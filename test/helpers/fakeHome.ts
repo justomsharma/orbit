@@ -48,7 +48,24 @@ export interface AssistantOpts {
   sidechain?: boolean;
   /** Replaces the whole `usage` object (e.g. an older shape without `cache_creation`). */
   usage?: Record<string, unknown>;
+  /** Replaces the content blocks (default: one text block from `text`). */
+  blocks?: unknown[];
 }
+
+/** One tracked file inside a `file-history-*` line. `backupFileName: null` = Claude created it. */
+export interface Backup {
+  backupFileName: string | null;
+  version: number;
+  backupTime?: string;
+  realParentDir?: string;
+}
+
+const backup = (b: Backup) => ({
+  backupFileName: b.backupFileName,
+  version: b.version,
+  backupTime: b.backupTime ?? tick(),
+  ...(b.realParentDir !== undefined ? { realParentDir: b.realParentDir } : {}),
+});
 
 export const L = {
   mode: (c: Ctx): Line => ({ type: "mode", mode: "normal", sessionId: c.sessionId }),
@@ -94,7 +111,7 @@ export const L = {
       model,
       role: "assistant",
       type: "message",
-      content: [{ type: "text", text: o.text ?? "Done." }],
+      content: o.blocks ?? [{ type: "text", text: o.text ?? "Done." }],
       usage: o.usage ?? {
         input_tokens: o.input ?? 10,
         cache_creation_input_tokens: (o.write5m ?? 0) + (o.write1h ?? 100),
@@ -112,6 +129,42 @@ export const L = {
       },
     },
   }),
+  /** An assistant line holding one tool call (Claude writes one line per content block). */
+  toolUse: (c: Ctx, name: string, input: Record<string, unknown>, o: AssistantOpts = {}): Line =>
+    L.assistant(c, "claude-opus-5-5", undefined, {
+      ...o,
+      blocks: [{ type: "tool_use", id: `toolu_${randomUUID()}`, name, input }],
+    }),
+  /** Claude's checkpoint of one file just before it edits it. */
+  fileDelta: (c: Ctx, trackingPath: string, b: Backup, messageId: string = randomUUID()): Line => ({
+    type: "file-history-delta",
+    messageId,
+    snapshotMessageId: randomUUID(),
+    trackingPath,
+    backup: backup(b),
+    timestamp: tick(),
+    sessionId: c.sessionId,
+  }),
+  /** A full checkpoint of every tracked file, keyed by tracking path. */
+  fileSnapshot: (
+    _c: Ctx,
+    files: Record<string, Backup>,
+    o: { messageId?: string; isSnapshotUpdate?: boolean } = {},
+  ): Line => {
+    const messageId = o.messageId ?? randomUUID();
+    return {
+      type: "file-history-snapshot",
+      messageId,
+      isSnapshotUpdate: o.isSnapshotUpdate ?? false,
+      snapshot: {
+        messageId,
+        timestamp: tick(),
+        trackedFileBackups: Object.fromEntries(
+          Object.entries(files).map(([k, b]) => [k, backup(b)]),
+        ),
+      },
+    };
+  },
   aiTitle: (c: Ctx, aiTitle: string): Line => ({
     type: "ai-title",
     aiTitle,
@@ -167,6 +220,20 @@ export function writeSession(
   writeFileSync(file, `${body}\n`);
   if (opts.mtime) utimesSync(file, opts.mtime, opts.mtime);
   return { id, file, ctx };
+}
+
+/** Writes a checkpoint blob to `file-history/<sessionId>/<name>`; returns its path. */
+export function writeBlob(
+  home: string,
+  sessionId: string,
+  name: string,
+  content: string | Buffer,
+): string {
+  const dir = join(home, "file-history", sessionId);
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, name);
+  writeFileSync(file, content);
+  return file;
 }
 
 /** Writes `projects/<slug>/<sessionId>/subagents/agent-<name>.jsonl`. */
