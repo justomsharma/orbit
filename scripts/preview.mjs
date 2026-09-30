@@ -169,6 +169,83 @@ const setupMsgs = [
   { type: "catalog", data: settingsCatalog() },
   { type: "setup", data: sampleSetup() },
 ];
+const promptsMsg = {
+  type: "prompts",
+  items: [
+    ["tell in short and simple", 60, 0.3, 0],
+    ["commit, push, and raise MR", 14, 2, 0],
+    [
+      "[Pasted text #1 +290 lines] this is the technical plan, run everything locally and test it end to end",
+      1,
+      5,
+      1,
+    ],
+    ["Review this diff for bugs and missing tests. Be specific and point to lines.", 7, 26, 0],
+    ["continue from where you left off", 9, 30, 0],
+    ["write the release notes for 2.4 from merged PRs", 1, 60, 0],
+  ].map(([text, count, hoursAgo, pastes], i) => ({
+    id: String(i).padStart(12, "a"),
+    text,
+    count,
+    first: now - 900 * H,
+    last: now - hoursAgo * H,
+    project: i % 2 ? "/Users/ana/code/api" : "/Users/ana/code/shop",
+    sessionId: id(i + 1),
+    pastes,
+  })),
+};
+const detailsMsg = (chatId) => ({
+  type: "chat:details",
+  id: chatId,
+  files: [
+    {
+      path: "/Users/ana/code/shop/src/checkout/cart.ts",
+      name: "cart.ts",
+      exists: true,
+      createdByClaude: false,
+      versions: [
+        { version: 1, at: now - 3 * H, available: true },
+        { version: 2, at: now - 2.5 * H, available: true },
+        { version: 3, at: now - 2 * H, available: false },
+      ],
+    },
+    {
+      path: "/Users/ana/code/shop/src/checkout/lock.ts",
+      name: "lock.ts",
+      exists: true,
+      createdByClaude: true,
+      versions: [
+        { version: 1, at: now - 2.8 * H, available: true },
+        { version: 2, at: now - 2.2 * H, available: true },
+      ],
+    },
+    {
+      path: "/Users/ana/code/shop/README.md",
+      name: "README.md",
+      exists: false,
+      createdByClaude: false,
+      versions: [{ version: 1, at: now - 1 * H, available: true }],
+    },
+  ],
+});
+const hitsMsg = (req) => ({
+  type: "search",
+  req,
+  done: true,
+  hits: [
+    {
+      sessionId: id(1),
+      snippet:
+        "…the race happens when two tabs call checkout() at the same time, so we take a lock…",
+      count: 4,
+    },
+    {
+      sessionId: id(6),
+      snippet: "…retry the webhook with the same idempotency key so checkout never charges twice…",
+      count: 1,
+    },
+  ],
+});
 const usageMsg = {
   type: "usage",
   data: sampleUsage({
@@ -202,8 +279,8 @@ for (const [name, vars] of Object.entries(themes)) {
 <script>
   window.__sent = [];
   window.acquireVsCodeApi = () => ({
-    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { window.postMessage(${JSON.stringify(sample)}, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); if (m.type === "tab" && m.tab === "setup") setTimeout(() => { for (const x of ${JSON.stringify(setupMsgs)}) window.postMessage(x, "*"); }, 0); },
-    getState: () => (location.hash ? { tab: location.hash.slice(1) } : undefined),
+    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { window.postMessage(${JSON.stringify(sample)}, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); if (m.type === "tab" && m.tab === "setup") setTimeout(() => { for (const x of ${JSON.stringify(setupMsgs)}) window.postMessage(x, "*"); }, 0); if (m.type === "tab" && m.tab === "prompts") setTimeout(() => window.postMessage(${JSON.stringify(promptsMsg)}, "*"), 0); if (m.type === "chat:details") { const d = ${JSON.stringify(detailsMsg("ID"))}; d.id = m.id; setTimeout(() => window.postMessage(d, "*"), 0); } if (m.type === "search") { const h = ${JSON.stringify(hitsMsg("REQ"))}; h.req = m.req; setTimeout(() => window.postMessage(h, "*"), 0); } },
+    getState: () => (location.hash === "#prompts" ? { tab: "chats", chatsMode: "prompts" } : location.hash ? { tab: location.hash.slice(1), chatsMode: "chats" } : undefined),
     setState: () => {},
   });
 </script></head><body><div id="root"></div><script src="main.js"></script></body></html>`,

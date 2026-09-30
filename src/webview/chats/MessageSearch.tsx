@@ -4,8 +4,24 @@ import * as store from "../store";
 import { Empty } from "../ui/Empty";
 import { IconButton } from "../ui/Icon";
 import { openDetails } from "./ChatDetails";
+import { passesFilter } from "./filter";
 
 let nextReq = 0;
+
+/** The snippet with each case-insensitive match of the query marked. */
+function highlight(text: string, q: string) {
+  const lower = text.toLowerCase();
+  const needle = q.toLowerCase();
+  const out: (string | preact.JSX.Element)[] = [];
+  let at = 0;
+  for (let i = lower.indexOf(needle); needle && i !== -1; i = lower.indexOf(needle, at)) {
+    if (i > at) out.push(text.slice(at, i));
+    out.push(<mark key={i}>{text.slice(i, i + needle.length)}</mark>);
+    at = i + needle.length;
+  }
+  out.push(text.slice(at));
+  return out;
+}
 
 /** Searches inside messages a moment after typing stops; only the latest answer is shown. */
 export function useMessageSearch(): void {
@@ -42,11 +58,12 @@ export function MessageResults() {
         Searching your chats…
       </div>
     );
-  if (!res.hits.length) return <Empty icon="search" title={`Nothing in your chats says "${q}"`} />;
+  const hits = res.hits.filter((h) => passesFilter(h.sessionId));
+  if (!hits.length) return <Empty icon="search" title={`Nothing in your chats says "${q}"`} />;
   const byId = new Map(store.sessions.value.map((s) => [s.id, s]));
   return (
     <ul class="hits" aria-label="Found in messages">
-      {res.hits.map((h) => {
+      {hits.map((h) => {
         const s = byId.get(h.sessionId);
         const title = store.renames.value[h.sessionId] || s?.title || "Chat";
         return (
@@ -57,7 +74,7 @@ export function MessageResults() {
               onClick={() => post({ type: "openChat", id: h.sessionId })}
             >
               <span class="chat-title">{title}</span>
-              <span class="hit-snippet">{h.snippet}</span>
+              <span class="hit-snippet">{highlight(h.snippet, q)}</span>
               <span class="chat-meta">
                 {[s?.project, `${h.count} match${h.count === 1 ? "" : "es"}`]
                   .filter(Boolean)

@@ -2,6 +2,7 @@ import type { ChangedFileView } from "../../shared/protocol";
 import { post } from "../bus";
 import * as store from "../store";
 import { Icon } from "../ui/Icon";
+import { relativeTime } from "./model";
 
 /** Where a file is, shown relative to the chat's folder when it's inside it. */
 function whereIs(path: string, cwd: string): string {
@@ -42,7 +43,13 @@ function FileCard({ id, f, cwd }: { id: string; f: ChangedFileView; cwd: string 
               <li key={v.version} class="version">
                 <span class="version-label">
                   {created ? "Created by Claude" : `Before edit ${n}`}
-                  {v.at ? <span class="muted"> · {time(v.at)}</span> : null}
+                  {v.at ? (
+                    <span class="muted" title={time(v.at)}>
+                      {" "}
+                      · {relativeTime(v.at, store.now.value)}
+                    </span>
+                  ) : null}
+                  {gone ? <span class="muted"> · no longer saved</span> : null}
                 </span>
                 {created ? null : (
                   <span class="version-actions">

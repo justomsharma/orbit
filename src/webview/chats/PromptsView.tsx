@@ -7,7 +7,7 @@ import { Icon, IconButton } from "../ui/Icon";
 import { VirtualList } from "../ui/VirtualList";
 import { relativeTime } from "./model";
 
-const ROW_H = 64;
+const ROW_H = 72;
 
 const folderName = (p: string | null) =>
   p

@@ -201,3 +201,9 @@
 .hit .icon-btn {
   margin-top: 4px;
 }
+
+.hit-snippet mark {
+  color: inherit;
+  background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
+  border-radius: 2px;
+}

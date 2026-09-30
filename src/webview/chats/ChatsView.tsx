@@ -7,6 +7,7 @@ import { Empty } from "../ui/Empty";
 import { Icon, IconButton } from "../ui/Icon";
 import { VirtualList } from "../ui/VirtualList";
 import { ChatDetails, openDetails } from "./ChatDetails";
+import { effectiveFilter } from "./filter";
 import { MessageResults, useMessageSearch } from "./MessageSearch";
 import { buildItems, type ChatVM, type Filter, type Item, relativeTime } from "./model";
 import { PromptsView } from "./PromptsView";
@@ -15,12 +16,6 @@ const HEADER_H = 30;
 const ROW_H = 54;
 const itemHeight = (i: Item) => (i.kind === "header" ? HEADER_H : ROW_H);
 const itemKey = (i: Item) => i.key;
-
-function effectiveFilter(): Filter {
-  const f = store.filter.value;
-  if (f) return f;
-  return store.here.value.length > 0 ? "workspace" : "all";
-}
 
 /** Purely visual: the status is also written out in the row text for screen readers. */
 function LiveDot({ vm }: { vm: ChatVM }) {

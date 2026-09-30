@@ -242,10 +242,45 @@ describe("Search inside messages", () => {
       }),
     );
     expect(screen.getByText("Fix the parser")).toBeTruthy();
-    expect(screen.getByText(/use the golden set/)).toBeTruthy();
+    const snippet = document.querySelector(".hit-snippet")!;
+    expect(snippet.textContent).toBe("…use the golden set for…");
     expect(screen.getByText(/3 matches/)).toBeTruthy();
-    fireEvent.click(screen.getByText(/use the golden set/));
+    fireEvent.click(snippet);
     expect(sent).toContainEqual({ type: "openChat", id: ID });
+  });
+
+  it("respects the chosen filter and highlights the match", async () => {
+    const OTHER = "00000000-0000-4000-8000-000000000002";
+    store.applyHostMessage({
+      type: "sessions",
+      items: [chat, { ...chat, id: OTHER, title: "Elsewhere chat", cwd: "/code/api" }],
+      live: [],
+      pins: [],
+      renames: {},
+      here: [ID],
+      env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
+    });
+    store.filter.value = "workspace";
+    store.inMessages.value = true;
+    render(<ChatsView />);
+    fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
+      target: { value: "golden" },
+    });
+    await waitFor(() => expect(sent.some((m) => m.type === "search")).toBe(true));
+    const { req } = sent.find((m) => m.type === "search") as { req: string };
+    act(() =>
+      store.applyHostMessage({
+        type: "search",
+        req,
+        done: true,
+        hits: [
+          { sessionId: ID, snippet: "use the Golden set", count: 1 },
+          { sessionId: OTHER, snippet: "golden elsewhere", count: 1 },
+        ],
+      }),
+    );
+    expect(screen.queryByText("Elsewhere chat")).toBeNull();
+    expect(screen.getByText("Golden", { selector: "mark" })).toBeTruthy();
   });
 
   it("ignores answers to an older search", () => {
