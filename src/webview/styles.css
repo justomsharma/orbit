@@ -251,7 +251,8 @@ button {
   background: var(--hover);
 }
 
-.chat-row.active {
+/* The keyboard cursor only shows while the person is navigating with the keyboard. */
+.chats.kbd .chat-row.active {
   background: var(--active);
   color: var(--active-fg);
 }
@@ -284,7 +285,7 @@ button {
   margin-top: 2px;
 }
 
-.chat-row.active .chat-meta {
+.chats.kbd .chat-row.active .chat-meta {
   color: inherit;
   opacity: 0.8;
 }
@@ -322,7 +323,7 @@ button {
   display: flex;
 }
 
-.chat-row.active .chat-actions {
+.chats.kbd .chat-row.active .chat-actions {
   background: linear-gradient(to right, transparent, var(--active) 14px);
 }
 
@@ -440,4 +441,16 @@ fieldset.chips {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+.live-label {
+  font-weight: 500;
+}
+
+.live-label.busy {
+  color: var(--busy);
+}
+
+.live-label.idle {
+  color: var(--ok);
 }

@@ -19,17 +19,11 @@ function effectiveFilter(): Filter {
   return store.here.value.length > 0 ? "workspace" : "all";
 }
 
+/** Purely visual: the status is also written out in the row text for screen readers. */
 function LiveDot({ vm }: { vm: ChatVM }) {
   if (!vm.live) return null;
-  const busy = vm.live.status === "busy";
-  const label = busy ? "Claude is working" : "Waiting for you";
   return (
-    <span
-      class={`live-dot ${busy ? "busy" : "idle"}`}
-      title={label}
-      aria-label={label}
-      role="img"
-    />
+    <span class={`live-dot ${vm.live.status === "busy" ? "busy" : "idle"}`} aria-hidden="true" />
   );
 }
 
@@ -96,7 +90,14 @@ function ChatRow({ vm, active, now, renaming, onRename }: RowProps) {
             <span class="chat-title">{vm.title}</span>
           )}
         </div>
-        <div class="chat-meta">{meta}</div>
+        <div class="chat-meta">
+          {vm.live ? (
+            <span class={`live-label ${vm.live.status}`}>
+              {vm.live.status === "busy" ? "Working… · " : "Waiting for you · "}
+            </span>
+          ) : null}
+          {meta}
+        </div>
       </div>
       <div class="chat-actions">
         {s.prLinks.length ? (
@@ -147,6 +148,7 @@ export function ChatsView() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [active, setActive] = useState(0);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [kbd, setKbd] = useState(false);
   const now = Date.now();
 
   const items = useComputed(() =>
@@ -273,7 +275,7 @@ export function ChatsView() {
   }
 
   return (
-    <section class="chats">
+    <section class={`chats${kbd ? " kbd" : ""}`}>
       <div class="toolbar">
         <div class="search">
           <Icon name="search" />
@@ -287,6 +289,8 @@ export function ChatsView() {
             value={store.query.value}
             onInput={(e) => (store.query.value = (e.target as HTMLInputElement).value)}
             onKeyDown={onSearchKey}
+            onFocus={() => setKbd(true)}
+            onBlur={() => setKbd(false)}
           />
           <kbd class="hint">/</kbd>
         </div>
