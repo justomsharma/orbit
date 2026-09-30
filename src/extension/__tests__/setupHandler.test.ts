@@ -36,8 +36,8 @@ async function setup(opts: { workspace?: boolean; settings?: object } = {}) {
   );
   const log: string[] = [];
   const confirm: ConfirmHost = {
-    confirm: async (s) => {
-      log.push(`confirm ${s}`);
+    confirm: async (s, warning) => {
+      log.push(`confirm ${s}${warning ? ` ⚠ ${warning}` : ""}`);
       return "apply";
     },
     showDiff: async () => {},
@@ -229,6 +229,36 @@ describe("handleSetup: plugins, MCP, hooks, permissions, skills", () => {
     const { handle, home, json } = await setup();
     await handle({ type: "setup:skillVisibility", name: "deploy", visibility: "off" });
     expect(json(join(home, "settings.json")).skillOverrides).toEqual({ deploy: "off" });
+  });
+});
+
+describe("handleSetup: risky choices", () => {
+  it("names the mode plainly and warns before bypassing every check", async () => {
+    const { handle, log } = await setup({ settings: {} });
+    await handle({
+      type: "setup:setSetting",
+      scope: "user",
+      key: "permissions.defaultMode",
+      value: "bypassPermissions",
+    });
+    expect(log[0]).toMatch(/"Bypass all checks \(sandboxes only\)".* ⚠ .*without asking/);
+  });
+
+  it("warns before auto-approving every project's MCP servers", async () => {
+    const { handle, log } = await setup({ settings: {} });
+    await handle({
+      type: "setup:setSetting",
+      scope: "user",
+      key: "enableAllProjectMcpServers",
+      value: true,
+    });
+    expect(log[0]).toMatch(/ ⚠ .*clone/);
+  });
+
+  it("asks plainly for safe choices", async () => {
+    const { handle, log } = await setup({ settings: {} });
+    await handle({ type: "setup:setSetting", scope: "user", key: "theme", value: "light" });
+    expect(log[0]).not.toMatch(/⚠/);
   });
 });
 

@@ -31,10 +31,14 @@ export function vscodeConfirmHost(context: vscode.ExtensionContext): ConfirmHost
   );
 
   return {
-    confirm: async (summary) => {
-      const pick = await vscode.window.showInformationMessage(
+    confirm: async (summary, warning) => {
+      const backup = "Orbit keeps a backup, and you can undo this afterwards.";
+      const show = warning
+        ? vscode.window.showWarningMessage
+        : vscode.window.showInformationMessage;
+      const pick = await show(
         summary,
-        { modal: true, detail: "Orbit keeps a backup, and you can undo this afterwards." },
+        { modal: true, detail: warning ? `${warning}\n\n${backup}` : backup },
         "Apply",
         "Show changes",
       );

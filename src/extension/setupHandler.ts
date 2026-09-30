@@ -18,6 +18,7 @@ import {
   setSkillVisibility,
 } from "../features/setup/edits";
 import { HOOK_EVENTS, humanize } from "../features/setup/hookEvents";
+import { MODE_LABELS, riskWarning } from "../features/setup/risk";
 import { decidingScope, readSettingsFiles, toggleScope } from "../features/setup/settings";
 import { newItem } from "../features/setup/templates";
 import { parseViewMsg, type ViewMsg } from "../shared/protocol";
@@ -46,7 +47,6 @@ const SCOPE_WORD: Record<EditScope, string> = {
   project: "shared project",
   local: "local project",
 };
-const MODES = ["default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"];
 
 const CLAUDE_MD_TEMPLATE = `# Notes for Claude
 
@@ -74,12 +74,18 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
     return path.join(ws, ".claude", scope === "project" ? "settings.json" : "settings.local.json");
   };
 
-  const edit = async (file: string | null, mutate: Mutate, summary: string, label: string) => {
+  const edit = async (
+    file: string | null,
+    mutate: Mutate,
+    summary: string,
+    label: string,
+    warning?: string,
+  ) => {
     if (!file) {
       warn("Open a folder first: project settings belong to a folder.");
       return;
     }
-    const ok = await applyJsonEdit(d.writer, d.confirm, { file, mutate, summary, label });
+    const ok = await applyJsonEdit(d.writer, d.confirm, { file, mutate, summary, label, warning });
     if (ok) await d.refresh();
     return ok;
   };
@@ -118,7 +124,7 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       } else scope = msg.scope;
       const where = SCOPE_WORD[scope];
       if (msg.key === "permissions.defaultMode") {
-        if (msg.value !== null && !MODES.includes(String(msg.value))) {
+        if (msg.value !== null && !(String(msg.value) in MODE_LABELS)) {
           warn(`"${msg.value}" isn't one of Claude Code's permission modes.`);
           return true;
         }
@@ -156,15 +162,20 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
           }
         }
       }
+      const shownValue =
+        msg.key === "permissions.defaultMode" && msg.value !== null
+          ? (MODE_LABELS[String(msg.value)] ?? msg.value)
+          : msg.value;
       const summary =
         msg.value === null
           ? `Reset "${label}" to Claude's default in your ${where} settings?`
-          : `Set "${label}" to "${msg.value}" in your ${where} settings?`;
+          : `Set "${label}" to "${shownValue}" in your ${where} settings?`;
       await edit(
         settingsPath(scope),
         setSetting(msg.key, msg.value ?? undefined),
         summary,
-        `${label}: ${msg.value ?? "default"}`,
+        `${label}: ${shownValue ?? "default"}`,
+        riskWarning(msg.key, msg.value, scope) ?? undefined,
       );
       return true;
     }

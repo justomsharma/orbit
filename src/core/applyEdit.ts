@@ -7,8 +7,11 @@ export type Mutate = (o: Record<string, unknown>) => void;
 
 /** The prompts around an edit — injected so the flow is tested without VS Code. */
 export interface ConfirmHost {
-  /** Modal question; "diff" means the person wants to see the exact change first. */
-  confirm(summary: string): Promise<"apply" | "diff" | "cancel">;
+  /**
+   * Modal question; "diff" means the person wants to see the exact change first.
+   * `warning` explains, in plain words, a safety check the change turns off.
+   */
+  confirm(summary: string, warning?: string): Promise<"apply" | "diff" | "cancel">;
   showDiff(plan: EditPlan): Promise<void>;
   /** Success notice with an Undo action; `undo` resolves to whether it worked. Not awaited. */
   done(label: string, undo: () => Promise<boolean>): Promise<void>;
@@ -22,6 +25,7 @@ export interface JsonEdit {
   summary: string;
   /** Short name for the change in history and the Undo notice. */
   label: string;
+  warning?: string;
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -71,7 +75,7 @@ async function applyPlanned(
   writer: SafeWriter,
   host: ConfirmHost,
   makePlan: () => Promise<EditPlan>,
-  edit: { summary: string; label: string },
+  edit: { summary: string; label: string; warning?: string },
   /** For JSON files: the inverse change, used when the file changed after Orbit's edit. */
   reverseOf?: (plan: EditPlan) => Mutate | null,
 ): Promise<boolean> {
@@ -85,7 +89,7 @@ async function applyPlanned(
   if (plan.after === plan.before) return true;
 
   for (;;) {
-    const answer = await host.confirm(edit.summary);
+    const answer = await host.confirm(edit.summary, edit.warning);
     if (answer === "diff") {
       await host.showDiff(plan);
       continue;
