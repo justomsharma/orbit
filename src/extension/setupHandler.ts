@@ -18,6 +18,7 @@ import {
   setSkillVisibility,
 } from "../features/setup/edits";
 import { HOOK_EVENTS, humanize } from "../features/setup/hookEvents";
+import { redactText } from "../features/setup/redact";
 import { MODE_LABELS, riskWarning } from "../features/setup/risk";
 import { decidingScope, readSettingsFiles, toggleScope } from "../features/setup/settings";
 import { newItem } from "../features/setup/templates";
@@ -308,7 +309,7 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       await edit(
         h.source,
         removeHook({ event: h.event, group: h.group, index: h.index, command: h.command }),
-        `Remove this ${h.event} hook${h.command ? `: ${h.command}` : ""}? You can undo this.`,
+        `Remove this ${h.event} hook${h.command ? `: ${redactText(h.command)}` : ""}? You can undo this.`,
         `Removed ${h.event} hook`,
       );
       return true;
@@ -346,16 +347,30 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       return true;
     }
 
-    case "setup:rule":
+    case "setup:rule": {
+      let rule = msg.rule;
+      if (msg.op === "remove") {
+        // The view shows rules with secrets masked; find the real rule it stands for.
+        const real = new Set(
+          (d.snapshot()?.permissions.rules ?? [])
+            .filter((r) => r.scope === msg.scope && r.list === msg.list)
+            .map((r) => r.rule)
+            .filter((r) => r === msg.rule || redactText(r) === msg.rule),
+        );
+        if (real.size > 1) {
+          warn("Several rules look the same once secrets are hidden. Remove this one in the file.");
+          return true;
+        }
+        rule = [...real][0] ?? msg.rule;
+      }
       await edit(
         settingsPath(msg.scope),
-        msg.op === "add"
-          ? addPermissionRule(msg.list, msg.rule)
-          : removePermissionRule(msg.list, msg.rule),
-        `${msg.op === "add" ? "Add" : "Remove"} the ${msg.list} rule "${msg.rule}" ${msg.op === "add" ? "to" : "from"} your ${SCOPE_WORD[msg.scope]} settings?`,
+        msg.op === "add" ? addPermissionRule(msg.list, rule) : removePermissionRule(msg.list, rule),
+        `${msg.op === "add" ? "Add" : "Remove"} the ${msg.list} rule "${redactText(rule)}" ${msg.op === "add" ? "to" : "from"} your ${SCOPE_WORD[msg.scope]} settings?`,
         `${msg.op === "add" ? "Added" : "Removed"} ${msg.list} rule`,
       );
       return true;
+    }
 
     case "setup:skillVisibility": {
       const n = `"${msg.name}"`;
@@ -440,7 +455,10 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
     }
 
     case "setup:fixWithClaude": {
-      const issue = d.snapshot()?.issues.find((i) => i.id === msg.issueId);
+      // The view saw ids with any secret masked (see viewSnapshot).
+      const issue = d
+        .snapshot()
+        ?.issues.find((i) => i.id === msg.issueId || redactText(i.id) === msg.issueId);
       if (issue?.claudePrompt) await d.newChat(issue.claudePrompt);
       return true;
     }

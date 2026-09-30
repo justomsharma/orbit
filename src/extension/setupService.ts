@@ -108,8 +108,15 @@ export function viewSnapshot(s: SetupSnapshot): SetupSnapshot {
       command: maybe(h.command, redactText),
       url: maybe(h.url, redactUrl),
     })),
+    // Claude saves exact commands as rules ("don't ask again"), tokens included.
+    permissions: {
+      ...s.permissions,
+      rules: s.permissions.rules.map((r) => ({ ...r, rule: redactText(r.rule) })),
+    },
+    skills: s.skills.map((k) => ({ ...k, allowedTools: k.allowedTools.map(redactText) })),
     issues: s.issues.map((i) => ({
       ...i,
+      id: redactText(i.id),
       title: redactText(i.title),
       detail: redactText(i.detail),
       claudePrompt: maybe(i.claudePrompt, redactText),

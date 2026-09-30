@@ -166,9 +166,9 @@ describe("SafeWriter.apply", () => {
     } catch {
       ctx.skip();
     }
-    await expect(w.plan(link, () => "x")).rejects.toThrow("Refusing to edit a symlink");
+    await expect(w.plan(link, () => "x")).rejects.toThrow(/is a link.*Edit the file it points to/);
     const plan = { file: link, before: "{}", after: "x", beforeHash: null };
-    await expect(w.apply(plan, "x")).rejects.toThrow("Refusing to edit a symlink");
+    await expect(w.apply(plan, "x")).rejects.toThrow(/is a link.*Edit the file it points to/);
     expect(readFileSync(target, "utf8")).toBe("{}");
   });
 });

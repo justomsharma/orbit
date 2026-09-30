@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../test/helpers/tmp";
 import type { ConfirmHost } from "../../core/applyEdit";
 import { SafeWriter } from "../../core/safeWriter";
+import { redactText } from "../../features/setup/redact";
 import { handleSetup, type SetupHandlerDeps } from "../setupHandler";
 import { SetupService } from "../setupService";
 
@@ -229,6 +230,44 @@ describe("handleSetup: plugins, MCP, hooks, permissions, skills", () => {
     const { handle, home, json } = await setup();
     await handle({ type: "setup:skillVisibility", name: "deploy", visibility: "off" });
     expect(json(join(home, "settings.json")).skillOverrides).toEqual({ deploy: "off" });
+  });
+});
+
+describe("handleSetup: masked values", () => {
+  const rule = 'Bash(curl -H "Authorization: Bearer rule-TOKEN-10" https://api.x)';
+
+  it("removes a permission rule the view only saw masked", async () => {
+    const { handle, home, json, log } = await setup({
+      settings: { permissions: { allow: [rule, "Read"] } },
+    });
+    await handle({
+      type: "setup:rule",
+      op: "remove",
+      scope: "user",
+      list: "allow",
+      rule: redactText(rule),
+    });
+    expect(json(join(home, "settings.json")).permissions.allow).toEqual(["Read"]);
+    expect(log[0]).not.toContain("rule-TOKEN-10");
+  });
+
+  it("never shows a hook's token in the confirm", async () => {
+    const { handle, deps, log } = await setup({
+      settings: {
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                { type: "command", command: "curl -H 'Authorization: Bearer hook-TOKEN-4' x" },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await handle({ type: "setup:hookRemove", id: deps.snapshot()!.hooks[0]!.id });
+    expect(log[0]).toMatch(/^confirm Remove this Stop hook/);
+    expect(log[0]).not.toContain("hook-TOKEN-4");
   });
 });
 

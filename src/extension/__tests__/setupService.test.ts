@@ -2,6 +2,7 @@ import { mkdirSync, truncateSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../test/helpers/tmp";
+import { redactText } from "../../features/setup/redact";
 import { SetupService, viewSnapshot } from "../setupService";
 
 const tmp = useTmpDir();
@@ -90,6 +91,10 @@ describe("SetupService", () => {
     writeFileSync(
       join(home, "settings.json"),
       JSON.stringify({
+        permissions: {
+          allow: ['Bash(curl -H "Authorization: Bearer rule-TOKEN-10" https://api.x)'],
+          deny: ['Bash(curl -H "Authorization: Bearer rule-TOKEN-10" https://api.x)'],
+        },
         hooks: {
           Stop: [
             {
@@ -129,6 +134,7 @@ describe("SetupService", () => {
       "pg-PASS-8",
       "url-KEY-9",
       "sk-ak-a1B2c3D4e5F6g7H8",
+      "rule-TOKEN-10",
     ]) {
       expect(json).not.toContain(secret);
     }
@@ -144,7 +150,7 @@ describe("SetupService", () => {
     // The host keeps the real values: removing a hook compares the file against them.
     expect(snap.hooks[0]!.command).toContain("hook-TOKEN-4");
     expect(view.hooks[0]!.id).toBe(snap.hooks[0]!.id);
-    expect(view.issues.map((i) => i.id)).toEqual(snap.issues.map((i) => i.id));
+    expect(view.issues.map((i) => i.id)).toEqual(snap.issues.map((i) => redactText(i.id)));
   });
 
   it("skips a ~/.claude.json over 32 MB honestly and keeps everything else", async () => {

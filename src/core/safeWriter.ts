@@ -62,7 +62,10 @@ async function readTarget(file: string): Promise<Current | null> {
     if (errCode(e) === "ENOENT") return null;
     throw e;
   }
-  if (st.isSymbolicLink()) throw new Error("Refusing to edit a symlink");
+  if (st.isSymbolicLink())
+    throw new Error(
+      `Orbit doesn't edit linked files: ${file} is a link. Edit the file it points to instead.`,
+    );
   if (!st.isFile()) throw new Error(`${file} is not a regular file`);
   return { bytes: await readFile(file), mode: st.mode & 0o7777 };
 }
