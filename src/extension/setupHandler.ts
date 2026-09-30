@@ -61,7 +61,7 @@ type SetupMsg = Extract<ViewMsg, { type: `setup:${string}` }>;
 /** Handles one Setup message. Returns false for messages that belong elsewhere. */
 export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<boolean> {
   const m = parseViewMsg(raw);
-  if (!m || !m.type.startsWith("setup:")) return false;
+  if (!m?.type.startsWith("setup:")) return false;
   const msg = m as SetupMsg;
   const warn = (text: string) => d.confirm.warn(text);
   const ws = d.workspace();

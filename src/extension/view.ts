@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { settingsCatalog } from "../features/setup/catalog";
 import type { QuotaInstaller } from "../features/usage/quotaInstall";
 import type { HostMsg } from "../shared/protocol";
 import type { ChatsService, ChatsSnapshot } from "./chatsService";
@@ -6,6 +7,8 @@ import { saveRecapImage } from "./exportFile";
 import { createHandler } from "./handler";
 import { makeNonce, renderHtml } from "./html";
 import type { Opener } from "./opener";
+import { handleSetup, type SetupHandlerDeps } from "./setupHandler";
+import type { SetupService, SetupSnapshot } from "./setupService";
 import type { OrbitState } from "./state";
 import type { UsageService, UsageSnapshot } from "./usageService";
 
@@ -18,6 +21,9 @@ export interface ViewDeps {
   quota: QuotaInstaller;
   state: OrbitState;
   opener: Opener;
+  setup: SetupService;
+  /** Everything the Setup actions need except the snapshot, which the view owns. */
+  setupDeps: Omit<SetupHandlerDeps, "snapshot" | "refresh">;
   log: vscode.LogOutputChannel;
   onSnapshot(s: ChatsSnapshot): void;
 }
@@ -32,14 +38,17 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   private again = false;
   last: ChatsSnapshot | null = null;
   lastUsage: UsageSnapshot | null = null;
+  lastSetup: SetupSnapshot | null = null;
+  /** The tab the person is looking at; only its data is read (chats always, for the status bar). */
+  private tab: "home" | "chats" | "usage" | "setup" = "home";
   /** Signatures of the data the view last received; identical refreshes are not re-sent. */
-  private sent = { sessions: "", usage: "" };
+  private sent = { sessions: "", usage: "", setup: "", catalog: "" };
 
   constructor(private readonly d: ViewDeps) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    this.sent = { sessions: "", usage: "" };
+    this.sent = { sessions: "", usage: "", setup: "", catalog: "" };
     const root = vscode.Uri.joinPath(this.d.extensionUri, "dist", "webview");
     const w = view.webview;
     w.options = { enableScripts: true, enableForms: false, localResourceRoots: [root] };
@@ -61,6 +70,9 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       copy: async (t) => vscode.env.clipboard.writeText(t),
       saveImage: saveRecapImage,
       refresh: () => this.refresh(),
+      setTab: (t) => {
+        this.tab = t;
+      },
       isKnownLink: (u) => this.d.chats.isKnownLink(u),
       openLink: async (url) => {
         await vscode.env.openExternal(vscode.Uri.parse(url, true));
@@ -68,11 +80,20 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       info: (m) => void vscode.window.showInformationMessage(m),
       warn: (m) => void vscode.window.showWarningMessage(m),
     });
-    w.onDidReceiveMessage((m) =>
-      handle(m).catch((e) => this.d.log.error("Action failed", errText(e))),
-    );
+    const setupDeps: SetupHandlerDeps = {
+      ...this.d.setupDeps,
+      snapshot: () => this.lastSetup,
+      refresh: () => this.refresh(),
+    };
+    w.onDidReceiveMessage(async (m) => {
+      try {
+        if (!(await handleSetup(m, setupDeps))) await handle(m);
+      } catch (e) {
+        this.d.log.error("Action failed", errText(e));
+      }
+    });
     view.onDidChangeVisibility(() => {
-      this.sent = { sessions: "", usage: "" };
+      this.sent = { sessions: "", usage: "", setup: "", catalog: "" };
       if (view.visible) void this.refresh();
     });
     view.onDidDispose(() => {
@@ -127,9 +148,20 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
         },
       });
     }
-    // Usage second: the first full index of a large history can take a few seconds.
-    // Only while the sidebar is visible; it refreshes as soon as it is shown again.
+    // The rest only while the sidebar is visible; it refreshes as soon as it is shown again.
     if (!this.view?.visible) return;
+    if (this.tab === "setup") {
+      try {
+        const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+        this.lastSetup = await this.d.setup.snapshot(ws);
+        this.postOnce("catalog", { type: "catalog", data: settingsCatalog() });
+        this.postOnce("setup", { type: "setup", data: this.lastSetup });
+      } catch (e) {
+        this.d.log.error("Could not read Claude Code setup", errText(e));
+      }
+      return;
+    }
+    // Usage (Home and Usage tabs): the first full index of a large history can take a few seconds.
     try {
       this.lastUsage = await this.d.usage.snapshot(snap.items, Date.now());
       if (this.view?.visible) this.postOnce("usage", { type: "usage", data: this.lastUsage });
@@ -138,7 +170,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private postOnce(kind: "sessions" | "usage", m: HostMsg): void {
+  private postOnce(kind: keyof OrbitViewProvider["sent"], m: HostMsg): void {
     const sig = JSON.stringify(m);
     if (sig === this.sent[kind]) return;
     this.sent[kind] = sig;

@@ -95,6 +95,13 @@ describe("SetupService", () => {
     expect(user.values.apiKeyHelper).toEqual({ hidden: true });
   });
 
+  it("shows skill visibility choices in full (they are not secrets)", async () => {
+    const { viewValue } = await import("../setupService");
+    expect(viewValue("skillOverrides", { deploy: "off", x: { nested: 1 } })).toEqual({
+      entries: { deploy: "off" },
+    });
+  });
+
   it("works with no folder open and with no Claude data at all", async () => {
     const root = tmp();
     const s = await svc(join(root, ".claude"), root).snapshot(null);

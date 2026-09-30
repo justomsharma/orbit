@@ -117,7 +117,13 @@ export function settingsCatalog(): SettingDef[] {
   if (cached) return cached;
   const keys = (schema as { keys: Record<string, RawDef> }).keys;
   const groupOf = new Map<string, string>();
-  for (const [g, list] of GROUPS) for (const k of list) groupOf.set(k, g);
+  const rank = new Map<string, number>();
+  for (const [g, list] of GROUPS) {
+    list.forEach((k, i) => {
+      groupOf.set(k, g);
+      rank.set(k, i);
+    });
+  }
   const order = [...GROUPS.map(([g]) => g), "More"];
   cached = Object.entries(keys)
     .map(([key, d]) => ({
@@ -131,7 +137,13 @@ export function settingsCatalog(): SettingDef[] {
       group: groupOf.get(key) ?? "More",
       managedOnly: MANAGED_ONLY.test(key),
     }))
-    .sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || a.key.localeCompare(b.key));
+    // Groups in order; inside a group the most useful settings first, then the rest A–Z.
+    .sort(
+      (a, b) =>
+        order.indexOf(a.group) - order.indexOf(b.group) ||
+        (rank.get(a.key) ?? 999) - (rank.get(b.key) ?? 999) ||
+        a.key.localeCompare(b.key),
+    );
   return cached;
 }
 

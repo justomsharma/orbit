@@ -22,8 +22,12 @@ import { readSkills, type SkillInfo } from "../features/setup/skills";
 export type SettingValue =
   | { value: string | number | boolean }
   | { keys: string[] }
+  | { entries: Record<string, string | number | boolean> }
   | { count: number }
   | { hidden: true };
+
+/** Objects whose values are plain choices (never secrets) and are shown in full. */
+const OPEN_OBJECTS = new Set(["skillOverrides", "enabledPlugins"]);
 
 export interface SettingsView {
   scope: SettingsScope;
@@ -64,6 +68,13 @@ export function viewValue(key: string, v: unknown): SettingValue {
   if (HIDDEN.has(key) || SECRETISH.test(key)) return { hidden: true };
   if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return { value: v };
   if (Array.isArray(v)) return { count: v.length };
+  if (OPEN_OBJECTS.has(key) && v && typeof v === "object") {
+    const entries: Record<string, string | number | boolean> = {};
+    for (const [k, x] of Object.entries(v)) {
+      if (typeof x === "string" || typeof x === "number" || typeof x === "boolean") entries[k] = x;
+    }
+    return { entries };
+  }
   if (v && typeof v === "object") return { keys: Object.keys(v).sort() };
   return { hidden: true };
 }

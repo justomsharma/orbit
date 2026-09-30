@@ -1,6 +1,8 @@
 import { effect, signal } from "@preact/signals";
+import type { SetupSnapshot } from "../extension/setupService";
 import type { UsageSnapshot } from "../extension/usageService";
 import type { LiveStatus, Session } from "../features/chats/types";
+import type { SettingDef } from "../features/setup/catalog";
 import type { Environment, HostMsg } from "../shared/protocol";
 import { loadViewState, saveViewState } from "./bus";
 import type { Filter } from "./chats/model";
@@ -23,6 +25,11 @@ export const filter = signal<Filter | null>(saved.filter);
 export const query = signal("");
 export const range = signal<Range>(saved.range);
 export const usage = signal<UsageSnapshot | null>(null);
+export const setup = signal<SetupSnapshot | null>(null);
+export const catalog = signal<SettingDef[]>([]);
+/** Setup search text and which sections are open. */
+export const setupQuery = signal("");
+export const openSections = signal<string[]>(["health"]);
 /** Ticks every minute so "Updated 2m ago" and "Resets in 1h" stay true while idle. */
 export const now = signal(Date.now());
 if (typeof window !== "undefined") setInterval(() => (now.value = Date.now()), 60_000);
@@ -54,6 +61,12 @@ export function applyHostMessage(m: HostMsg): void {
       break;
     case "usage":
       usage.value = m.data;
+      break;
+    case "setup":
+      setup.value = m.data;
+      break;
+    case "catalog":
+      catalog.value = m.data;
       break;
     case "error":
       error.value = m.text;

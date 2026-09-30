@@ -1,4 +1,7 @@
+import { useEffect } from "preact/hooks";
+import { post } from "./bus";
 import { ChatsView } from "./chats/ChatsView";
+import { SetupView } from "./setup/SetupView";
 import type { Tab } from "./store";
 import * as store from "./store";
 import { Empty } from "./ui/Empty";
@@ -47,6 +50,8 @@ function TabBar() {
 
 export function App() {
   const t = store.tab.value;
+  // Tell the host which tab is open, so it only reads what this tab shows.
+  useEffect(() => post({ type: "tab", tab: t }), [t]);
   return (
     <div class="app">
       <TabBar />
@@ -57,6 +62,8 @@ export function App() {
           <ChatsView />
         ) : t === "usage" ? (
           <UsageView />
+        ) : t === "setup" ? (
+          <SetupView />
         ) : (
           <Empty icon="tools" title="Coming soon">
             This tab is being built.

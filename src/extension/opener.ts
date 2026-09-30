@@ -89,16 +89,23 @@ export class Opener {
     h.createTerminal(terminalOptions(s.id, s.cwd, claude));
   }
 
-  /** Starts a new conversation: Claude's panel, else a claude terminal in the open folder. */
-  async newChat(): Promise<void> {
+  /**
+   * Starts a new conversation: Claude's panel (with `prompt` typed in, not sent),
+   * else a claude terminal in the open folder with the prompt on the clipboard.
+   */
+  async newChat(prompt?: string): Promise<void> {
     const h = this.host;
     if (h.claudeExtensionInstalled()) {
-      await h.openExternal(chatUri(h.uriScheme));
+      await h.openExternal(chatUri(h.uriScheme, undefined, prompt));
       return;
     }
     const claude = await h.findClaude();
     if (claude) {
       h.createTerminal(newChatTerminal(h.workspaceFolders()[0], claude));
+      if (prompt) {
+        await h.copy(prompt);
+        h.info("Claude is starting in a terminal. The prompt is copied: paste it in.");
+      }
       return;
     }
     const pick = await h.ask(

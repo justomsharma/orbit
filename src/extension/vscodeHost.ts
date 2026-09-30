@@ -42,3 +42,23 @@ export function vscodeOpenerHost(): OpenerHost {
     info: (m) => void vscode.window.showInformationMessage(m),
   };
 }
+
+/** Runs `claude <args>` (e.g. `mcp login github`) as a terminal's own program — no shell. */
+export async function runClaudeInTerminal(args: string[], cwd?: string): Promise<void> {
+  const claude = await findClaude();
+  if (!claude) {
+    void vscode.window.showWarningMessage(
+      "The claude command wasn't found. Install Claude Code's CLI to do this from Orbit.",
+    );
+    return;
+  }
+  vscode.window
+    .createTerminal({
+      name: `Claude · ${args.slice(0, 2).join(" ")}`,
+      shellPath: claude,
+      shellArgs: args,
+      cwd,
+      iconPath: new vscode.ThemeIcon("plug"),
+    })
+    .show();
+}

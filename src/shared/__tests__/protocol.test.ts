@@ -17,6 +17,7 @@ describe("parseViewMsg", () => {
     { type: "newChat" },
     { type: "quota", on: true },
     { type: "copyRecap" },
+    { type: "tab", tab: "setup" },
     { type: "saveRecapImage", dataUrl: "data:image/png;base64,iVBORw0KGgo=" },
   ])("accepts %j", (m) => {
     expect(parseViewMsg(m)).toEqual(m);
@@ -34,6 +35,7 @@ describe("parseViewMsg", () => {
     { type: "openLink", url: "command:workbench.action.terminal.new" },
     { type: "openLink", url: "javascript:alert(1)" },
     { type: "quota", on: "yes" },
+    { type: "tab", tab: "settings" },
     { type: "saveRecapImage", dataUrl: "data:text/html;base64,PGgxPg==" },
     { type: "saveRecapImage", dataUrl: "data:image/png;base64,<script>" },
     { type: "saveRecapImage", dataUrl: `data:image/png;base64,${"A".repeat(9 * 1024 * 1024)}` },

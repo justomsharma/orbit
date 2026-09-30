@@ -34,6 +34,7 @@ function setup(opts: { known?: boolean; quota?: QuotaResult; recap?: string | nu
     copy: async (t) => void log.push(`clipboard ${t}`),
     saveImage: async (d) => void log.push(`save ${d.slice(0, 22)}`),
     refresh: async () => void log.push("refresh"),
+    setTab: (t) => void log.push(`tab ${t}`),
     isKnownLink: (u) => u === "https://github.com/a/b/pull/1",
     openLink: async (u) => void log.push(`link ${u}`),
     info: (m) => void log.push(`info ${m}`),
@@ -122,6 +123,7 @@ describe("createHandler", () => {
       copy: async () => {},
       saveImage: async () => {},
       refresh: async () => void log.push("refresh"),
+      setTab: () => {},
       isKnownLink: () => false,
       openLink: async () => {},
       info: () => {},
@@ -133,6 +135,12 @@ describe("createHandler", () => {
       "warn Orbit couldn't change plan limits: EPERM: settings.json is read-only",
       "refresh",
     ]);
+  });
+
+  it("remembers which tab is open and refreshes for it", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "tab", tab: "setup" });
+    expect(log).toEqual(["tab setup", "refresh"]);
   });
 
   it("copies the weekly recap as Markdown", async () => {

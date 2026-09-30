@@ -62,14 +62,14 @@ export function recapPng(
     r.cost !== null ? `${formatCost(r.cost)} of API value` : null,
   ].filter((l): l is string => l !== null);
   // Keep text clear of the chart on the right.
-  const fit = (text: string, max: number) => {
+  const fitText = (text: string, max: number) => {
     if (c.measureText(text).width <= max) return text;
     let t = text;
     while (t.length > 1 && c.measureText(`${t}…`).width > max) t = t.slice(0, -1);
     return `${t}…`;
   };
   lines.slice(0, 4).forEach((l, i) => {
-    c.fillText(fit(l, 680), 72, 390 + i * 46);
+    c.fillText(fitText(l, 680), 72, 390 + i * 46);
   });
 
   // Seven small columns: tokens per day this week, weekday initials below.

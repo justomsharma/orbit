@@ -1,6 +1,8 @@
 import * as v from "valibot";
+import type { SetupSnapshot } from "../extension/setupService";
 import type { UsageSnapshot } from "../extension/usageService";
 import type { LiveStatus, Session } from "../features/chats/types";
+import type { SettingDef } from "../features/setup/catalog";
 
 const SessionId = v.pipe(
   v.string(),
@@ -43,6 +45,7 @@ export const ViewMsgSchema = v.variant("type", [
   v.object({ type: v.literal("newChat") }),
   v.object({ type: v.literal("quota"), on: v.boolean() }),
   v.object({ type: v.literal("copyRecap") }),
+  v.object({ type: v.literal("tab"), tab: v.picklist(["home", "chats", "usage", "setup"]) }),
   v.object({ type: v.literal("saveRecapImage"), dataUrl: PngDataUrl }),
   ...setupMessages(),
 ]);
@@ -167,5 +170,7 @@ export type HostMsg =
       env: Environment;
     }
   | { type: "usage"; data: UsageSnapshot }
+  | { type: "setup"; data: SetupSnapshot }
+  | { type: "catalog"; data: SettingDef[] }
   | { type: "loading" }
   | { type: "error"; text: string };

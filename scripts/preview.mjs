@@ -149,14 +149,26 @@ const sample = {
 
 // Sample usage from the test fixture (bundled on the fly, since it is TypeScript).
 await esbuild.build({
-  entryPoints: ["test/helpers/usageFixture.ts"],
+  stdin: {
+    contents: `export { sampleUsage } from "./test/helpers/usageFixture.ts";
+export { sampleSetup } from "./test/helpers/setupFixture.ts";
+export { settingsCatalog } from "./src/features/setup/catalog.ts";`,
+    resolveDir: ".",
+    loader: "ts",
+  },
   bundle: true,
   format: "esm",
   platform: "node",
   outfile: join(out, "fixture.mjs"),
   logLevel: "silent",
 });
-const { sampleUsage } = await import(pathToFileURL(resolve(out, "fixture.mjs")).href);
+const { sampleUsage, sampleSetup, settingsCatalog } = await import(
+  pathToFileURL(resolve(out, "fixture.mjs")).href
+);
+const setupMsgs = [
+  { type: "catalog", data: settingsCatalog() },
+  { type: "setup", data: sampleSetup() },
+];
 const usageMsg = {
   type: "usage",
   data: sampleUsage({
@@ -190,7 +202,7 @@ for (const [name, vars] of Object.entries(themes)) {
 <script>
   window.__sent = [];
   window.acquireVsCodeApi = () => ({
-    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { window.postMessage(${JSON.stringify(sample)}, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); },
+    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { window.postMessage(${JSON.stringify(sample)}, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); if (m.type === "tab" && m.tab === "setup") setTimeout(() => { for (const x of ${JSON.stringify(setupMsgs)}) window.postMessage(x, "*"); }, 0); },
     getState: () => (location.hash ? { tab: location.hash.slice(1) } : undefined),
     setState: () => {},
   });

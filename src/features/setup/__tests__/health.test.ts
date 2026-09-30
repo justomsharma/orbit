@@ -240,6 +240,7 @@ describe("hookScriptPath", () => {
   it.each([
     ["./scripts/notify.sh", "/w/scripts/notify.sh"],
     ['"$CLAUDE_PROJECT_DIR/hooks/check.sh" --fast', "/w/hooks/check.sh"],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell syntax under test
     ["${CLAUDE_PROJECT_DIR}/hooks/check.sh", "/w/hooks/check.sh"],
     ["~/bin/done.sh", "/home/a/bin/done.sh"],
     ["bash ./x.sh", "/w/x.sh"],

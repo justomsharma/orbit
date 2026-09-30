@@ -1,18 +1,20 @@
+import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { OrbitStore } from "../core/orbitStore";
-import { claudeHome, projectsDir, sessionsDir, settingsFile } from "../core/paths";
+import { claudeHome, claudeJsonPath, projectsDir, sessionsDir, settingsFile } from "../core/paths";
 import { SafeWriter } from "../core/safeWriter";
 import { RefreshScheduler } from "../core/scheduler";
 import { findNode } from "../features/usage/findNode";
 import { QuotaInstaller } from "../features/usage/quotaInstall";
 import { ChatsService, type ChatsSnapshot } from "./chatsService";
 import { Opener } from "./opener";
+import { SetupService } from "./setupService";
 import { OrbitState } from "./state";
 import { UsageService, type UsageSnapshot } from "./usageService";
 import { OrbitViewProvider, VIEW_ID } from "./view";
 import { vscodeConfirmHost } from "./vscodeConfirm";
-import { vscodeOpenerHost } from "./vscodeHost";
+import { runClaudeInTerminal, vscodeOpenerHost } from "./vscodeHost";
 
 /** What `activate` returns — used by the integration tests. */
 export interface OrbitApi {
@@ -37,6 +39,15 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   const storage = context.globalStorageUri.fsPath;
   const store = new OrbitStore(storage);
   const writer = new SafeWriter(path.join(storage, "backups"));
+  const confirm = vscodeConfirmHost(context);
+  const workspace = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+  const claudeJson = claudeJsonPath();
+  const setup = new SetupService({
+    home,
+    claudeJson,
+    userHome: os.homedir(),
+    platform: process.platform,
+  });
   const quota = new QuotaInstaller({
     settingsPath: settingsFile(home),
     tapDir: path.join(storage, "statusline"),
@@ -45,8 +56,8 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     writer,
     findNode: () => findNode(),
     platform: process.platform,
-    confirm: vscodeConfirmHost(context),
-    workspace: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
+    confirm,
+    workspace,
   });
   const usage = new UsageService(home, store, quota);
   void quota.syncTap().catch((e) => log.warn("Could not refresh the statusline tap", String(e)));
@@ -70,6 +81,20 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     quota,
     state,
     opener,
+    setup,
+    setupDeps: {
+      home,
+      claudeJson,
+      workspace,
+      platform: process.platform,
+      writer,
+      confirm,
+      openFile: async (file) => {
+        await vscode.window.showTextDocument(vscode.Uri.file(file), { preview: false });
+      },
+      runClaude: (args, cwd) => runClaudeInTerminal(args, cwd),
+      newChat: (prompt) => opener.newChat(prompt),
+    },
     log,
     onSnapshot: (s) => showStatus(s.live.length),
   });
@@ -98,7 +123,22 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     watch(home, "history.jsonl"),
     // The tap rewrites quota.json on every statusline render.
     watch(path.join(storage, "statusline"), "quota.json"),
+    // Setup: settings, skills, agents, commands, plugins, MCP and project instructions.
+    watch(
+      home,
+      "{settings.json,CLAUDE.md,skills/**,agents/**,commands/**,plugins/installed_plugins.json}",
+    ),
+    watch(os.homedir(), ".claude.json"),
   ];
+  for (const f of vscode.workspace.workspaceFolders ?? []) {
+    const w = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(f, "{.claude/**,.mcp.json,CLAUDE.md,CLAUDE.local.md}"),
+    );
+    w.onDidChange(changed);
+    w.onDidCreate(changed);
+    w.onDidDelete(changed);
+    watchers.push(w);
+  }
 
   // Safety net for file systems where watching is unreliable.
   const poll = setInterval(changed, POLL_MS);

@@ -41,6 +41,7 @@ describe("settingsCatalog", () => {
   it("puts every setting in a group, most useful groups first", () => {
     expect(cat.every((d) => d.group)).toBe(true);
     expect(cat[0]!.group).toBe("Model & thinking");
+    expect(cat.slice(0, 2).map((d) => d.key)).toEqual(["model", "effortLevel"]);
   });
 });
 

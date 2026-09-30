@@ -14,6 +14,8 @@ export interface HandlerDeps {
   copy(text: string): Promise<void>;
   saveImage(dataUrl: string): Promise<void>;
   refresh(): Promise<void>;
+  /** The tab the person is looking at, so only its data is read. */
+  setTab(tab: "home" | "chats" | "usage" | "setup"): void;
   /** Only links that appear in the person's own chats (PR links) may be opened. */
   isKnownLink(url: string): boolean;
   openLink(url: string): Promise<void>;
@@ -69,6 +71,9 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         }
         return d.refresh();
       }
+      case "tab":
+        d.setTab(m.tab);
+        return d.refresh();
       case "copyRecap": {
         const md = d.recapMarkdown();
         if (!md) return;

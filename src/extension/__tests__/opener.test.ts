@@ -119,6 +119,22 @@ describe("Opener.newChat", () => {
     expect(calls).toEqual(["terminal /usr/bin/claude  @/code/shop"]);
   });
 
+  it("opens a chat with a prompt typed in (not sent) for Fix with Claude", async () => {
+    const { host, calls } = fakeHost();
+    await new Opener(host).newChat("Fix my settings.json");
+    expect(calls).toEqual([
+      "open vscode://anthropic.claude-code/open?prompt=Fix%20my%20settings.json",
+    ]);
+  });
+
+  it("copies the prompt when only the terminal CLI is available", async () => {
+    const { host, calls } = fakeHost({ claudeExtensionInstalled: () => false });
+    await new Opener(host).newChat("Fix it");
+    expect(calls[0]).toBe("terminal /usr/bin/claude  @/code/shop");
+    expect(calls[1]).toBe("copy Fix it");
+    expect(calls[2]).toMatch(/^info .*paste/i);
+  });
+
   it("explains when neither Claude's extension nor the claude command is available", async () => {
     const { host, calls } = fakeHost({
       claudeExtensionInstalled: () => false,
