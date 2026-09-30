@@ -149,10 +149,16 @@ export function effectiveSetting(
   return null;
 }
 
-/** Top-level keys Claude Code doesn't know (usually typos), sorted. */
+/**
+ * Documented in code.claude.com/docs but missing from the published schema
+ * (the schema can lag behind Claude Code releases).
+ */
+const DOCUMENTED_EXTRA = new Set(["modelSettings", "modelPicker"]);
+
+/** Top-level keys not in Claude Code's published list (typos, or newer than Orbit's copy), sorted. */
 export function unknownKeys(data: Record<string, unknown>): string[] {
   const known = (schema as { keys: Record<string, unknown> }).keys;
   return Object.keys(data)
-    .filter((k) => k !== "$schema" && !Object.hasOwn(known, k))
+    .filter((k) => k !== "$schema" && !Object.hasOwn(known, k) && !DOCUMENTED_EXTRA.has(k))
     .sort();
 }
