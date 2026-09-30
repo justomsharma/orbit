@@ -8,6 +8,8 @@ const { runTests } = require("@vscode/test-electron");
 const HERE_ID = "0b95bc0d-e0c0-4c77-9ad4-c2b7fd22d24a";
 const AWAY_ID = "11111111-2222-4333-8444-555555555555";
 
+const BLOB = "0123456789abcdef@v1";
+
 function transcript(id, cwd, prompt) {
   const base = { cwd, sessionId: id, gitBranch: "main", entrypoint: "cli", isSidechain: false };
   return [
@@ -36,6 +38,18 @@ function transcript(id, cwd, prompt) {
       },
     },
     { type: "ai-title", aiTitle: `${prompt} (title)`, sessionId: id },
+    {
+      type: "file-history-delta",
+      messageId: `msg_${id.slice(0, 8)}`,
+      trackingPath: "app.js",
+      backup: {
+        backupFileName: BLOB,
+        version: 1,
+        backupTime: "2026-09-29T10:00:30.000Z",
+        realParentDir: cwd,
+      },
+      timestamp: "2026-09-29T10:00:30.000Z",
+    },
   ]
     .map((l) => JSON.stringify(l))
     .join("\n");
@@ -55,6 +69,11 @@ async function main() {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, `${id}.jsonl`), transcript(id, cwd, prompt));
   }
+  // One checkpoint in the "here" chat: app.js before Claude's edit, and as it is now.
+  const blobs = join(claude, "file-history", HERE_ID);
+  mkdirSync(blobs, { recursive: true });
+  writeFileSync(join(blobs, BLOB), "const total = 1;\n");
+  writeFileSync(join(workspace, "app.js"), "const total = 2;\n");
 
   try {
     await runTests({
@@ -66,6 +85,7 @@ async function main() {
         CLAUDE_CONFIG_DIR: claude,
         ORBIT_IT_HERE: HERE_ID,
         ORBIT_IT_AWAY: AWAY_ID,
+        ORBIT_IT_APP: join(workspace, "app.js"),
       },
     });
   } finally {

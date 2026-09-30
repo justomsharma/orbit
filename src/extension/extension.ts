@@ -24,6 +24,8 @@ export interface OrbitApi {
   refresh(): Promise<void>;
   lastSnapshot(): ChatsSnapshot | null;
   lastUsage(): UsageSnapshot | null;
+  /** Runs a webview message through Orbit's handlers (for integration tests). */
+  dispatch(m: unknown): Promise<void>;
 }
 
 const POLL_MS = 20_000;
@@ -183,6 +185,7 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     },
     lastSnapshot: () => provider.last,
     lastUsage: () => provider.lastUsage,
+    dispatch: (m: unknown) => provider.dispatch(m),
   };
 }
 

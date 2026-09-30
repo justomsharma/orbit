@@ -48,23 +48,14 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   /** Signatures of the data the view last received; identical refreshes are not re-sent. */
   private sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
 
-  constructor(private readonly d: ViewDeps) {}
+  /**
+   * Runs one message from the webview (every message is validated inside the
+   * handlers). Also the test API's way in, so integration tests exercise the
+   * same code paths as a click.
+   */
+  readonly dispatch: (m: unknown) => Promise<void>;
 
-  resolveWebviewView(view: vscode.WebviewView): void {
-    this.view = view;
-    this.sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
-    const root = vscode.Uri.joinPath(this.d.extensionUri, "dist", "webview");
-    const w = view.webview;
-    w.options = { enableScripts: true, enableForms: false, localResourceRoots: [root] };
-    const asset = (f: string) => w.asWebviewUri(vscode.Uri.joinPath(root, f)).toString();
-    w.html = renderHtml({
-      cspSource: w.cspSource,
-      nonce: makeNonce(),
-      scriptUri: asset("main.js"),
-      styleUri: asset("main.css"),
-      codiconUri: asset("codicon.css"),
-    });
-
+  constructor(private readonly d: ViewDeps) {
     const handle = createHandler({
       getSession: (id) => this.d.chats.get(id),
       opener: this.d.opener,
@@ -96,14 +87,32 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       sessions: () => this.d.chats.all(),
       post: (msg) => this.post(msg),
     };
-    w.onDidReceiveMessage(async (m) => {
+    this.dispatch = async (m) => {
       try {
         if (!(await handleSetup(m, setupDeps)) && !(await handleChats(m, chatsDeps)))
           await handle(m);
       } catch (e) {
         this.d.log.error("Action failed", errText(e));
       }
+    };
+  }
+
+  resolveWebviewView(view: vscode.WebviewView): void {
+    this.view = view;
+    this.sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
+    const root = vscode.Uri.joinPath(this.d.extensionUri, "dist", "webview");
+    const w = view.webview;
+    w.options = { enableScripts: true, enableForms: false, localResourceRoots: [root] };
+    const asset = (f: string) => w.asWebviewUri(vscode.Uri.joinPath(root, f)).toString();
+    w.html = renderHtml({
+      cspSource: w.cspSource,
+      nonce: makeNonce(),
+      scriptUri: asset("main.js"),
+      styleUri: asset("main.css"),
+      codiconUri: asset("codicon.css"),
     });
+
+    w.onDidReceiveMessage((m) => this.dispatch(m));
     view.onDidChangeVisibility(() => {
       this.sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
       if (view.visible) void this.refresh();

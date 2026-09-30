@@ -55,6 +55,42 @@ exports.run = async () => {
     assert.equal(u.quota.enabled, false);
   });
 
+  const until = async (what, fn) => {
+    for (let i = 0; i < 50; i++) {
+      const v = fn();
+      if (v) return v;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.fail(`timed out waiting for ${what}`);
+  };
+
+  await check("opens a chat's transcript as a read-only Markdown preview", async () => {
+    await api.dispatch({ type: "chat:transcript", id: process.env.ORBIT_IT_HERE });
+    const doc = await until("the transcript document", () =>
+      vscode.workspace.textDocuments.find((d) => d.uri.scheme === "orbit-view"),
+    );
+    assert.match(doc.getText(), /^# Fix checkout \(title\)/);
+    assert.match(doc.getText(), /Fix checkout/);
+  });
+
+  await check("compares a checkpoint with the file as it is now", async () => {
+    await api.dispatch({
+      type: "chat:diff",
+      id: process.env.ORBIT_IT_HERE,
+      path: process.env.ORBIT_IT_APP,
+      version: 1,
+    });
+    const tab = await until("the diff editor", () =>
+      vscode.window.tabGroups.all
+        .flatMap((g) => g.tabs)
+        .find((t) => t.input instanceof vscode.TabInputTextDiff),
+    );
+    assert.equal(tab.input.original.scheme, "orbit-view");
+    assert.equal(tab.input.modified.fsPath.toLowerCase(), process.env.ORBIT_IT_APP.toLowerCase());
+    const before = await vscode.workspace.openTextDocument(tab.input.original);
+    assert.equal(before.getText(), "const total = 1;\n");
+  });
+
   await check("refresh command runs without error", async () => {
     await vscode.commands.executeCommand("orbit.refresh");
   });
