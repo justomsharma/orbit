@@ -547,3 +547,56 @@ describe("Chat details: small things done right", () => {
     await waitFor(() => expect(focused()).toBe("Search chats"));
   });
 });
+
+describe("Last touches", () => {
+  it("'Show all chats' also clears the menu filters that emptied the list", () => {
+    store.narrow.value = { project: "/nowhere", branch: null, since: null };
+    store.filter.value = "all";
+    render(<ChatsView />);
+    fireEvent.click(screen.getByRole("button", { name: /Show all chats/ }));
+    expect(store.narrow.value).toEqual({ project: null, branch: null, since: null });
+    expect(screen.getByText("Fix the parser")).toBeTruthy();
+  });
+
+  it("says when a chat already has the most tags", () => {
+    store.applyHostMessage({
+      type: "sessions",
+      items: [chat],
+      live: [],
+      pins: [],
+      renames: {},
+      tags: { [ID]: ["a", "b", "c", "d", "e", "f", "g", "h"] },
+      here: [ID],
+      env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
+    });
+    render(<ChatsView />);
+    fireEvent.click(screen.getByRole("button", { name: /Files and transcript/ }));
+    expect(screen.queryByRole("textbox", { name: /Add a tag/ })).toBeNull();
+    expect(screen.getByText(/up to 8 tags/)).toBeTruthy();
+  });
+
+  it("keeps a search running when running chats reorder the list", async () => {
+    const OTHER = "00000000-0000-4000-8000-000000000002";
+    const load = (order: string[]) =>
+      store.applyHostMessage({
+        type: "sessions",
+        items: order.map((id) => ({ ...chat, id, title: id })),
+        live: [],
+        pins: [],
+        renames: {},
+        tags: {},
+        here: order,
+        env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
+      });
+    load([ID, OTHER]);
+    store.inMessages.value = true;
+    render(<ChatsView />);
+    fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
+      target: { value: "golden" },
+    });
+    await waitFor(() => expect(sent.filter((m) => m.type === "search")).toHaveLength(1));
+    act(() => load([OTHER, ID]));
+    await new Promise((r) => setTimeout(r, 450));
+    expect(sent.filter((m) => m.type === "search")).toHaveLength(1);
+  });
+});

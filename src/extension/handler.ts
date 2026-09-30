@@ -56,10 +56,13 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
       case "pin":
         await d.state.setPin(m.id, m.on);
         return d.refresh();
+      // Orbit's own names and tags, kept only for chats that exist.
       case "rename":
+        if (!d.getSession(m.id)) return;
         await d.state.setRename(m.id, m.title);
         return d.refresh();
       case "tags":
+        if (!d.getSession(m.id)) return;
         await d.state.setTags(m.id, m.tags);
         return d.refresh();
       case "openLink":

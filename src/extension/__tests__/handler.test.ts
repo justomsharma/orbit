@@ -74,6 +74,13 @@ describe("createHandler", () => {
     ]);
   });
 
+  it("only tags or renames chats that exist", async () => {
+    const { handle, log } = setup({ known: false });
+    await handle({ type: "tags", id: ID, tags: ["x"] });
+    await handle({ type: "rename", id: ID, title: "x" });
+    expect(log.filter((l) => l.startsWith("tags") || l.startsWith("rename"))).toEqual([]);
+  });
+
   it("drops malformed messages without acting", async () => {
     const { handle, log } = setup();
     await handle({ type: "openChat", id: "x; rm -rf ~" });

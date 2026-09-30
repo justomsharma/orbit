@@ -11,7 +11,7 @@ explains and tidies everything around it, then hands you back to Claude.
 | Tab | |
 |---|---|
 | **Home** | Today at a glance: continue your last chat, what's running, today's usage, plan limits, setup warnings. |
-| **Chats** | Every chat from the terminal and the extension. Search titles or **inside messages**, filter by folder, branch and date, pin, rename, tag. Continue in Claude's chat or a terminal, or **fork** into a new chat. Open a chat's **files and transcript**: every file Claude changed, each version, compare with now, safe restore, readable transcript, export to Markdown. **Prompts**: every prompt you've typed (repeats collapsed, pasted text restored), ready to use again. |
+| **Chats** | Every chat from the terminal and the extension. Search titles or **inside messages**, filter by folder, branch and date, pin, rename, tag. Continue in Claude's chat or a terminal, or **fork** into a new chat (needs the `claude` command). Open a chat's **files and transcript**: every file Claude changed, each version, compare with now, safe restore, readable transcript, export to Markdown. **Prompts**: every prompt you've typed (repeats collapsed, pasted text restored), ready to use again. |
 | **Usage** | Tokens and cost by day, week and month, by model and project, a 6-month activity map, and a weekly recap card to share (image or Markdown). Optional 5-hour and 7-day **plan limits**. |
 | **Setup** | MCP servers, plugins, skills, agents, commands, hooks, permissions, memory and CLAUDE.md files, and Claude's settings. See them and change them safely. A **health check** finds broken JSON, missing commands, servers waiting for approval and more, and **Fix with Claude** opens a chat with the fix typed in. |
 
@@ -20,12 +20,14 @@ explains and tidies everything around it, then hands you back to Claude.
 - **Claude keeps working exactly as before.** Orbit never deletes chats and never rewrites Claude's own
   history or transcripts. It never touches login tokens.
 - **Every change asks first.** You see the exact change, Orbit keeps a backup, and one click undoes it.
-  If Claude changes the file while you're deciding, Orbit asks again instead of overwriting.
+  If Claude changes a settings file while you're deciding, Orbit applies just your change on top of
+  Claude's; for a whole file (like restoring an old version) it asks you again instead of overwriting.
 - **Only Claude's official settings**, straight from its published settings schema.
 - **Nothing is typed into a shell.** Chats open through Claude Code's documented link, or by starting
   `claude` directly.
-- **Secrets stay hidden.** API keys and tokens in env values, server arguments, URLs, hooks and
-  permission rules are masked before anything is shown.
+- **Secrets stay hidden in Orbit's views.** API keys and tokens in env values, server arguments, URLs,
+  hooks, permission rules and transcript tool lines are masked. (VS Code's own diff of a change shows the
+  real file, and chat text is shown as it was written.)
 - Orbit's own data (pins, tags, backups) lives in VS Code's storage, never in `~/.claude`.
 
 ## Good to know

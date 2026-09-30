@@ -8,6 +8,7 @@ import { IconButton } from "../ui/Icon";
 import { openDetails } from "./ChatDetails";
 
 let nextReq = 0;
+const MAX_IDS = 50_000;
 
 /**
  * Searches inside messages a moment after typing stops, in the chats in view
@@ -17,7 +18,8 @@ let nextReq = 0;
 export function useMessageSearch(enabled: boolean, ids: string[]): void {
   const on = enabled && store.inMessages.value;
   const q = store.query.value.trim();
-  const key = ids.join(",");
+  // The host doesn't care about order, so the list reordering never restarts a search.
+  const key = [...ids].sort().join(",");
   useEffect(() => {
     if (!on || q.length < 2) {
       if (store.messageSearch.value) post({ type: "search", query: "", req: "cancel" });
@@ -31,7 +33,8 @@ export function useMessageSearch(enabled: boolean, ids: string[]): void {
       const req = `search-${++nextReq}`;
       store.messageSearch.value = { req, query: q, key };
       store.messageHits.value = null;
-      post({ type: "search", query: q, req, ids });
+      // Beyond the message's limit, search every chat; results are still filtered to this view.
+      post({ type: "search", query: q, req, ...(ids.length <= MAX_IDS ? { ids } : {}) });
     }, 350);
     return () => clearTimeout(t);
   }, [on, q, key]);

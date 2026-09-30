@@ -207,18 +207,22 @@ function TagEditor({ id }: { id: string }) {
           </button>
         </span>
       ))}
-      <input
-        class="tag-input"
-        aria-label="Add a tag"
-        placeholder={tags.length ? "Add tag" : "Add a tag, e.g. bug"}
-        maxLength={24}
-        value={draft}
-        onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") add();
-        }}
-        onBlur={add}
-      />
+      {tags.length >= 8 ? (
+        <span class="muted">A chat can have up to 8 tags.</span>
+      ) : (
+        <input
+          class="tag-input"
+          aria-label="Add a tag"
+          placeholder={tags.length ? "Add tag" : "Add a tag, e.g. bug"}
+          maxLength={24}
+          value={draft}
+          onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") add();
+          }}
+          onBlur={add}
+        />
+      )}
     </div>
   );
 }

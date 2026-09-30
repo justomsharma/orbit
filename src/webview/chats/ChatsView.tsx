@@ -346,7 +346,13 @@ function ChatList() {
       <Empty
         icon="filter"
         title="Nothing here yet"
-        action={{ label: "Show all chats", onClick: () => (store.filter.value = "all") }}
+        action={{
+          label: "Show all chats",
+          onClick: () => {
+            store.filter.value = "all";
+            store.narrow.value = { project: null, branch: null, since: null };
+          },
+        }}
       >
         No chats match this filter.
       </Empty>
