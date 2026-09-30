@@ -5,3 +5,4 @@ out/
 *.vsix
 coverage/
 .vscode-test/
+test/local/

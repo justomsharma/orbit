@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  esbuild: { jsx: "automatic", jsxImportSource: "preact" },
+  oxc: { jsx: { runtime: "automatic", importSource: "preact" } },
   resolve: {
     alias: { vscode: fileURLToPath(new URL("./test/mocks/vscode.ts", import.meta.url)) },
   },
