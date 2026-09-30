@@ -5,9 +5,9 @@ describe("findNode", () => {
   it("returns the first node on PATH, preferring node.exe on Windows", async () => {
     const r = await findNode({
       platform: "win32",
-      run: async () => "C:\x\node\r\nC:\Program Files\nodejs\node.exe\r\n",
+      run: async () => "C:\\tools\\node\r\nC:\\Program Files\\nodejs\\node.exe\r\n",
     });
-    expect(r).toBe("C:Program Files\nodejs\node.exe");
+    expect(r).toBe("C:\\Program Files\\nodejs\\node.exe");
     expect(await findNode({ platform: "linux", run: async () => "/usr/bin/node\n" })).toBe(
       "/usr/bin/node",
     );
