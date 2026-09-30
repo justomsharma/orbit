@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "publisher": "orbit-dev",
   "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#a8472f",
+    "theme": "dark"
+  },
   "private": true,
   "engines": {
     "vscode": "^1.94.0",

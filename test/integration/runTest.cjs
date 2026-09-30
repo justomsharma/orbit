@@ -78,7 +78,10 @@ async function main() {
   try {
     await runTests({
       version: "1.94.0",
-      extensionDevelopmentPath: resolve(__dirname, "../.."),
+      // ORBIT_IT_EXTENSION: an unpacked .vsix, to test exactly what ships.
+      extensionDevelopmentPath: process.env.ORBIT_IT_EXTENSION
+        ? resolve(process.env.ORBIT_IT_EXTENSION)
+        : resolve(__dirname, "../.."),
       extensionTestsPath: resolve(__dirname, "suite.cjs"),
       launchArgs: [workspace, "--disable-extensions", "--user-data-dir", join(root, "user")],
       extensionTestsEnv: {

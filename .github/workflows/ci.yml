@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx biome check .
+      - run: npm test
+      - run: npm run test:perf
+      - run: npm run build
+      # A real VS Code (the oldest supported version) needs a display on Linux.
+      - name: Integration (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
+      - name: Integration (Windows, macOS)
+        if: runner.os != 'Linux'
+        run: npm run test:integration
+
+  package:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run package
+      # Test exactly what ships: the unpacked .vsix in a real VS Code.
+      - name: Integration on the packaged extension
+        run: |
+          mkdir -p /tmp/vsix && unzip -q dist/*.vsix -d /tmp/vsix
+          ORBIT_IT_EXTENSION=/tmp/vsix/extension xvfb-run -a node test/integration/runTest.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orbit-vsix
+          path: dist/*.vsix
