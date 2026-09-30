@@ -17,6 +17,13 @@ function effective(files: SettingsView[], key: string): { scope: string; v: Sett
   return null;
 }
 
+/**
+ * Settings Claude merges across files instead of taking only the highest one:
+ * every list, plus these objects (Claude Code docs, "Settings precedence").
+ */
+const COMBINED = new Set(["permissions", "env", "enabledPlugins", "hooks", "skillOverrides"]);
+const combines = (key: string, v: SettingValue) => COMBINED.has(key) || "count" in v;
+
 const shown = (v: SettingValue | undefined): string =>
   !v
     ? ""
@@ -152,10 +159,12 @@ function SettingRow({ def, scope }: { def: SettingDef; scope: EditScope }) {
       {elsewhere ? (
         <p class="setting-note">
           Set in {SCOPE_WORD[elsewhere.scope]} settings: {shown(elsewhere.v)}
-          {PRECEDENCE.indexOf(elsewhere.scope as (typeof PRECEDENCE)[number]) <
-          PRECEDENCE.indexOf(scope)
-            ? " (that one wins)"
-            : ""}
+          {combines(def.key, elsewhere.v)
+            ? " (Claude combines the values from every file)"
+            : PRECEDENCE.indexOf(elsewhere.scope as (typeof PRECEDENCE)[number]) <
+                PRECEDENCE.indexOf(scope)
+              ? " (that one wins)"
+              : ""}
         </p>
       ) : null}
       {def.description ? (

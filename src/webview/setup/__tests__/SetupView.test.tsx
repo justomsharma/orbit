@@ -274,6 +274,21 @@ describe("SetupView", () => {
     expect(within(settings).getAllByText(/set in shared project/i).length).toBeGreaterThan(0);
   });
 
+  it("says settings Claude combines across files are combined, not overridden", () => {
+    const s = sampleSetup();
+    s.settings.find((f) => f.scope === "project")!.values.env = { keys: ["CI"] };
+    s.settings.find((f) => f.scope === "local")!.values.effortLevel = { value: "low" };
+    store.setup.value = s;
+    render(<SetupView />);
+    const row = (label: string) =>
+      within(section(/Settings/))
+        .getAllByText(label, { selector: ".setting-label" })[0]!
+        .closest("li") as HTMLElement;
+    expect(within(row("Env")).getByText(/combines/)).toBeTruthy();
+    expect(within(row("Env")).queryByText(/that one wins/)).toBeNull();
+    expect(within(row("Effort level")).getByText(/that one wins/)).toBeTruthy();
+  });
+
   it("searches across the whole setup", () => {
     render(<SetupView />);
     fireEvent.input(screen.getByRole("searchbox", { name: /Search setup/ }), {
