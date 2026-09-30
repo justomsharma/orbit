@@ -144,6 +144,7 @@ export function removeHook(h: HookRef): Mutate {
     handlers.splice(h.index, 1);
     if (handlers.length === 0) (groups as unknown[]).splice(h.group, 1);
     if ((groups as unknown[]).length === 0) delete hooks[h.event];
+    if (Object.keys(hooks).length === 0) delete o.hooks;
   };
 }
 

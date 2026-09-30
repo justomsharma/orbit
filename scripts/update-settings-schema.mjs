@@ -9,7 +9,15 @@ const res = await fetch(URL);
 if (!res.ok) throw new Error(`${URL}: ${res.status}`);
 const schema = await res.json();
 
+/** Every branch of anyOf/oneOf is a string: an open text setting, with any enum values as suggestions. */
+function stringUnion(p) {
+  const branches = p.anyOf ?? p.oneOf;
+  if (!Array.isArray(branches) || !branches.every((b) => b.type === "string")) return null;
+  return branches.flatMap((b) => (Array.isArray(b.enum) ? b.enum : []));
+}
+
 function kind(p) {
+  if (stringUnion(p)) return "string";
   if (Array.isArray(p.enum) && p.enum.every((v) => typeof v === "string")) return "enum";
   const t = Array.isArray(p.type) ? p.type.filter((x) => x !== "null") : [p.type];
   if (t.length === 1 && ["boolean", "string", "number", "integer"].includes(t[0])) {
@@ -26,6 +34,7 @@ for (const [key, p] of Object.entries(schema.properties ?? {})) {
     kind: kind(p),
     description,
     ...(Array.isArray(p.enum) ? { enum: p.enum } : {}),
+    ...(stringUnion(p)?.length ? { suggestions: stringUnion(p) } : {}),
     ...(typeof p.minimum === "number" ? { minimum: p.minimum } : {}),
     ...(/^DEPRECATED/i.test(description) ? { deprecated: true } : {}),
   };

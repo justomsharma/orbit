@@ -44,7 +44,100 @@ export const ViewMsgSchema = v.variant("type", [
   v.object({ type: v.literal("quota"), on: v.boolean() }),
   v.object({ type: v.literal("copyRecap") }),
   v.object({ type: v.literal("saveRecapImage"), dataUrl: PngDataUrl }),
+  ...setupMessages(),
 ]);
+
+/** Setup tab messages. Every value is bounded here and checked again by the host. */
+function setupMessages() {
+  const text = (max: number) => v.pipe(v.string(), v.maxLength(max));
+  const nonEmpty = (max: number) => v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(max));
+  const EditScope = v.picklist(["user", "project", "local"]);
+  const McpName = v.pipe(v.string(), v.regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/));
+  const ItemName = v.pipe(v.string(), v.regex(/^[a-z0-9][a-z0-9-]{0,63}$/));
+  const Key = v.pipe(
+    v.string(),
+    v.regex(/^[A-Za-z][A-Za-z0-9]{0,79}(\.[A-Za-z][A-Za-z0-9]{0,79})?$/),
+  );
+  const FilePath = nonEmpty(1024);
+  // MCP servers are often local (http://localhost:3000/mcp): http and https only.
+  const McpUrl = v.pipe(
+    v.string(),
+    v.maxLength(2048),
+    v.check((u) => {
+      try {
+        return ["http:", "https:"].includes(new URL(u).protocol);
+      } catch {
+        return false;
+      }
+    }),
+  );
+  return [
+    v.object({ type: v.literal("setup:refresh") }),
+    v.object({
+      type: v.literal("setup:setSetting"),
+      scope: EditScope,
+      key: Key,
+      value: v.union([v.pipe(v.string(), v.maxLength(2000)), v.number(), v.boolean(), v.null()]),
+    }),
+    v.object({
+      type: v.literal("setup:plugin"),
+      id: v.pipe(v.string(), v.maxLength(200), v.regex(/^[^@\s]+@[^@\s]+$/)),
+      enabled: v.boolean(),
+      scope: EditScope,
+    }),
+    v.object({
+      type: v.literal("setup:mcpApproval"),
+      name: McpName,
+      state: v.picklist(["approved", "rejected"]),
+    }),
+    v.object({ type: v.literal("setup:mcpRemove"), scope: EditScope, name: McpName }),
+    v.object({
+      type: v.literal("setup:mcpAdd"),
+      scope: EditScope,
+      name: McpName,
+      transport: v.picklist(["stdio", "http", "sse"]),
+      command: v.optional(nonEmpty(500)),
+      args: v.optional(v.pipe(v.array(text(500)), v.maxLength(50))),
+      url: v.optional(McpUrl),
+    }),
+    v.object({ type: v.literal("setup:mcpLogin"), name: McpName }),
+    v.object({ type: v.literal("setup:hookRemove"), id: nonEmpty(2000) }),
+    v.object({
+      type: v.literal("setup:hookAdd"),
+      scope: EditScope,
+      event: v.pipe(v.string(), v.regex(/^[A-Z][A-Za-z]{1,40}$/)),
+      matcher: v.nullable(text(200)),
+      command: nonEmpty(2000),
+      timeout: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(3600))),
+    }),
+    v.object({ type: v.literal("setup:hooksPaused"), paused: v.boolean() }),
+    v.object({
+      type: v.literal("setup:rule"),
+      op: v.picklist(["add", "remove"]),
+      scope: EditScope,
+      list: v.picklist(["allow", "ask", "deny"]),
+      rule: nonEmpty(500),
+    }),
+    v.object({
+      type: v.literal("setup:skillVisibility"),
+      name: v.pipe(v.string(), v.maxLength(100)),
+      visibility: v.picklist(["on", "name-only", "off"]),
+    }),
+    v.object({
+      type: v.literal("setup:new"),
+      kind: v.picklist(["skill", "agent", "command"]),
+      scope: v.picklist(["user", "project"]),
+      name: ItemName,
+      description: nonEmpty(500),
+    }),
+    v.object({ type: v.literal("setup:open"), file: FilePath }),
+    v.object({
+      type: v.literal("setup:createClaudeMd"),
+      scope: v.picklist(["user", "project", "local"]),
+    }),
+    v.object({ type: v.literal("setup:fixWithClaude"), issueId: nonEmpty(2000) }),
+  ] as const;
+}
 
 export type ViewMsg = v.InferOutput<typeof ViewMsgSchema>;
 

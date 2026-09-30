@@ -429,8 +429,17 @@
       "description": "(Managed settings only) Allowlist restricting Desktop SSH sessions to approved hosts. Patterns are case-insensitive; * matches any host and *.example.com matches example.com and any subdomain. See https://code.claude.com/docs/en/desktop#ssh-sessions"
     },
     "theme": {
-      "kind": "json",
-      "description": "Color theme for the interface: auto, dark, light, the daltonized variants (deuteranopia-friendly), the ansi variants (16-color terminals), or a custom theme reference such as custom:<slug> or custom:<plugin-name>:<slug>. See https://code.claude.com/docs/en/terminal-config#match-the-color-theme"
+      "kind": "string",
+      "description": "Color theme for the interface: auto, dark, light, the daltonized variants (deuteranopia-friendly), the ansi variants (16-color terminals), or a custom theme reference such as custom:<slug> or custom:<plugin-name>:<slug>. See https://code.claude.com/docs/en/terminal-config#match-the-color-theme",
+      "suggestions": [
+        "auto",
+        "dark",
+        "light",
+        "dark-daltonized",
+        "light-daltonized",
+        "dark-ansi",
+        "light-ansi"
+      ]
     },
     "voice": {
       "kind": "json",

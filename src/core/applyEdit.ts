@@ -29,14 +29,40 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
  * between the preview and the write (common for ~/.claude.json), the same edit is
  * planned again on the fresh file once; Claude's own change is never lost.
  */
-export async function applyJsonEdit(
+export function applyJsonEdit(
   writer: SafeWriter,
   host: ConfirmHost,
   edit: JsonEdit,
 ): Promise<boolean> {
+  return applyPlanned(writer, host, () => writer.planJson(edit.file, edit.mutate), edit);
+}
+
+export interface TextEdit {
+  file: string;
+  /** New content from the current one (null when the file doesn't exist). May throw to refuse. */
+  transform: (before: string | null) => string;
+  summary: string;
+  label: string;
+}
+
+/** The same flow for a whole-file edit, such as creating a new skill. */
+export function applyTextEdit(
+  writer: SafeWriter,
+  host: ConfirmHost,
+  edit: TextEdit,
+): Promise<boolean> {
+  return applyPlanned(writer, host, () => writer.plan(edit.file, edit.transform), edit);
+}
+
+async function applyPlanned(
+  writer: SafeWriter,
+  host: ConfirmHost,
+  makePlan: () => Promise<EditPlan>,
+  edit: { summary: string; label: string },
+): Promise<boolean> {
   let plan: EditPlan;
   try {
-    plan = await writer.planJson(edit.file, edit.mutate);
+    plan = await makePlan();
   } catch (e) {
     host.warn(message(e));
     return false;
@@ -70,7 +96,7 @@ export async function applyJsonEdit(
         return false;
       }
       try {
-        plan = await writer.planJson(edit.file, edit.mutate);
+        plan = await makePlan();
       } catch (e2) {
         host.warn(message(e2));
         return false;

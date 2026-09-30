@@ -8,6 +8,8 @@ export interface SettingDef {
   kind: SettingKind;
   description: string;
   enum?: string[];
+  /** Common values for an open text setting (e.g. theme names; custom values allowed). */
+  suggestions?: string[];
   minimum?: number;
   deprecated: boolean;
   group: string;
@@ -104,6 +106,7 @@ interface RawDef {
   kind: SettingKind;
   description: string;
   enum?: string[];
+  suggestions?: string[];
   minimum?: number;
   deprecated?: boolean;
 }
@@ -122,6 +125,7 @@ export function settingsCatalog(): SettingDef[] {
       kind: d.kind,
       description: d.description,
       ...(d.enum ? { enum: d.enum } : {}),
+      ...(d.suggestions ? { suggestions: d.suggestions } : {}),
       ...(d.minimum !== undefined ? { minimum: d.minimum } : {}),
       deprecated: d.deprecated === true,
       group: groupOf.get(key) ?? "More",
