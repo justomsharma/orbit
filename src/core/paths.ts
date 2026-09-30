@@ -56,3 +56,13 @@ export function projectName(cwd: string): string {
   // A bare drive like "C:" is not a useful name on its own.
   return /^[a-zA-Z]:$/.test(last) && parts.length === 1 ? cwd : last;
 }
+
+/** Is `cwd` the folder itself or somewhere inside it? */
+export function isInside(folder: string, cwd: string, platform: NodeJS.Platform = process.platform) {
+  if (!cwd) return false;
+  const f = normPath(folder, platform);
+  const c = normPath(cwd, platform);
+  if (c === f) return true;
+  const sep = platform === "win32" ? "\\" : "/";
+  return c.startsWith(f.endsWith(sep) ? f : f + sep);
+}

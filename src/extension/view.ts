@@ -25,11 +25,14 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   private running: Promise<void> | null = null;
   private again = false;
   last: ChatsSnapshot | null = null;
+  /** Signature of the data the view last received; identical refreshes are not re-sent. */
+  private sent = "";
 
   constructor(private readonly d: ViewDeps) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    this.sent = "";
     const root = vscode.Uri.joinPath(this.d.extensionUri, "dist", "webview");
     const w = view.webview;
     w.options = { enableScripts: true, enableForms: false, localResourceRoots: [root] };
@@ -47,6 +50,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       opener: this.d.opener,
       state: this.d.state,
       refresh: () => this.refresh(),
+      isKnownLink: (u) => this.d.chats.isKnownLink(u),
       openLink: async (url) => {
         await vscode.env.openExternal(vscode.Uri.parse(url, true));
       },
@@ -56,6 +60,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       handle(m).catch((e) => this.d.log.error("Action failed", e instanceof Error ? e : String(e))),
     );
     view.onDidChangeVisibility(() => {
+      this.sent = "";
       if (view.visible) void this.refresh();
     });
     view.onDidDispose(() => {
@@ -89,7 +94,8 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       const snap = await this.d.chats.snapshot(workspaceFolders());
       this.last = snap;
       this.d.onSnapshot(snap);
-      this.post({
+      if (!this.view?.visible) return;
+      const msg: HostMsg = {
         type: "sessions",
         items: snap.items,
         live: snap.live,
@@ -101,7 +107,11 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
           hasWorkspace: workspaceFolders().length > 0,
           platform: process.platform,
         },
-      });
+      };
+      const sig = JSON.stringify(msg);
+      if (sig === this.sent) return;
+      this.sent = sig;
+      this.post(msg);
     } catch (e) {
       this.d.log.error("Could not read Claude Code data", e instanceof Error ? e : String(e));
       this.post({ type: "error", text: "Orbit couldn't read Claude Code's data folder." });

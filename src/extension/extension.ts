@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { claudeHome } from "../core/paths";
-import { readLiveSessions } from "../features/chats/live";
+import { claudeHome, projectsDir, sessionsDir } from "../core/paths";
+import { RefreshScheduler } from "../core/scheduler";
 import { ChatsService, type ChatsSnapshot } from "./chatsService";
 import { Opener } from "./opener";
 import { OrbitState } from "./state";
@@ -13,7 +13,6 @@ export interface OrbitApi {
   lastSnapshot(): ChatsSnapshot | null;
 }
 
-const DEBOUNCE_MS = 600;
 const POLL_MS = 20_000;
 
 export function activate(context: vscode.ExtensionContext): OrbitApi {
@@ -44,28 +43,29 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     onSnapshot: (s) => showStatus(s.live.length),
   });
 
-  // Refresh when Claude writes its files, debounced; while hidden only the status bar updates.
-  let timer: NodeJS.Timeout | undefined;
-  const changed = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (provider.visible) void provider.refresh();
-      else
-        void readLiveSessions(home).then(
-          (m) => showStatus(m.size),
-          () => {},
-        );
-    }, DEBOUNCE_MS);
+  // Refresh when Claude writes its files: a burst becomes one refresh, and never
+  // more than one every 2 s while Claude is writing continuously. The snapshot is
+  // cheap (per-file caches, incremental history) and also keeps the status bar right
+  // while the sidebar is hidden; the view skips sending data that did not change.
+  const scheduler = new RefreshScheduler(() => void provider.refresh(), {
+    delayMs: 500,
+    minIntervalMs: 2000,
+  });
+  const changed = () => scheduler.trigger();
+  const watch = (base: string, glob: string) => {
+    const w = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(base), glob),
+    );
+    w.onDidChange(changed);
+    w.onDidCreate(changed);
+    w.onDidDelete(changed);
+    return w;
   };
-  const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(
-      vscode.Uri.file(home),
-      "{projects/*/*.jsonl,sessions/*.json,history.jsonl}",
-    ),
-  );
-  watcher.onDidChange(changed);
-  watcher.onDidCreate(changed);
-  watcher.onDidDelete(changed);
+  const watchers = [
+    watch(projectsDir(home), "**/*.jsonl"),
+    watch(sessionsDir(home), "*.json"),
+    watch(home, "history.jsonl"),
+  ];
 
   // Safety net for file systems where watching is unreliable.
   const poll = setInterval(changed, POLL_MS);
@@ -74,9 +74,9 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   context.subscriptions.push(
     log,
     status,
-    watcher,
+    ...watchers,
     { dispose: () => clearInterval(poll) },
-    { dispose: () => clearTimeout(timer) },
+    scheduler,
     vscode.window.registerWebviewViewProvider(VIEW_ID, provider),
     vscode.commands.registerCommand("orbit.open", () =>
       vscode.commands.executeCommand("workbench.view.extension.orbit"),

@@ -454,3 +454,8 @@ fieldset.chips {
 .live-label.idle {
   color: var(--ok);
 }
+
+/* While navigating with the keyboard, the highlighted row shows its actions. */
+.chats.kbd .chat-row.active .chat-actions {
+  display: flex;
+}

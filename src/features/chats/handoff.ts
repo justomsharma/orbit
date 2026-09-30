@@ -33,7 +33,10 @@ export interface TerminalSpec {
 
 /**
  * Starts `claude` itself as the terminal's program, with the session id as an
- * argument. No shell parses anything, so nothing can be injected.
+ * argument. For a native executable no shell parses anything. For npm's `.cmd`
+ * shim Windows runs it through cmd.exe, which re-parses arguments — safe only
+ * because the id is a validated UUID and `--resume` is constant. Never add
+ * free-text arguments here.
  */
 export function terminalOptions(id: string, cwd: string, claudePath: string): TerminalSpec {
   assertId(id);
@@ -46,7 +49,8 @@ export function terminalOptions(id: string, cwd: string, claudePath: string): Te
 }
 
 const posixQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-const psQuote = (s: string) => `'${s.replace(/'/g, "''")}'`;
+// PowerShell also treats the curly quotes ‘ ’ ‚ ‛ as single quotes, so they are doubled too.
+const psQuote = (s: string) => `'${s.replace(/['‘’‚‛]/g, (q) => q + q)}'`;
 
 /** A command the person can paste into their own terminal. PowerShell on Windows, POSIX sh elsewhere. */
 export function resumeCommand(id: string, cwd: string, platform: NodeJS.Platform): string {
@@ -58,12 +62,17 @@ export function resumeCommand(id: string, cwd: string, platform: NodeJS.Platform
     : `cd ${posixQuote(cwd)} && ${run}`;
 }
 
-/** From `where`/`which` output, the best `claude` to run. Native `.exe` beats npm's `.cmd` shim. */
+/**
+ * From `where`/`which` output, the best `claude` to run. On Windows a native
+ * `.exe` wins, then npm's `.cmd`/`.bat` shim; npm's extensionless POSIX script
+ * (listed first by `where`) cannot be started by Windows and is never picked.
+ */
 export function pickClaudePath(hits: string[], platform: NodeJS.Platform): string | null {
   const clean = hits.map((h) => h.trim()).filter(Boolean);
-  if (platform === "win32") {
-    const exe = clean.find((h) => h.toLowerCase().endsWith(".exe"));
-    if (exe) return exe;
+  if (platform !== "win32") return clean[0] ?? null;
+  for (const ext of [".exe", ".cmd", ".bat", ".com"]) {
+    const hit = clean.find((h) => h.toLowerCase().endsWith(ext));
+    if (hit) return hit;
   }
-  return clean[0] ?? null;
+  return null;
 }

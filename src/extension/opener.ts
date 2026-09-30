@@ -1,4 +1,4 @@
-import { samePath } from "../core/paths";
+import { isInside, samePath } from "../core/paths";
 import {
   CLAUDE_EXTENSION_ID,
   chatUri,
@@ -41,7 +41,7 @@ export class Opener {
     const h = this.host;
     if (!h.claudeExtensionInstalled()) {
       const pick = await h.ask(
-        "The Claude Code extension isn't installed, so this chat can't open in its panel.",
+        "The Claude Code extension isn't installed or enabled, so this chat can't open in its panel.",
         "Continue in terminal",
         "Install extension",
       );
@@ -51,9 +51,12 @@ export class Opener {
       return;
     }
     if (!this.inWorkspace(s.cwd)) {
-      // Claude's panel can only resume chats that belong to the open folder.
+      // Claude's panel can only resume chats that belong to the open folder itself.
+      const sub = h.workspaceFolders().some((f) => isInside(f, s.cwd, h.platform));
       const pick = await h.ask(
-        `This chat is from "${s.project}" (${s.cwd}), which isn't the folder open here.`,
+        sub
+          ? `This chat started in a subfolder (${s.cwd}). Claude's panel only opens chats that belong to the open folder itself.`
+          : `This chat is from "${s.project}" (${s.cwd}), which isn't the folder open here.`,
         "Continue in terminal",
         "Copy command",
       );

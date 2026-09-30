@@ -53,6 +53,12 @@ describe("resumeCommand (for the clipboard)", () => {
     );
   });
 
+  it("doubles the curly quotes PowerShell also treats as single quotes", () => {
+    expect(resumeCommand(ID, "C:\\O’Brien‘x", "win32")).toBe(
+      `Set-Location -LiteralPath 'C:\\O’’Brien‘‘x'; claude --resume ${ID}`,
+    );
+  });
+
   it("omits the cd when there is no folder", () => {
     expect(resumeCommand(ID, "", "darwin")).toBe(`claude --resume ${ID}`);
   });
@@ -67,6 +73,16 @@ describe("pickClaudePath", () => {
     expect(
       pickClaudePath(["C:\\npm\\claude.cmd", "C:\\Users\\a\\.local\\bin\\claude.exe"], "win32"),
     ).toBe("C:\\Users\\a\\.local\\bin\\claude.exe");
+  });
+
+  it("never picks npm's extensionless POSIX script on Windows (real `where` order)", () => {
+    const where = [
+      "C:\\Users\\a\\AppData\\Roaming\\npm\\claude",
+      "C:\\Users\\a\\AppData\\Roaming\\npm\\claude.cmd",
+    ];
+    expect(pickClaudePath(where, "win32")).toBe("C:\\Users\\a\\AppData\\Roaming\\npm\\claude.cmd");
+    expect(pickClaudePath(["C:\\x\\claude", "C:\\x\\claude.ps1"], "win32")).toBeNull();
+    expect(pickClaudePath(["C:\\x\\claude.BAT"], "win32")).toBe("C:\\x\\claude.BAT");
   });
 
   it("falls back to the first hit, and to null when nothing is found", () => {

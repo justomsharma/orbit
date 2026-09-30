@@ -63,6 +63,8 @@ function ChatRow({ vm, active, now, renaming, onRename }: RowProps) {
       title={s.firstPrompt && s.firstPrompt !== vm.title ? s.firstPrompt : undefined}
       onClick={() => !renaming && post({ type: "openChat", id: s.id })}
       onKeyDown={(e) => {
+        // Keys pressed on a row button belong to that button, not the row.
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" && !renaming) post({ type: "openChat", id: s.id });
       }}
     >
@@ -93,7 +95,7 @@ function ChatRow({ vm, active, now, renaming, onRename }: RowProps) {
         <div class="chat-meta">
           {vm.live ? (
             <span class={`live-label ${vm.live.status}`}>
-              {vm.live.status === "busy" ? "Working… · " : "Waiting for you · "}
+              {LIVE_LABEL[vm.live.status]} · 
             </span>
           ) : null}
           {meta}
@@ -128,6 +130,8 @@ function ChatRow({ vm, active, now, renaming, onRename }: RowProps) {
     </div>
   );
 }
+
+const LIVE_LABEL = { busy: "Working…", idle: "Waiting for you", unknown: "Running" } as const;
 
 function Chip({ value, label, count }: { value: Filter; label: string; count?: number }) {
   const on = effectiveFilter() === value;
@@ -185,6 +189,19 @@ export function ChatsView() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
+  /** Keyboard equivalents of every row action, applied to the highlighted chat. */
+  const rowShortcut = (e: KeyboardEvent, vm: ChatVM): boolean => {
+    const id = vm.s.id;
+    const is = (letter: string) =>
+      e.altKey && (e.key.toLowerCase() === letter || e.code === `Key${letter.toUpperCase()}`);
+    if (e.key === "Enter") post({ type: e.shiftKey ? "openTerminal" : "openChat", id });
+    else if (is("p")) post({ type: "pin", id, on: !vm.pinned });
+    else if (is("c")) post({ type: "copyResume", id });
+    else if (e.key === "F2") setRenaming(id);
+    else return false;
+    return true;
+  };
+
   const onSearchKey = (e: KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -192,10 +209,8 @@ export function ChatsView() {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((a) => Math.max(a - 1, 0));
-    } else if (e.key === "Enter" && activeItem !== undefined) {
-      const it = items[activeItem];
-      if (it?.kind === "chat")
-        post({ type: e.shiftKey ? "openTerminal" : "openChat", id: it.vm.s.id });
+    } else if (activeEntry?.kind === "chat" && rowShortcut(e, activeEntry.vm)) {
+      e.preventDefault();
     } else if (e.key === "Escape") {
       store.query.value = "";
     }
@@ -266,7 +281,10 @@ export function ChatsView() {
               now={now}
               active={i === activeItem}
               renaming={renaming === it.vm.s.id}
-              onRename={(on) => setRenaming(on ? it.vm.s.id : null)}
+              onRename={(on) => {
+                setRenaming(on ? it.vm.s.id : null);
+                if (!on) searchRef.current?.focus();
+              }}
             />
           )
         }
@@ -282,6 +300,11 @@ export function ChatsView() {
           <input
             ref={searchRef}
             type="search"
+            role="combobox"
+            aria-expanded="true"
+            aria-autocomplete="list"
+            aria-keyshortcuts="Enter Shift+Enter Alt+P Alt+C F2"
+            title="↑↓ to move · Enter: continue · Shift+Enter: terminal · Alt+P: pin · Alt+C: copy command · F2: rename"
             placeholder="Search chats"
             aria-label="Search chats"
             aria-controls="chat-list"

@@ -8,6 +8,8 @@ export interface HandlerDeps {
   opener: Pick<Opener, "continueChat" | "continueInTerminal" | "copyResume">;
   state: Pick<OrbitState, "setPin" | "setRename">;
   refresh(): Promise<void>;
+  /** Only links that appear in the person's own chats (PR links) may be opened. */
+  isKnownLink(url: string): boolean;
   openLink(url: string): Promise<void>;
   warn(message: string): void;
 }
@@ -41,6 +43,7 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         await d.state.setRename(m.id, m.title);
         return d.refresh();
       case "openLink":
+        if (!d.isKnownLink(m.url)) return;
         return d.openLink(m.url);
     }
   };

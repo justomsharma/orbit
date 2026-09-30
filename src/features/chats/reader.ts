@@ -2,12 +2,16 @@ import { basename, join } from "node:path";
 import type { MtimeCache } from "../../core/cache";
 import { type HeadTail, listDirSafe, readHeadTail, statSafe } from "../../core/fsSafe";
 import { forEachJsonLine, type JsonObject, obj, str } from "../../core/jsonl";
+import { streamJsonLines } from "../../core/lines";
 import { projectName, projectsDir } from "../../core/paths";
 import { isSessionId } from "../../core/uuid";
 import type { Session } from "./types";
 
 const MAX_PROMPT = 300;
+const MAX_TITLE = 200;
 const PARALLEL = 32;
+
+const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 
 /** Text of a person's prompt, or null for meta lines, tool results and command wrappers. */
 export function promptText(line: JsonObject): string | null {
@@ -23,7 +27,7 @@ export function promptText(line: JsonObject): string | null {
   if (!text) return null;
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean || clean.startsWith("<")) return null;
-  return clean.length > MAX_PROMPT ? `${clean.slice(0, MAX_PROMPT - 1)}…` : clean;
+  return clip(clean, MAX_PROMPT);
 }
 
 function toTime(v: unknown): number | null {
@@ -32,94 +36,128 @@ function toTime(v: unknown): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
-/** Builds a Session from the head and tail of a transcript. Null when it holds no real conversation. */
-export function parseSession(id: string, file: string, ht: HeadTail): Session | null {
-  let cwd: string | null = null;
-  let branch: string | null = null;
-  let startedAt: number | null = null;
-  let lastActiveAt: number | null = null;
-  let firstPrompt: string | null = null;
-  let prompts = 0;
-  let assistantTurns = 0;
-  let aiTitle: string | null = null;
-  let agentName: string | null = null;
-  let customTitle: string | null = null;
-  let model: string | null = null;
-  let entrypoint: string | null = null;
-  let continuedIn: string | null = null;
-  const prLinks = new Set<string>();
+/** Accumulates what a Session needs from transcript lines, in file order. */
+class SessionBuilder {
+  cwd: string | null = null;
+  private branch: string | null = null;
+  private startedAt: number | null = null;
+  private lastActiveAt: number | null = null;
+  private firstPrompt: string | null = null;
+  private prompts = 0;
+  private assistantTurns = 0;
+  private aiTitle: string | null = null;
+  private agentName: string | null = null;
+  private customTitle: string | null = null;
+  private model: string | null = null;
+  private entrypoint: string | null = null;
+  private continuedIn: string | null = null;
+  private readonly prLinks = new Set<string>();
 
-  const visit = (l: JsonObject) => {
-    cwd ??= str(l.cwd);
-    entrypoint ??= str(l.entrypoint);
+  readonly visit = (l: JsonObject): void => {
+    this.cwd ??= str(l.cwd);
+    this.entrypoint ??= str(l.entrypoint);
     const b = str(l.gitBranch);
-    if (b) branch = b;
+    if (b) this.branch = b;
     const t = toTime(l.timestamp);
     if (t !== null) {
-      startedAt ??= t;
-      lastActiveAt = Math.max(lastActiveAt ?? t, t);
+      this.startedAt ??= t;
+      this.lastActiveAt = Math.max(this.lastActiveAt ?? t, t);
     }
     switch (l.type) {
       case "user": {
         const p = promptText(l);
         if (p) {
-          prompts++;
-          firstPrompt ??= p;
+          this.prompts++;
+          this.firstPrompt ??= p;
         }
         break;
       }
       case "assistant": {
-        assistantTurns++;
+        this.assistantTurns++;
         const m = str(obj(l.message)?.model);
-        if (m && !m.startsWith("<")) model = m;
+        if (m && !m.startsWith("<")) this.model = m;
         break;
       }
       case "ai-title":
-        aiTitle = str(l.aiTitle) ?? aiTitle;
+        this.aiTitle = str(l.aiTitle) ?? this.aiTitle;
         break;
       case "agent-name":
-        agentName = str(l.agentName) ?? agentName;
+        this.agentName = str(l.agentName) ?? this.agentName;
         break;
       case "custom-title":
-        customTitle = str(l.customTitle) ?? customTitle;
+        this.customTitle = str(l.customTitle) ?? this.customTitle;
         break;
       case "pr-link": {
         const u = str(l.prUrl);
-        if (u) prLinks.add(u);
+        if (u) this.prLinks.add(u);
         break;
       }
       case "continued-in": {
         const n = l.continuedInSessionId;
-        if (isSessionId(n)) continuedIn = n;
+        if (isSessionId(n)) this.continuedIn = n;
         break;
       }
     }
   };
 
-  forEachJsonLine(ht.head, visit);
-  forEachJsonLine(ht.tail, visit);
+  get empty(): boolean {
+    return this.prompts === 0 && this.assistantTurns === 0;
+  }
 
-  if (prompts === 0 && assistantTurns === 0) return null;
-  const where = cwd ?? "";
-  const title = (customTitle ?? agentName ?? aiTitle ?? firstPrompt ?? "Untitled chat").trim();
-  return {
-    id,
-    file,
-    cwd: where,
-    project: projectName(where),
-    title: title || "Untitled chat",
-    firstPrompt: firstPrompt ?? "",
-    branch: branch === "HEAD" ? null : branch,
-    startedAt: startedAt ?? ht.mtimeMs,
-    lastActiveAt: lastActiveAt ?? ht.mtimeMs,
-    prompts,
-    estimated: !ht.whole,
-    model,
-    entrypoint,
-    prLinks: [...prLinks],
-    continuedIn,
-    sizeBytes: ht.size,
-  };
+  build(id: string, file: string, meta: { mtimeMs: number; size: number; estimated: boolean }): Session {
+    const where = this.cwd ?? "";
+    const title = clip(
+      (this.customTitle ?? this.agentName ?? this.aiTitle ?? this.firstPrompt ?? "").replace(/\s+/g, " ").trim(),
+      MAX_TITLE,
+    );
+    return {
+      id,
+      file,
+      cwd: where,
+      project: projectName(where),
+      title: title || "Untitled chat",
+      firstPrompt: this.firstPrompt ?? "",
+      branch: this.branch === "HEAD" ? null : this.branch,
+      startedAt: this.startedAt ?? meta.mtimeMs,
+      lastActiveAt: this.lastActiveAt ?? meta.mtimeMs,
+      prompts: this.prompts,
+      estimated: meta.estimated,
+      model: this.model,
+      entrypoint: this.entrypoint,
+      prLinks: [...this.prLinks],
+      continuedIn: this.continuedIn,
+      sizeBytes: meta.size,
+    };
+  }
+}
+
+/** Builds a Session from the head and tail of a transcript. Null when it holds no real conversation. */
+export function parseSession(id: string, file: string, ht: HeadTail): Session | null {
+  const b = new SessionBuilder();
+  forEachJsonLine(ht.head, b.visit);
+  forEachJsonLine(ht.tail, b.visit);
+  if (b.empty) return null;
+  return b.build(id, file, { mtimeMs: ht.mtimeMs, size: ht.size, estimated: !ht.whole });
+}
+
+/**
+ * Reads a whole transcript line by line. Used only when the head and tail
+ * windows fall inside huge lines (e.g. pasted screenshots), so the fast path
+ * could not see the conversation.
+ */
+async function scanSession(id: string, file: string, ht: HeadTail): Promise<Session | null> {
+  const b = new SessionBuilder();
+  await streamJsonLines(file, b.visit);
+  if (b.empty) return null;
+  return b.build(id, file, { mtimeMs: ht.mtimeMs, size: ht.size, estimated: false });
+}
+
+async function readSession(id: string, file: string): Promise<{ ht: HeadTail; s: Session | null } | null> {
+  const ht = await readHeadTail(file);
+  if (!ht) return null;
+  let s = parseSession(id, file, ht);
+  if (!ht.whole && (!s || !s.cwd)) s = (await scanSession(id, file, ht)) ?? s;
+  return { ht, s };
 }
 
 async function transcriptFiles(home: string): Promise<{ id: string; file: string }[]> {
@@ -156,15 +194,15 @@ export async function listSessions(
   cache?: MtimeCache<Session | null>,
 ): Promise<Session[]> {
   const files = await transcriptFiles(home);
+  cache?.retain(new Set(files.map((f) => f.file)));
   const parsed = await mapLimit(files, PARALLEL, async ({ id, file }) => {
     const st = await statSafe(file);
     if (!st?.isFile()) return null;
     const hit = cache?.get(file, st.mtimeMs, st.size);
     if (hit !== undefined) return hit;
-    const ht = await readHeadTail(file);
-    const s = ht ? parseSession(id, file, ht) : null;
-    if (ht) cache?.set(file, ht.mtimeMs, ht.size, s);
-    return s;
+    const r = await readSession(id, file);
+    if (r) cache?.set(file, r.ht.mtimeMs, r.ht.size, r.s);
+    return r?.s ?? null;
   });
   return parsed
     .filter((s): s is Session => s !== null)

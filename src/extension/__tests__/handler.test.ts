@@ -19,6 +19,7 @@ function setup(known = true) {
       setRename: async (id, t) => void log.push(`rename ${id} ${t}`),
     },
     refresh: async () => void log.push("refresh"),
+    isKnownLink: (u) => u === "https://github.com/a/b/pull/1",
     openLink: async (u) => void log.push(`link ${u}`),
     warn: (m) => void log.push(`warn ${m}`),
   });
@@ -53,6 +54,12 @@ describe("createHandler", () => {
     await handle({ type: "openChat", id: "x; rm -rf ~" });
     await handle({ type: "openLink", url: "file:///etc/passwd" });
     await handle("junk");
+    expect(log).toEqual([]);
+  });
+
+  it("only opens links that appear in the person's chats", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "openLink", url: "https://evil.example/phish" });
     expect(log).toEqual([]);
   });
 

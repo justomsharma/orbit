@@ -1,6 +1,6 @@
 import { MtimeCache } from "../core/cache";
-import { normPath } from "../core/paths";
-import { applyPromptCounts, readPromptCounts } from "../features/chats/history";
+import { isInside } from "../core/paths";
+import { applyPromptCounts, PromptCounter } from "../features/chats/history";
 import { pidAlive, readLiveSessions } from "../features/chats/live";
 import { listSessions } from "../features/chats/reader";
 import type { LiveStatus, Session } from "../features/chats/types";
@@ -16,20 +16,12 @@ interface Options {
   isAlive?: (pid: number) => boolean;
 }
 
-/** Is `cwd` the folder itself or somewhere inside it? */
-export function isInside(folder: string, cwd: string, platform: NodeJS.Platform): boolean {
-  if (!cwd) return false;
-  const f = normPath(folder, platform);
-  const c = normPath(cwd, platform);
-  if (c === f) return true;
-  const sep = platform === "win32" ? "\\" : "/";
-  return c.startsWith(f.endsWith(sep) ? f : f + sep);
-}
-
 /** Reads everything the Chats tab needs, keeping a per-file cache between refreshes. */
 export class ChatsService {
   private readonly cache = new MtimeCache<Session | null>();
+  private readonly prompts: PromptCounter;
   private byId = new Map<string, Session>();
+  private links = new Set<string>();
   private readonly platform: NodeJS.Platform;
   private readonly isAlive: (pid: number) => boolean;
 
@@ -39,20 +31,27 @@ export class ChatsService {
   ) {
     this.platform = opts.platform ?? process.platform;
     this.isAlive = opts.isAlive ?? pidAlive;
+    this.prompts = new PromptCounter(home);
   }
 
   async snapshot(workspaceFolders: string[]): Promise<ChatsSnapshot> {
     const [sessions, counts, live] = await Promise.all([
       listSessions(this.home, this.cache),
-      readPromptCounts(this.home),
+      this.prompts.update(),
       readLiveSessions(this.home, this.isAlive),
     ]);
     const items = applyPromptCounts(sessions, counts);
     this.byId = new Map(items.map((s) => [s.id, s]));
+    this.links = new Set(items.flatMap((s) => s.prLinks));
     const here = items
       .filter((s) => workspaceFolders.some((f) => isInside(f, s.cwd, this.platform)))
       .map((s) => s.id);
     return { items, live: [...live.values()].filter((l) => this.byId.has(l.sessionId)), here };
+  }
+
+  /** Every pull-request link found in the person's chats. */
+  isKnownLink(url: string): boolean {
+    return this.links.has(url);
   }
 
   get(id: string): Session | undefined {

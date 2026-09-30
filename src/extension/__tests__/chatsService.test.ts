@@ -16,8 +16,8 @@ describe("ChatsService", () => {
     writeFileSync(
       join(home, "history.jsonl"),
       Array.from({ length: 9 }, (_, i) =>
-        JSON.stringify({ display: "x", timestamp: i, project: "/code/shop", sessionId: here.id }),
-      ).join("\n"),
+        `${JSON.stringify({ display: "x", timestamp: i, project: "/code/shop", sessionId: here.id })}\n`,
+      ).join(""),
     );
     mkdirSync(join(home, "sessions"));
     writeFileSync(

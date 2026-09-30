@@ -10,6 +10,21 @@ describe("MtimeCache", () => {
     expect(c.get("/f", 10, 6)).toBeUndefined();
   });
 
+  it("keeps every entry by default, so a full refresh never evicts what it needs next", () => {
+    const c = new MtimeCache<number>();
+    for (let i = 0; i < 12_000; i++) c.set(`/f${i}`, 1, 1, i);
+    expect(c.get("/f0", 1, 1)).toBe(0);
+  });
+
+  it("retain() drops entries for files that no longer exist", () => {
+    const c = new MtimeCache<number>();
+    c.set("/a", 1, 1, 1);
+    c.set("/b", 1, 1, 2);
+    c.retain(new Set(["/b"]));
+    expect(c.get("/a", 1, 1)).toBeUndefined();
+    expect(c.get("/b", 1, 1)).toBe(2);
+  });
+
   it("evicts the least recently used entry beyond capacity", () => {
     const c = new MtimeCache<number>(2);
     c.set("/a", 1, 1, 1);

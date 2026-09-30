@@ -70,7 +70,7 @@ describe("ChatsView", () => {
   it("filters as you type", () => {
     load([mk(1, { title: "Fix checkout bug" }), mk(2, { title: "Write docs" })]);
     render(<ChatsView />);
-    fireEvent.input(screen.getByRole("searchbox"), { target: { value: "checkout" } });
+    fireEvent.input(screen.getByRole("combobox", { name: "Search chats" }), { target: { value: "checkout" } });
     expect(screen.queryByText("Write docs")).toBeNull();
     expect(screen.getByText("Fix checkout bug")).toBeTruthy();
   });
@@ -88,7 +88,7 @@ describe("ChatsView", () => {
     const b = mk(2);
     load([a, b]);
     render(<ChatsView />);
-    const box = screen.getByRole("searchbox");
+    const box = screen.getByRole("combobox", { name: "Search chats" });
     fireEvent.keyDown(box, { key: "ArrowDown" });
     fireEvent.keyDown(box, { key: "Enter" });
     expect(sent).toContainEqual({ type: "openChat", id: b.id });
@@ -126,10 +126,52 @@ describe("ChatsView", () => {
     expect(sent).toContainEqual({ type: "rename", id: s.id, title: "Better name" });
   });
 
+  it("does not also open the chat when Enter is pressed on a row button", () => {
+    const s = mk(1);
+    load([s]);
+    render(<ChatsView />);
+    const pin = screen.getByRole("button", { name: "Pin" });
+    fireEvent.keyDown(pin, { key: "Enter" });
+    expect(sent.filter((m) => m.type === "openChat")).toEqual([]);
+  });
+
+  it("offers every row action from the keyboard", () => {
+    const s = mk(1);
+    load([s]);
+    render(<ChatsView />);
+    const box = screen.getByRole("combobox", { name: "Search chats" });
+    fireEvent.keyDown(box, { key: "p", altKey: true });
+    fireEvent.keyDown(box, { key: "c", altKey: true });
+    fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
+    expect(sent).toEqual([
+      { type: "pin", id: s.id, on: true },
+      { type: "copyResume", id: s.id },
+      { type: "openTerminal", id: s.id },
+    ]);
+    fireEvent.keyDown(box, { key: "F2" });
+    expect(screen.getByRole("textbox", { name: /New name/ })).toBeTruthy();
+  });
+
+  it("describes a running chat with an unknown state neutrally", () => {
+    const s = mk(1);
+    store.applyHostMessage({
+      type: "sessions",
+      items: [s],
+      live: [{ sessionId: s.id, pid: 1, status: "unknown", name: null, updatedAt: 0 }],
+      pins: [],
+      renames: {},
+      here: [s.id],
+      env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
+    });
+    render(<ChatsView />);
+    expect(screen.getByText(/Running ·/)).toBeTruthy();
+    expect(screen.queryByText(/Waiting for you/)).toBeNull();
+  });
+
   it("shows a clear message when nothing matches the search", () => {
     load([mk(1)]);
     render(<ChatsView />);
-    fireEvent.input(screen.getByRole("searchbox"), { target: { value: "zzzz" } });
+    fireEvent.input(screen.getByRole("combobox", { name: "Search chats" }), { target: { value: "zzzz" } });
     expect(screen.getByText(/No chats match/i)).toBeTruthy();
   });
 });

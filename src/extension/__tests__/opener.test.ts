@@ -70,8 +70,19 @@ describe("Opener.continueChat", () => {
     await new Opener(host).continueChat(session("/code/shop"));
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatch(
-      /^ask .*Claude Code extension.*\[Continue in terminal\|Install extension\]/,
+      /^ask .*Claude Code extension.*installed or enabled.*\[Continue in terminal\|Install extension\]/,
     );
+  });
+});
+
+describe("Opener.continueChat (subfolders)", () => {
+  it("explains that a chat from a subfolder can't open in Claude's panel", async () => {
+    const { host, calls } = fakeHost({ choose: "Continue in terminal" });
+    await new Opener(host).continueChat(session("/code/shop/packages/ui"));
+    expect(calls[0]).toMatch(
+      /^ask .*subfolder.*packages\/ui.*\[Continue in terminal\|Copy command\]/,
+    );
+    expect(calls[1]).toMatch(/^terminal /);
   });
 });
 

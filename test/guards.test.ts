@@ -81,3 +81,21 @@ describe("safety guards", () => {
     expect(hits).toEqual([]);
   });
 });
+
+describe("safety guards on the built bundles", () => {
+  const bundles = ["dist/extension.js", "dist/statusline-tap.js", "dist/webview/main.js"].map((p) =>
+    join(__dirname, "..", p),
+  );
+
+  it.each(bundles)("%s loads no network module", (p, ctx) => {
+    let text: string;
+    try {
+      text = readFileSync(p, "utf8");
+    } catch {
+      ctx.skip(); // not built yet; `npm run build` first
+      return;
+    }
+    expect(text).not.toMatch(/require\(["'](node:)?(http|https|http2|net|tls|dgram|dns)["']\)/);
+    expect(text).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|new WebSocket|EventSource\(|sendBeacon/);
+  });
+});

@@ -144,6 +144,42 @@ describe("listSessions", () => {
     expect(r!.firstPrompt.startsWith("prompt 0")).toBe(true);
   });
 
+  it("keeps chats whose first and last lines are huge (pasted screenshots)", async () => {
+    const home = tmp();
+    const img = "A".repeat(400_000);
+    writeSession(home, CWD, (c) => [
+      { type: "permission-mode", permissionMode: "default", sessionId: c.sessionId },
+      {
+        ...L.userBlocks(c, "Fix the login page"),
+        message: {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/png", data: img } },
+            { type: "text", text: "Fix the login page" },
+          ],
+        },
+      },
+      L.assistant(c),
+      {
+        ...L.toolResult(c),
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: "t", content: [{ type: "image", source: { data: img } }] }],
+        },
+      },
+    ]);
+    const [r] = await listSessions(home);
+    expect(r).toMatchObject({ title: "Fix the login page", cwd: CWD, prompts: 1, estimated: false });
+  });
+
+  it("caps very long titles", async () => {
+    const home = tmp();
+    writeSession(home, CWD, (c) => [L.user(c, "hi"), L.customTitle(c, "x".repeat(1000))]);
+    const [r] = await listSessions(home);
+    expect(r!.title.length).toBeLessThanOrEqual(200);
+    expect(r!.title.endsWith("…")).toBe(true);
+  });
+
   it("reuses cached results for unchanged files", async () => {
     const home = tmp();
     writeSession(home, CWD, (c) => [L.user(c, "cache me")]);

@@ -4,11 +4,14 @@ interface Entry<T> {
   value: T;
 }
 
-/** Small LRU cache whose entries are valid only while a file's mtime and size are unchanged. */
+/**
+ * Cache whose entries are valid only while a file's mtime and size are unchanged.
+ * Unbounded by default (callers prune with `retain`); pass a capacity for LRU eviction.
+ */
 export class MtimeCache<T> {
   private readonly map = new Map<string, Entry<T>>();
 
-  constructor(private readonly capacity = 5000) {}
+  constructor(private readonly capacity = Number.POSITIVE_INFINITY) {}
 
   get(key: string, mtimeMs: number, size: number): T | undefined {
     const e = this.map.get(key);
@@ -25,5 +28,10 @@ export class MtimeCache<T> {
       const oldest = this.map.keys().next().value;
       if (oldest !== undefined) this.map.delete(oldest);
     }
+  }
+
+  /** Forgets every key not in `keep` (e.g. files that were deleted). */
+  retain(keep: Set<string>): void {
+    for (const k of this.map.keys()) if (!keep.has(k)) this.map.delete(k);
   }
 }
