@@ -87,7 +87,8 @@ describe("safety guards on the built bundles", () => {
     join(__dirname, "..", p),
   );
 
-  it.each(bundles)("%s loads no network module", (p, ctx) => {
+  for (const p of bundles)
+    it(`${p} loads no network module`, (ctx) => {
     let text: string;
     try {
       text = readFileSync(p, "utf8");
