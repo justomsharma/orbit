@@ -106,6 +106,31 @@ describe("Opener.continueInTerminal", () => {
   });
 });
 
+describe("Opener.newChat", () => {
+  it("opens a fresh chat in Claude's panel", async () => {
+    const { host, calls } = fakeHost();
+    await new Opener(host).newChat();
+    expect(calls).toEqual(["open vscode://anthropic.claude-code/open"]);
+  });
+
+  it("starts claude in a terminal in the open folder when the extension is missing", async () => {
+    const { host, calls } = fakeHost({ claudeExtensionInstalled: () => false });
+    await new Opener(host).newChat();
+    expect(calls).toEqual(["terminal /usr/bin/claude  @/code/shop"]);
+  });
+
+  it("explains when neither Claude's extension nor the claude command is available", async () => {
+    const { host, calls } = fakeHost({
+      claudeExtensionInstalled: () => false,
+      findClaude: async () => null,
+    });
+    await new Opener(host).newChat();
+    expect(calls[0]).toMatch(
+      /^ask .*Install Claude Code.*\[Install extension\|How to install the CLI\]/,
+    );
+  });
+});
+
 describe("Opener.copyResume", () => {
   it("copies a shell-safe command", async () => {
     const { host, calls } = fakeHost();

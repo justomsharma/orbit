@@ -46,6 +46,15 @@ exports.run = async () => {
     },
   );
 
+  await check("reads token usage and prices it", async () => {
+    await api.refresh();
+    const u = api.lastUsage();
+    assert.ok(u, "no usage snapshot");
+    assert.equal(u.all.messages, 2);
+    assert.ok(u.all.cost > 0, "expected a priced cost");
+    assert.equal(u.quota.enabled, false);
+  });
+
   await check("refresh command runs without error", async () => {
     await vscode.commands.executeCommand("orbit.refresh");
   });

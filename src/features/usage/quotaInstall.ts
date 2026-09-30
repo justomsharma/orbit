@@ -131,6 +131,12 @@ export class QuotaInstaller {
     return { ok: true };
   }
 
+  /** Re-copies the bundled tap (after an Orbit update) while plan limits are on. */
+  async syncTap(): Promise<void> {
+    if (!(await this.status()).enabled) return;
+    await this.tapStore().writeText(TAP, await readFile(this.d.tapSource, "utf8"));
+  }
+
   /** The latest numbers the tap recorded, or null. */
   async readQuota(): Promise<QuotaFile | null> {
     const q = await this.tapStore().read<QuotaFile | null>("quota.json", null);

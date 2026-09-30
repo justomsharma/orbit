@@ -3,6 +3,8 @@ import type { Tab } from "./store";
 import * as store from "./store";
 import { Empty } from "./ui/Empty";
 import { Icon } from "./ui/Icon";
+import { HomeView } from "./usage/HomeView";
+import { UsageView } from "./usage/UsageView";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "home", label: "Home", icon: "home" },
@@ -49,8 +51,12 @@ export function App() {
     <div class="app">
       <TabBar />
       <main class="panel" role="tabpanel" aria-labelledby={`tab-${t}`}>
-        {t === "chats" ? (
+        {t === "home" ? (
+          <HomeView />
+        ) : t === "chats" ? (
           <ChatsView />
+        ) : t === "usage" ? (
+          <UsageView />
         ) : (
           <Empty icon="tools" title="Coming soon">
             This tab is being built.

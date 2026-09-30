@@ -1,4 +1,5 @@
 import { effect, signal } from "@preact/signals";
+import type { UsageSnapshot } from "../extension/usageService";
 import type { LiveStatus, Session } from "../features/chats/types";
 import type { Environment, HostMsg } from "../shared/protocol";
 import { loadViewState, saveViewState } from "./bus";
@@ -6,17 +7,22 @@ import type { Filter } from "./chats/model";
 
 export type Tab = "home" | "chats" | "usage" | "setup";
 
+export type Range = "today" | "week" | "month" | "all";
+
 interface Persisted {
   tab: Tab;
   filter: Filter | null;
+  range: Range;
 }
 
-const saved = loadViewState<Persisted>({ tab: "chats", filter: null });
+const saved = loadViewState<Persisted>({ tab: "home", filter: null, range: "month" });
 
 export const tab = signal<Tab>(saved.tab);
 /** null = not chosen yet; picks "This folder" when it has chats, else "All". */
 export const filter = signal<Filter | null>(saved.filter);
 export const query = signal("");
+export const range = signal<Range>(saved.range);
+export const usage = signal<UsageSnapshot | null>(null);
 
 export const loaded = signal(false);
 export const error = signal<string | null>(null);
@@ -28,7 +34,7 @@ export const here = signal<string[]>([]);
 export const env = signal<Environment | null>(null);
 
 effect(() => {
-  saveViewState({ tab: tab.value, filter: filter.value } satisfies Persisted);
+  saveViewState({ tab: tab.value, filter: filter.value, range: range.value } satisfies Persisted);
 });
 
 export function applyHostMessage(m: HostMsg): void {
@@ -42,6 +48,9 @@ export function applyHostMessage(m: HostMsg): void {
       env.value = m.env;
       error.value = null;
       loaded.value = true;
+      break;
+    case "usage":
+      usage.value = m.data;
       break;
     case "error":
       error.value = m.text;

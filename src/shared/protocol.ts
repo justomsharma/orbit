@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import type { UsageSnapshot } from "../extension/usageService";
 import type { LiveStatus, Session } from "../features/chats/types";
 
 const SessionId = v.pipe(
@@ -18,6 +19,13 @@ const HttpsUrl = v.pipe(
   }),
 );
 
+/** A PNG the webview rendered (the weekly recap card). Capped at 8 MB. */
+const PngDataUrl = v.pipe(
+  v.string(),
+  v.maxLength(8 * 1024 * 1024),
+  v.regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/),
+);
+
 /** Messages the webview may send. Anything else is dropped by the host. */
 export const ViewMsgSchema = v.variant("type", [
   v.object({ type: v.literal("ready") }),
@@ -32,6 +40,10 @@ export const ViewMsgSchema = v.variant("type", [
     title: v.pipe(v.string(), v.maxLength(200)),
   }),
   v.object({ type: v.literal("openLink"), url: HttpsUrl }),
+  v.object({ type: v.literal("newChat") }),
+  v.object({ type: v.literal("quota"), on: v.boolean() }),
+  v.object({ type: v.literal("copyRecap") }),
+  v.object({ type: v.literal("saveRecapImage"), dataUrl: PngDataUrl }),
 ]);
 
 export type ViewMsg = v.InferOutput<typeof ViewMsgSchema>;
@@ -61,5 +73,6 @@ export type HostMsg =
       here: string[];
       env: Environment;
     }
+  | { type: "usage"; data: UsageSnapshot }
   | { type: "loading" }
   | { type: "error"; text: string };

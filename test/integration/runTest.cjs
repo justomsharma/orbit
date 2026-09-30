@@ -23,10 +23,16 @@ function transcript(id, cwd, prompt) {
       type: "assistant",
       timestamp: "2026-09-29T10:01:00.000Z",
       message: {
-        id: "msg_1",
+        id: `msg_${id.slice(0, 8)}`,
         model: "claude-opus-5-5",
         role: "assistant",
         content: [{ type: "text", text: "ok" }],
+        usage: {
+          input_tokens: 10,
+          output_tokens: 50,
+          cache_read_input_tokens: 1000,
+          cache_creation_input_tokens: 100,
+        },
       },
     },
     { type: "ai-title", aiTitle: `${prompt} (title)`, sessionId: id },

@@ -14,6 +14,10 @@ describe("parseViewMsg", () => {
     { type: "rename", id: ID, title: "Checkout rewrite" },
     { type: "rename", id: ID, title: "" },
     { type: "openLink", url: "https://github.com/acme/shop/pull/7" },
+    { type: "newChat" },
+    { type: "quota", on: true },
+    { type: "copyRecap" },
+    { type: "saveRecapImage", dataUrl: "data:image/png;base64,iVBORw0KGgo=" },
   ])("accepts %j", (m) => {
     expect(parseViewMsg(m)).toEqual(m);
   });
@@ -29,6 +33,10 @@ describe("parseViewMsg", () => {
     { type: "openLink", url: "file:///etc/passwd" },
     { type: "openLink", url: "command:workbench.action.terminal.new" },
     { type: "openLink", url: "javascript:alert(1)" },
+    { type: "quota", on: "yes" },
+    { type: "saveRecapImage", dataUrl: "data:text/html;base64,PGgxPg==" },
+    { type: "saveRecapImage", dataUrl: "data:image/png;base64,<script>" },
+    { type: "saveRecapImage", dataUrl: `data:image/png;base64,${"A".repeat(9 * 1024 * 1024)}` },
   ])("rejects %j", (m) => {
     expect(parseViewMsg(m)).toBeNull();
   });

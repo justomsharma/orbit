@@ -1,33 +1,49 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "../../features/chats/types";
+import type { QuotaResult } from "../../features/usage/quotaInstall";
 import { createHandler } from "../handler";
 
 const ID = "0b95bc0d-e0c0-4c77-9ad4-c2b7fd22d24a";
 const S = { id: ID, cwd: "/code/shop", project: "shop" } as Session;
 
-function setup(known = true) {
+function setup(opts: { known?: boolean; quota?: QuotaResult; recap?: string | null } = {}) {
   const log: string[] = [];
   const handle = createHandler({
-    getSession: (id) => (known && id === ID ? S : undefined),
+    getSession: (id) => ((opts.known ?? true) && id === ID ? S : undefined),
     opener: {
       continueChat: async (s) => void log.push(`chat ${s.id}`),
       continueInTerminal: async (s) => void log.push(`terminal ${s.id}`),
       copyResume: async (s) => void log.push(`copy ${s.id}`),
+      newChat: async () => void log.push("new chat"),
     },
     state: {
       setPin: async (id, on) => void log.push(`pin ${id} ${on}`),
       setRename: async (id, t) => void log.push(`rename ${id} ${t}`),
     },
+    quota: {
+      enable: async () => {
+        log.push("quota on");
+        return opts.quota ?? { ok: true };
+      },
+      disable: async () => {
+        log.push("quota off");
+        return { ok: true };
+      },
+    },
+    recapMarkdown: () => (opts.recap === undefined ? "# My week" : opts.recap),
+    copy: async (t) => void log.push(`clipboard ${t}`),
+    saveImage: async (d) => void log.push(`save ${d.slice(0, 22)}`),
     refresh: async () => void log.push("refresh"),
     isKnownLink: (u) => u === "https://github.com/a/b/pull/1",
     openLink: async (u) => void log.push(`link ${u}`),
+    info: (m) => void log.push(`info ${m}`),
     warn: (m) => void log.push(`warn ${m}`),
   });
   return { handle, log };
 }
 
 describe("createHandler", () => {
-  it("routes each valid message to its action", async () => {
+  it("routes each valid chat message to its action", async () => {
     const { handle, log } = setup();
     await handle({ type: "ready" });
     await handle({ type: "openChat", id: ID });
@@ -36,6 +52,7 @@ describe("createHandler", () => {
     await handle({ type: "pin", id: ID, on: true });
     await handle({ type: "rename", id: ID, title: "New" });
     await handle({ type: "openLink", url: "https://github.com/a/b/pull/1" });
+    await handle({ type: "newChat" });
     expect(log).toEqual([
       "refresh",
       `chat ${ID}`,
@@ -46,6 +63,7 @@ describe("createHandler", () => {
       `rename ${ID} New`,
       "refresh",
       "link https://github.com/a/b/pull/1",
+      "new chat",
     ]);
   });
 
@@ -64,8 +82,37 @@ describe("createHandler", () => {
   });
 
   it("tells the person when a chat no longer exists", async () => {
-    const { handle, log } = setup(false);
+    const { handle, log } = setup({ known: false });
     await handle({ type: "openChat", id: ID });
     expect(log).toEqual(["warn This chat is no longer on disk. Refreshing the list.", "refresh"]);
+  });
+
+  it("turns plan limits on and off, then refreshes", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "quota", on: true });
+    await handle({ type: "quota", on: false });
+    expect(log).toEqual(["quota on", "refresh", "quota off", "refresh"]);
+  });
+
+  it.each([
+    ["no-node", /needs Node\.js/],
+    ["unparseable", /settings\.json.*isn't plain JSON/],
+    ["conflict", /changed while Orbit was saving/],
+  ] as const)("explains why plan limits could not turn on (%s)", async (reason, text) => {
+    const { handle, log } = setup({ quota: { ok: false, reason } });
+    await handle({ type: "quota", on: true });
+    expect(log[1]).toMatch(text);
+  });
+
+  it("copies the weekly recap as Markdown", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "copyRecap" });
+    expect(log).toEqual(["clipboard # My week", "info Recap copied as Markdown."]);
+  });
+
+  it("saves the recap image the view rendered", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "saveRecapImage", dataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+    expect(log).toEqual(["save data:image/png;base64,"]);
   });
 });

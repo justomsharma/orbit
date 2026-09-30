@@ -16,6 +16,8 @@ const WRITERS: string[] = [
   "core/orbitStore.ts",
   // The statusline tap writes only quota.json in its own folder (Orbit storage).
   "tap/statusline.ts",
+  // Saves the recap image to a path the person picked in the save dialog.
+  "extension/exportFile.ts",
 ];
 /**
  * Files allowed to start a shell. The tap runs the person's own previous

@@ -2,7 +2,9 @@
 // theme variables and sample data, for visual review in a normal browser.
 //   node scripts/preview.mjs  →  .superpowers/preview/{dark,light}.html
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import * as esbuild from "esbuild";
 
 const out = ".superpowers/preview";
 mkdirSync(out, { recursive: true });
@@ -145,6 +147,36 @@ const sample = {
   env: { claudeExtension: true, hasWorkspace: true, platform: "darwin" },
 };
 
+// Sample usage from the test fixture (bundled on the fly, since it is TypeScript).
+await esbuild.build({
+  entryPoints: ["test/helpers/usageFixture.ts"],
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  outfile: join(out, "fixture.mjs"),
+  logLevel: "silent",
+});
+const { sampleUsage } = await import(pathToFileURL(resolve(out, "fixture.mjs")).href);
+const usageMsg = {
+  type: "usage",
+  data: sampleUsage({
+    quota: {
+      enabled: true,
+      data: {
+        v: 1,
+        updatedAt: now - 120_000,
+        sessionId: null,
+        model: null,
+        contextPct: null,
+        costUsd: null,
+        fiveHour: { pct: 38, resetsAt: now + 2.4 * H },
+        sevenDay: { pct: 81, resetsAt: now + 3 * 24 * H },
+        spendLimit: null,
+      },
+    },
+  }),
+};
+
 for (const [name, vars] of Object.entries(themes)) {
   const css = Object.entries(vars)
     .map(([k, v]) => `${k}: ${v};`)
@@ -153,11 +185,11 @@ for (const [name, vars] of Object.entries(themes)) {
     join(out, `${name}.html`),
     `<!DOCTYPE html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="codicon.css"><link rel="stylesheet" href="main.css">
-<style>:root{${css}} body{width:340px;height:640px;border-right:1px solid #8884}</style>
+<style>:root{${css}} body{width:340px;height:100vh;border-right:1px solid #8884}</style>
 <script>
   window.__sent = [];
   window.acquireVsCodeApi = () => ({
-    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => window.postMessage(${JSON.stringify(sample)}, "*"), 0); },
+    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { window.postMessage(${JSON.stringify(sample)}, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); },
     getState: () => (location.hash ? { tab: location.hash.slice(1) } : undefined),
     setState: () => {},
   });

@@ -123,6 +123,17 @@ describe("QuotaInstaller", () => {
     expect(readFileSync(settings, "utf8")).toBe('{ "a": 1, // comment\n}');
   });
 
+  it("refreshes the installed tap after an Orbit update, only while turned on", async () => {
+    const { q, storage } = setup({ settings: {} });
+    const tapFile = join(storage, "statusline", "statusline-tap.js");
+    await q.syncTap();
+    expect(existsSync(tapFile)).toBe(false);
+    await q.enable();
+    writeFileSync(join(storage, "..", "dist-tap.js"), "// tap v2");
+    await q.syncTap();
+    expect(readFileSync(tapFile, "utf8")).toBe("// tap v2");
+  });
+
   it("reads the latest plan-limit numbers the tap recorded", async () => {
     const { q, storage } = setup({ settings: {} });
     await q.enable();

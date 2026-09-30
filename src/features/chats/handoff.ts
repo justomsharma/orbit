@@ -76,3 +76,13 @@ export function pickClaudePath(hits: string[], platform: NodeJS.Platform): strin
   }
   return null;
 }
+
+/** A terminal running a fresh `claude` session in `cwd`. */
+export function newChatTerminal(cwd: string | undefined, claudePath: string): TerminalSpec {
+  return {
+    name: cwd ? `Claude · ${projectName(cwd)}` : "Claude",
+    shellPath: claudePath,
+    shellArgs: [],
+    cwd,
+  };
+}

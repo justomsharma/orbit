@@ -2,6 +2,7 @@ import { isInside, samePath } from "../core/paths";
 import {
   CLAUDE_EXTENSION_ID,
   chatUri,
+  newChatTerminal,
   resumeCommand,
   type TerminalSpec,
   terminalOptions,
@@ -86,6 +87,28 @@ export class Opener {
       return;
     }
     h.createTerminal(terminalOptions(s.id, s.cwd, claude));
+  }
+
+  /** Starts a new conversation: Claude's panel, else a claude terminal in the open folder. */
+  async newChat(): Promise<void> {
+    const h = this.host;
+    if (h.claudeExtensionInstalled()) {
+      await h.openExternal(chatUri(h.uriScheme));
+      return;
+    }
+    const claude = await h.findClaude();
+    if (claude) {
+      h.createTerminal(newChatTerminal(h.workspaceFolders()[0], claude));
+      return;
+    }
+    const pick = await h.ask(
+      "Install Claude Code to start a chat: the VS Code extension, or the claude command for terminals.",
+      "Install extension",
+      "How to install the CLI",
+    );
+    if (pick === "Install extension")
+      await h.openExternal(`${h.uriScheme}:extension/${CLAUDE_EXTENSION_ID}`);
+    if (pick === "How to install the CLI") await h.openExternal(INSTALL_DOCS);
   }
 
   async copyResume(s: Session): Promise<void> {

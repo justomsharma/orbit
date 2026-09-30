@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import * as esbuild from "esbuild";
 
 const watch = process.argv.includes("--watch");
@@ -45,7 +45,13 @@ const tap = {
 
 function copyCss() {
   mkdirSync("dist/webview", { recursive: true });
-  copyFileSync("src/webview/styles.css", "dist/webview/main.css");
+  // Stylesheets are concatenated into one file the webview loads.
+  writeFileSync(
+    "dist/webview/main.css",
+    ["styles.css", "styles-usage.css"]
+      .map((f) => readFileSync(`src/webview/${f}`, "utf8"))
+      .join("\n"),
+  );
   // VS Code's own icon font, so Orbit looks native in every theme.
   for (const f of ["codicon.css", "codicon.ttf"]) {
     copyFileSync(`node_modules/@vscode/codicons/dist/${f}`, `dist/webview/${f}`);

@@ -1,9 +1,15 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
-import { claudeHome, projectsDir, sessionsDir } from "../core/paths";
+import { OrbitStore } from "../core/orbitStore";
+import { claudeHome, projectsDir, sessionsDir, settingsFile } from "../core/paths";
+import { SafeWriter } from "../core/safeWriter";
 import { RefreshScheduler } from "../core/scheduler";
+import { findNode } from "../features/usage/findNode";
+import { QuotaInstaller } from "../features/usage/quotaInstall";
 import { ChatsService, type ChatsSnapshot } from "./chatsService";
 import { Opener } from "./opener";
 import { OrbitState } from "./state";
+import { UsageService, type UsageSnapshot } from "./usageService";
 import { OrbitViewProvider, VIEW_ID } from "./view";
 import { vscodeOpenerHost } from "./vscodeHost";
 
@@ -11,9 +17,13 @@ import { vscodeOpenerHost } from "./vscodeHost";
 export interface OrbitApi {
   refresh(): Promise<void>;
   lastSnapshot(): ChatsSnapshot | null;
+  lastUsage(): UsageSnapshot | null;
 }
 
 const POLL_MS = 20_000;
+
+/** Saves the usage index on shutdown; VS Code waits for the promise deactivate() returns. */
+let onExit: (() => Promise<void>) | null = null;
 
 export function activate(context: vscode.ExtensionContext): OrbitApi {
   const home = claudeHome();
@@ -21,6 +31,22 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   const state = new OrbitState(context.globalState);
   const chats = new ChatsService(home);
   const opener = new Opener(vscodeOpenerHost());
+
+  // Orbit's own files live only in its VS Code storage folder, never in ~/.claude.
+  const storage = context.globalStorageUri.fsPath;
+  const store = new OrbitStore(storage);
+  const writer = new SafeWriter(path.join(storage, "backups"));
+  const quota = new QuotaInstaller({
+    settingsPath: settingsFile(home),
+    tapDir: path.join(storage, "statusline"),
+    tapSource: vscode.Uri.joinPath(context.extensionUri, "dist", "statusline-tap.js").fsPath,
+    store,
+    writer,
+    findNode: () => findNode(),
+    platform: process.platform,
+  });
+  const usage = new UsageService(home, store, quota);
+  void quota.syncTap().catch((e) => log.warn("Could not refresh the statusline tap", String(e)));
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = "orbit.open";
@@ -37,6 +63,8 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   const provider = new OrbitViewProvider({
     extensionUri: context.extensionUri,
     chats,
+    usage,
+    quota,
     state,
     opener,
     log,
@@ -65,6 +93,8 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     watch(projectsDir(home), "**/*.jsonl"),
     watch(sessionsDir(home), "*.json"),
     watch(home, "history.jsonl"),
+    // The tap rewrites quota.json on every statusline render.
+    watch(path.join(storage, "statusline"), "quota.json"),
   ];
 
   // Safety net for file systems where watching is unreliable.
@@ -85,13 +115,18 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     vscode.workspace.onDidChangeWorkspaceFolders(() => void provider.refresh()),
   );
 
+  onExit = () => usage.flush();
+
   return {
     refresh: async () => {
       // Works even before the view is opened, so tests and commands can read a snapshot.
       await provider.refresh();
     },
     lastSnapshot: () => provider.last,
+    lastUsage: () => provider.lastUsage,
   };
 }
 
-export function deactivate(): void {}
+export function deactivate(): Promise<void> | undefined {
+  return onExit?.();
+}
