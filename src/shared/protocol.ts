@@ -44,11 +44,9 @@ export function parseViewMsg(raw: unknown): ViewMsg | null {
 export interface Environment {
   /** Anthropic's Claude Code extension is installed. */
   claudeExtension: boolean;
-  /** The `claude` command was found. */
-  claudeCli: boolean;
-  /** Open workspace folders, normalised for comparison. */
-  workspace: string[];
-  platform: NodeJS.Platform;
+  /** A folder is open in this window. */
+  hasWorkspace: boolean;
+  platform: string;
 }
 
 /** Messages the host sends to the webview. */
@@ -59,6 +57,8 @@ export type HostMsg =
       live: LiveStatus[];
       pins: string[];
       renames: Record<string, string>;
+      /** Ids of chats that belong to a folder open in this window. */
+      here: string[];
       env: Environment;
     }
   | { type: "loading" }

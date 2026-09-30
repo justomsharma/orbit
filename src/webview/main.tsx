@@ -1,3 +1,8 @@
 import { render } from "preact";
+import { App } from "./app";
+import { onHostMessage, post } from "./bus";
+import { applyHostMessage } from "./store";
 
-render(<div>Orbit</div>, document.getElementById("root")!);
+onHostMessage(applyHostMessage);
+render(<App />, document.getElementById("root")!);
+post({ type: "ready" });

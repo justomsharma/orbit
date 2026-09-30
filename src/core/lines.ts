@@ -7,10 +7,7 @@ import type { JsonObject } from "./jsonl";
  * Streams a JSONL file line by line (constant memory). Corrupt lines are skipped.
  * Return `false` from `fn` to stop early. Missing files and symlinks resolve quietly.
  */
-export async function streamJsonLines(
-  p: string,
-  fn: (o: JsonObject) => boolean | undefined | void,
-): Promise<void> {
+export async function streamJsonLines(p: string, fn: (o: JsonObject) => unknown): Promise<void> {
   const st = await statSafe(p);
   if (!st?.isFile()) return;
   const stream = createReadStream(p, { encoding: "utf8" });

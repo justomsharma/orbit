@@ -72,6 +72,7 @@
     "check": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
+    "test:perf": "vitest run --config vitest.perf.mts",
     "package": "npm run build && vsce package --no-dependencies -o dist/"
   },
   "devDependencies": {
@@ -88,6 +89,7 @@
   },
   "dependencies": {
     "@preact/signals": "2.11.3",
+    "@vscode/codicons": "0.0.46-24",
     "preact": "10.29.8",
     "valibot": "1.5.0"
   }

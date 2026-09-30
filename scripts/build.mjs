@@ -34,6 +34,10 @@ const webview = {
 function copyCss() {
   mkdirSync("dist/webview", { recursive: true });
   copyFileSync("src/webview/styles.css", "dist/webview/main.css");
+  // VS Code's own icon font, so Orbit looks native in every theme.
+  for (const f of ["codicon.css", "codicon.ttf"]) {
+    copyFileSync(`node_modules/@vscode/codicons/dist/${f}`, `dist/webview/${f}`);
+  }
 }
 
 if (watch) {

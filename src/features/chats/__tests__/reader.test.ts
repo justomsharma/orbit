@@ -152,20 +152,4 @@ describe("listSessions", () => {
     const b = await listSessions(home, cache);
     expect(b[0]).toBe(a[0]);
   });
-
-  it("lists 2 000 chats quickly", async () => {
-    const home = tmp();
-    for (let i = 0; i < 2000; i++) {
-      writeSession(home, `/code/p${i % 40}`, (c) => [
-        L.user(c, `task ${i}`),
-        L.assistant(c),
-        L.aiTitle(c, `Task ${i}`),
-      ]);
-    }
-    const t0 = performance.now();
-    const all = await listSessions(home);
-    const ms = performance.now() - t0;
-    expect(all).toHaveLength(2000);
-    expect(ms).toBeLessThan(2500);
-  });
 });

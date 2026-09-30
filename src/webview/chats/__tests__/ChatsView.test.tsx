@@ -1,0 +1,135 @@
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render, screen } from "@testing-library/preact";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Session } from "../../../features/chats/types";
+import type { ViewMsg } from "../../../shared/protocol";
+import { setPost } from "../../bus";
+import * as store from "../../store";
+import { ChatsView } from "../ChatsView";
+
+const sent: ViewMsg[] = [];
+
+function mk(i: number, over: Partial<Session> = {}): Session {
+  const id = `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
+  return {
+    id,
+    file: `/p/${id}.jsonl`,
+    cwd: "/code/shop",
+    project: "shop",
+    title: `Chat number ${i}`,
+    firstPrompt: "",
+    branch: "main",
+    startedAt: Date.now() - i * 1000,
+    lastActiveAt: Date.now() - i * 1000,
+    prompts: 3,
+    estimated: false,
+    model: null,
+    entrypoint: "cli",
+    prLinks: [],
+    continuedIn: null,
+    sizeBytes: 1,
+    ...over,
+  };
+}
+
+function load(items: Session[], here = items.map((s) => s.id)) {
+  store.applyHostMessage({
+    type: "sessions",
+    items,
+    live: [],
+    pins: [],
+    renames: {},
+    here,
+    env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
+  });
+}
+
+beforeEach(() => {
+  sent.length = 0;
+  setPost((m) => sent.push(m));
+  store.query.value = "";
+  store.filter.value = null;
+});
+afterEach(cleanup);
+
+describe("ChatsView", () => {
+  it("shows a friendly empty state before Claude has any chats", () => {
+    load([]);
+    render(<ChatsView />);
+    expect(screen.getByText(/No chats yet/i)).toBeTruthy();
+  });
+
+  it("renders only a window of rows for a huge history", () => {
+    load(Array.from({ length: 5000 }, (_, i) => mk(i)));
+    const { container } = render(<ChatsView />);
+    const rows = container.querySelectorAll("[data-row='chat']");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(60);
+  });
+
+  it("filters as you type", () => {
+    load([mk(1, { title: "Fix checkout bug" }), mk(2, { title: "Write docs" })]);
+    render(<ChatsView />);
+    fireEvent.input(screen.getByRole("searchbox"), { target: { value: "checkout" } });
+    expect(screen.queryByText("Write docs")).toBeNull();
+    expect(screen.getByText("Fix checkout bug")).toBeTruthy();
+  });
+
+  it("continues a chat when its row is clicked", () => {
+    const s = mk(1);
+    load([s]);
+    render(<ChatsView />);
+    fireEvent.click(screen.getByText("Chat number 1"));
+    expect(sent).toContainEqual({ type: "openChat", id: s.id });
+  });
+
+  it("continues the highlighted chat with Enter and moves with the arrow keys", () => {
+    const a = mk(1);
+    const b = mk(2);
+    load([a, b]);
+    render(<ChatsView />);
+    const box = screen.getByRole("searchbox");
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(sent).toContainEqual({ type: "openChat", id: b.id });
+  });
+
+  it("defaults to this folder when it has chats, otherwise to all chats", () => {
+    const here = mk(1, { title: "Here chat" });
+    const away = mk(2, { title: "Away chat" });
+    load([here, away], [here.id]);
+    render(<ChatsView />);
+    expect(screen.queryByText("Away chat")).toBeNull();
+    cleanup();
+    store.filter.value = null;
+    load([away], []);
+    render(<ChatsView />);
+    expect(screen.getByText("Away chat")).toBeTruthy();
+  });
+
+  it("pins from the row's action button", () => {
+    const s = mk(1);
+    load([s]);
+    render(<ChatsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Pin" }));
+    expect(sent).toContainEqual({ type: "pin", id: s.id, on: true });
+  });
+
+  it("renames inline and saves on Enter", () => {
+    const s = mk(1);
+    load([s]);
+    render(<ChatsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const input = screen.getByRole("textbox", { name: /New name/ });
+    fireEvent.input(input, { target: { value: "Better name" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(sent).toContainEqual({ type: "rename", id: s.id, title: "Better name" });
+  });
+
+  it("shows a clear message when nothing matches the search", () => {
+    load([mk(1)]);
+    render(<ChatsView />);
+    fireEvent.input(screen.getByRole("searchbox"), { target: { value: "zzzz" } });
+    expect(screen.getByText(/No chats match/i)).toBeTruthy();
+  });
+});

@@ -8,7 +8,10 @@ type Line = Record<string, unknown>;
 export const slugFor = (cwd: string) => cwd.replace(/[^a-zA-Z0-9]/g, "-");
 
 let clock = Date.parse("2026-09-01T10:00:00.000Z");
-const tick = (ms = 1000) => new Date((clock += ms)).toISOString();
+function tick(ms = 1000): string {
+  clock += ms;
+  return new Date(clock).toISOString();
+}
 
 export interface Ctx {
   sessionId: string;
