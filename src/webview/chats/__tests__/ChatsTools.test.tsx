@@ -60,6 +60,7 @@ beforeEach(() => {
     live: [],
     pins: [],
     renames: {},
+    tags: {},
     here: [ID],
     env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
   });
@@ -257,6 +258,7 @@ describe("Search inside messages", () => {
       live: [],
       pins: [],
       renames: {},
+      tags: {},
       here: [ID],
       env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
     });

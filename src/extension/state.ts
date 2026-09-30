@@ -10,6 +10,20 @@ const PINS = "orbit.pins";
 const RENAMES = "orbit.renames";
 const MAX_PINS = 500;
 const MAX_RENAMES = 5000;
+const TAGS = "orbit.tags";
+const MAX_TAGGED = 5000;
+const MAX_TAGS = 8;
+
+/** `#Big Refactor` → `big-refactor`: lowercase letters, digits, - and _, up to 24 long. */
+export function cleanTag(t: string): string {
+  return t
+    .trim()
+    .toLowerCase()
+    .replace(/^#+/, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}_-]+/gu, "")
+    .slice(0, 24);
+}
 
 /**
  * Orbit's own per-user data. Lives in VS Code's extension storage — never in
@@ -47,5 +61,27 @@ export class OrbitState {
       RENAMES,
       Object.fromEntries(Object.entries(next).slice(0, MAX_RENAMES)),
     );
+  }
+
+  /** Tags per chat, kept only in Orbit (Claude never sees them). */
+  tags(): Record<string, string[]> {
+    const v = this.store.get<unknown>(TAGS, {});
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    const out: Record<string, string[]> = {};
+    for (const [k, t] of Object.entries(v)) {
+      if (!isSessionId(k) || !Array.isArray(t)) continue;
+      const list = t.filter((x): x is string => typeof x === "string");
+      if (list.length) out[k] = list;
+    }
+    return out;
+  }
+
+  async setTags(id: string, tags: string[]): Promise<void> {
+    if (!isSessionId(id)) return;
+    const clean = [...new Set(tags.map(cleanTag).filter(Boolean))].slice(0, MAX_TAGS);
+    const all = this.tags();
+    delete all[id];
+    const next = clean.length ? { [id]: clean, ...all } : all;
+    await this.store.update(TAGS, Object.fromEntries(Object.entries(next).slice(0, MAX_TAGGED)));
   }
 }

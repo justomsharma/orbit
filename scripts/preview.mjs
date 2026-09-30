@@ -143,6 +143,7 @@ const sample = {
   ],
   pins: [id(4)],
   renames: {},
+  tags: {},
   here: chats.filter((c) => c.project === "shop").map((c) => c.id),
   env: { claudeExtension: true, hasWorkspace: true, platform: "darwin" },
 };

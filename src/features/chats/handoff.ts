@@ -38,12 +38,22 @@ export interface TerminalSpec {
  * because the id is a validated UUID and `--resume` is constant. Never add
  * free-text arguments here.
  */
-export function terminalOptions(id: string, cwd: string, claudePath: string): TerminalSpec {
+/** `fork`: Claude's --fork-session, a new chat that starts from this one's history. */
+export interface ResumeOptions {
+  fork?: boolean;
+}
+
+export function terminalOptions(
+  id: string,
+  cwd: string,
+  claudePath: string,
+  o: ResumeOptions = {},
+): TerminalSpec {
   assertId(id);
   return {
-    name: `Claude · ${projectName(cwd)}`,
+    name: `Claude · ${projectName(cwd)}${o.fork ? " (new branch)" : ""}`,
     shellPath: claudePath,
-    shellArgs: ["--resume", id],
+    shellArgs: ["--resume", id, ...(o.fork ? ["--fork-session"] : [])],
     cwd: cwd || undefined,
   };
 }
@@ -53,9 +63,14 @@ const posixQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 const psQuote = (s: string) => `'${s.replace(/['‘’‚‛]/g, (q) => q + q)}'`;
 
 /** A command the person can paste into their own terminal. PowerShell on Windows, POSIX sh elsewhere. */
-export function resumeCommand(id: string, cwd: string, platform: NodeJS.Platform): string {
+export function resumeCommand(
+  id: string,
+  cwd: string,
+  platform: NodeJS.Platform,
+  o: ResumeOptions = {},
+): string {
   assertId(id);
-  const run = `claude --resume ${id}`;
+  const run = `claude --resume ${id}${o.fork ? " --fork-session" : ""}`;
   if (!cwd) return run;
   return platform === "win32"
     ? `Set-Location -LiteralPath ${psQuote(cwd)}; ${run}`

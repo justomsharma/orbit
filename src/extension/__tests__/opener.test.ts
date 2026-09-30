@@ -99,6 +99,12 @@ describe("Opener.continueInTerminal", () => {
     expect(calls[0]).toMatch(/^ask .*claude.*not found.*\[Copy command\|How to install\]/i);
   });
 
+  it("forks a chat into a new one, keeping the original untouched", async () => {
+    const { host, calls } = fakeHost();
+    await new Opener(host).continueInTerminal(session("/code/shop"), { fork: true });
+    expect(calls).toEqual([`terminal /usr/bin/claude --resume ${ID} --fork-session @/code/shop`]);
+  });
+
   it("refuses when the chat's folder no longer exists", async () => {
     const { host, calls } = fakeHost({ pathExists: async () => false });
     await new Opener(host).continueInTerminal(session("/code/gone"));

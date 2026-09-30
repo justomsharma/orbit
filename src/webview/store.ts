@@ -63,6 +63,13 @@ export const sessions = signal<Session[]>([]);
 export const live = signal<LiveStatus[]>([]);
 export const pins = signal<string[]>([]);
 export const renames = signal<Record<string, string>>({});
+export const tags = signal<Record<string, string[]>>({});
+/** The filter menus: a chat folder, a branch in it, and how recent. */
+export const narrow = signal<{
+  project: string | null;
+  branch: string | null;
+  since: "today" | "week" | "month" | null;
+}>({ project: null, branch: null, since: null });
 export const here = signal<string[]>([]);
 export const env = signal<Environment | null>(null);
 
@@ -82,6 +89,7 @@ export function applyHostMessage(m: HostMsg): void {
       live.value = m.live;
       pins.value = m.pins;
       renames.value = m.renames;
+      tags.value = m.tags;
       here.value = m.here;
       env.value = m.env;
       error.value = null;

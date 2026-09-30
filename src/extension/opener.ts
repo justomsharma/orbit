@@ -3,6 +3,7 @@ import {
   CLAUDE_EXTENSION_ID,
   chatUri,
   newChatTerminal,
+  type ResumeOptions,
   resumeCommand,
   type TerminalSpec,
   terminalOptions,
@@ -68,8 +69,11 @@ export class Opener {
     await h.openExternal(chatUri(h.uriScheme, s.id));
   }
 
-  /** Continue a chat by running `claude --resume <id>` as a new terminal's program. */
-  async continueInTerminal(s: Session): Promise<void> {
+  /**
+   * Continue a chat by running `claude --resume <id>` as a new terminal's program.
+   * With `fork`, Claude starts a new chat from its history and leaves it untouched.
+   */
+  async continueInTerminal(s: Session, o: ResumeOptions = {}): Promise<void> {
     const h = this.host;
     if (s.cwd && !(await h.pathExists(s.cwd))) {
       h.info(`The folder for this chat no longer exists: ${s.cwd}`);
@@ -82,11 +86,11 @@ export class Opener {
         "Copy command",
         "How to install",
       );
-      if (pick === "Copy command") await this.copyResume(s);
+      if (pick === "Copy command") await this.copyResume(s, o);
       if (pick === "How to install") await h.openExternal(INSTALL_DOCS);
       return;
     }
-    h.createTerminal(terminalOptions(s.id, s.cwd, claude));
+    h.createTerminal(terminalOptions(s.id, s.cwd, claude, o));
   }
 
   /**
@@ -118,8 +122,8 @@ export class Opener {
     if (pick === "How to install the CLI") await h.openExternal(INSTALL_DOCS);
   }
 
-  async copyResume(s: Session): Promise<void> {
-    await this.host.copy(resumeCommand(s.id, s.cwd, this.host.platform));
+  async copyResume(s: Session, o: ResumeOptions = {}): Promise<void> {
+    await this.host.copy(resumeCommand(s.id, s.cwd, this.host.platform, o));
     this.host.info("Copied. Paste it into a terminal to continue this chat.");
   }
 }

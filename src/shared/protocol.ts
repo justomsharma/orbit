@@ -38,12 +38,18 @@ export const ViewMsgSchema = v.variant("type", [
   v.object({ type: v.literal("refresh") }),
   v.object({ type: v.literal("openChat"), id: SessionId }),
   v.object({ type: v.literal("openTerminal"), id: SessionId }),
+  v.object({ type: v.literal("forkChat"), id: SessionId }),
   v.object({ type: v.literal("copyResume"), id: SessionId }),
   v.object({ type: v.literal("pin"), id: SessionId, on: v.boolean() }),
   v.object({
     type: v.literal("rename"),
     id: SessionId,
     title: v.pipe(v.string(), v.maxLength(200)),
+  }),
+  v.object({
+    type: v.literal("tags"),
+    id: SessionId,
+    tags: v.pipe(v.array(v.pipe(v.string(), v.maxLength(40))), v.maxLength(20)),
   }),
   v.object({ type: v.literal("openLink"), url: HttpsUrl }),
   v.object({ type: v.literal("newChat") }),
@@ -197,6 +203,8 @@ export type HostMsg =
       live: LiveStatus[];
       pins: string[];
       renames: Record<string, string>;
+      /** Orbit-only tags per chat. */
+      tags: Record<string, string[]>;
       /** Ids of chats that belong to a folder open in this window. */
       here: string[];
       env: Environment;

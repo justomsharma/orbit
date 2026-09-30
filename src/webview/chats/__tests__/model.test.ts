@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LiveStatus, Session } from "../../../features/chats/types";
-import { buildItems, type ChatsInput, relativeTime } from "../model";
+import { branchesOf, buildItems, type ChatsInput, projectsOf, relativeTime } from "../model";
 
 const NOW = new Date(2026, 8, 30, 15, 0, 0).getTime(); // Wed 30 Sep 2026, 15:00 local
 const H = 3600_000;
@@ -32,7 +32,15 @@ function s(over: Partial<Session> = {}): Session {
 }
 
 function input(sessions: Session[], over: Partial<ChatsInput> = {}): ChatsInput {
-  return { sessions, live: [], pins: [], renames: {}, here: sessions.map((x) => x.id), ...over };
+  return {
+    sessions,
+    live: [],
+    pins: [],
+    renames: {},
+    tags: {},
+    here: sessions.map((x) => x.id),
+    ...over,
+  };
 }
 
 const labels = (items: ReturnType<typeof buildItems>) =>
@@ -149,5 +157,59 @@ describe("relativeTime", () => {
     [new Date(2025, 11, 25).getTime(), "Dec 25, 2025"],
   ])("formats %s as %s", (t, want) => {
     expect(relativeTime(t, NOW, "en-US")).toBe(want);
+  });
+});
+
+describe("buildItems: tags and narrowing", () => {
+  it("finds chats by #tag and shows tags to plain search too", () => {
+    const a = s({ title: "Alpha" });
+    const b = s({ title: "Beta" });
+    const i = input([a, b], { tags: { [a.id]: ["release", "bug"] } });
+    expect(labels(buildItems(i, "#bug", "all", NOW)).filter((l) => !l.startsWith("#"))).toEqual([
+      "Alpha",
+    ]);
+    expect(labels(buildItems(i, "#bu", "all", NOW)).filter((l) => !l.startsWith("#"))).toEqual([]);
+    expect(labels(buildItems(i, "release", "all", NOW)).filter((l) => !l.startsWith("#"))).toEqual([
+      "Alpha",
+    ]);
+    const vm = buildItems(i, "", "all", NOW).find((x) => x.kind === "chat" && x.vm.s.id === a.id);
+    expect(vm?.kind === "chat" && vm.vm.tags).toEqual(["release", "bug"]);
+  });
+
+  it("narrows by project folder, branch and date", () => {
+    const shopMain = s({ title: "Shop main", cwd: "/code/shop", branch: "main" });
+    const shopFix = s({
+      title: "Shop fix",
+      cwd: "/code/shop",
+      branch: "fix/cart",
+      lastActiveAt: NOW - 3 * D,
+    });
+    const api = s({ title: "Api", cwd: "/code/api", project: "api", lastActiveAt: NOW - 40 * D });
+    const i = input([shopMain, shopFix, api]);
+    const titles = (more: Parameters<typeof buildItems>[4]) =>
+      labels(buildItems(i, "", "all", NOW, more)).filter((l) => !l.startsWith("#"));
+    expect(titles({ project: "/code/shop" })).toEqual(["Shop main", "Shop fix"]);
+    expect(titles({ project: "/code/shop", branch: "fix/cart" })).toEqual(["Shop fix"]);
+    expect(titles({ since: "today" })).toEqual(["Shop main"]);
+    expect(titles({ since: "week" })).toEqual(["Shop main", "Shop fix"]);
+    expect(titles({ since: "month" })).toEqual(["Shop main", "Shop fix"]);
+    expect(titles({})).toEqual(["Shop main", "Shop fix", "Api"]);
+  });
+});
+
+describe("projectsOf / branchesOf", () => {
+  it("lists folders by name, newest first, telling apart folders with the same name", () => {
+    const a = s({ cwd: "/work/shop", project: "shop", lastActiveAt: NOW - H });
+    const b = s({ cwd: "/home/shop", project: "shop", lastActiveAt: NOW - 2 * H });
+    const c = s({ cwd: "/code/api", project: "api", lastActiveAt: NOW - 3 * H });
+    expect(projectsOf([a, b, c, a])).toEqual([
+      { cwd: "/work/shop", label: "shop (/work/shop)" },
+      { cwd: "/home/shop", label: "shop (/home/shop)" },
+      { cwd: "/code/api", label: "api" },
+    ]);
+    expect(branchesOf([a, s({ cwd: "/work/shop", branch: "dev" }), c], "/work/shop")).toEqual([
+      "dev",
+      "main",
+    ]);
   });
 });

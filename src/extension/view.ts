@@ -161,6 +161,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
         live: snap.live,
         pins: this.d.state.pins(),
         renames: this.d.state.renames(),
+        tags: this.d.state.tags(),
         here: snap.here,
         env: {
           claudeExtension: this.d.opener.claudeExtensionInstalled(),

@@ -60,4 +60,44 @@ describe("OrbitState", () => {
     await new OrbitState(m).setPin(A, true);
     expect(new OrbitState(m).pins()).toEqual([A]);
   });
+
+  it("keeps tags clean: lowercase words, no repeats, at most 8", async () => {
+    const s = new OrbitState(memento());
+    await s.setTags(A, [
+      "Bug",
+      " bug ",
+      "#release",
+      "big refactor",
+      "x".repeat(40),
+      "",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+    ]);
+    expect(s.tags()[A]).toEqual([
+      "bug",
+      "release",
+      "big-refactor",
+      "x".repeat(24),
+      "a",
+      "b",
+      "c",
+      "d",
+    ]);
+    await s.setTags(A, []);
+    expect(s.tags()).toEqual({});
+  });
+
+  it("ignores tags for bad ids and tolerates damaged storage", async () => {
+    const m = memento();
+    await m.update("orbit.tags", { [A]: ["ok", 3], nope: ["x"], [B]: "bad" });
+    const s = new OrbitState(m);
+    expect(s.tags()).toEqual({ [A]: ["ok"] });
+    await s.setTags("not-a-uuid", ["x"]);
+    expect(Object.keys(s.tags())).toEqual([A]);
+  });
 });

@@ -39,6 +39,7 @@ function load(items: Session[], here = items.map((s) => s.id)) {
     live: [],
     pins: [],
     renames: {},
+    tags: {},
     here,
     env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
   });
@@ -162,6 +163,7 @@ describe("ChatsView", () => {
       live: [{ sessionId: s.id, pid: 1, status: "unknown", name: null, updatedAt: 0 }],
       pins: [],
       renames: {},
+      tags: {},
       here: [s.id],
       env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
     });

@@ -9,6 +9,15 @@ export interface ChatsInput {
   renames: Record<string, string>;
   /** Ids of chats that belong to the folder open in this window. */
   here: string[];
+  /** Orbit-only tags per chat. */
+  tags?: Record<string, string[]>;
+}
+
+/** Extra narrowing from the filter menus. `project` is a chat folder (cwd). */
+export interface Narrow {
+  project?: string | null;
+  branch?: string | null;
+  since?: "today" | "week" | "month" | null;
 }
 
 export interface ChatVM {
@@ -17,6 +26,7 @@ export interface ChatVM {
   live: LiveStatus | undefined;
   pinned: boolean;
   here: boolean;
+  tags: string[];
 }
 
 export type Item =
@@ -52,12 +62,30 @@ const ORDER = [
 
 function matches(vm: ChatVM, words: string[]): boolean {
   if (!words.length) return true;
-  const hay = `${vm.title} ${vm.s.firstPrompt} ${vm.s.project} ${vm.s.branch ?? ""}`.toLowerCase();
-  return words.every((w) => hay.includes(w));
+  const hay =
+    `${vm.title} ${vm.s.firstPrompt} ${vm.s.project} ${vm.s.branch ?? ""} ${vm.tags.join(" ")}`.toLowerCase();
+  // "#tag" matches a whole tag; other words match anywhere.
+  return words.every((w) =>
+    w.startsWith("#") && w.length > 1 ? vm.tags.includes(w.slice(1)) : hay.includes(w),
+  );
 }
 
 /** The flat list the Chats view renders: group headers followed by their chats. */
-export function buildItems(input: ChatsInput, query: string, filter: Filter, now: number): Item[] {
+export function buildItems(
+  input: ChatsInput,
+  query: string,
+  filter: Filter,
+  now: number,
+  narrow: Narrow = {},
+): Item[] {
+  const since =
+    narrow.since === "today"
+      ? startOfDay(now)
+      : narrow.since === "week"
+        ? startOfDay(now) - 6 * DAY
+        : narrow.since === "month"
+          ? startOfDay(now) - 29 * DAY
+          : null;
   const live = new Map(input.live.map((l) => [l.sessionId, l]));
   const pins = new Set(input.pins);
   const here = new Set(input.here);
@@ -72,10 +100,14 @@ export function buildItems(input: ChatsInput, query: string, filter: Filter, now
       live: live.get(s.id),
       pinned: pins.has(s.id),
       here: here.has(s.id),
+      tags: input.tags?.[s.id] ?? [],
     };
     if (filter === "workspace" && !vm.here) continue;
     if (filter === "pinned" && !vm.pinned) continue;
     if (filter === "live" && !vm.live) continue;
+    if (narrow.project && s.cwd !== narrow.project) continue;
+    if (narrow.branch && s.branch !== narrow.branch) continue;
+    if (since !== null && s.lastActiveAt < since) continue;
     if (!matches(vm, words)) continue;
     const g = vm.live ? "Running now" : vm.pinned ? "Pinned" : dateGroup(s.lastActiveAt, now);
     const list = groups.get(g);
@@ -111,4 +143,27 @@ export function relativeTime(t: number, now: number, locale?: string): string {
     day: "numeric",
     ...(sameYear ? {} : { year: "numeric" }),
   });
+}
+
+/** Chat folders for the project menu, most recently used first. Same-named folders show their path. */
+export function projectsOf(sessions: Session[]): { cwd: string; label: string }[] {
+  const latest = new Map<string, Session>();
+  for (const s of sessions) {
+    const cur = latest.get(s.cwd);
+    if (!cur || s.lastActiveAt > cur.lastActiveAt) latest.set(s.cwd, s);
+  }
+  const list = [...latest.values()].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  const names = new Map<string, number>();
+  for (const s of list) names.set(s.project, (names.get(s.project) ?? 0) + 1);
+  return list.map((s) => ({
+    cwd: s.cwd,
+    label: (names.get(s.project) ?? 0) > 1 ? `${s.project} (${s.cwd})` : s.project,
+  }));
+}
+
+/** Branches seen in one folder's chats, alphabetically. */
+export function branchesOf(sessions: Session[], cwd: string): string[] {
+  const set = new Set<string>();
+  for (const s of sessions) if (s.cwd === cwd && s.branch) set.add(s.branch);
+  return [...set].sort((a, b) => a.localeCompare(b));
 }

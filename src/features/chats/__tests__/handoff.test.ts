@@ -38,6 +38,23 @@ describe("terminalOptions", () => {
   it("refuses a hostile session id", () => {
     expect(() => terminalOptions("--dangerously-skip-permissions", "/x", "/bin/claude")).toThrow();
   });
+
+  it("forks into a new chat with Claude's own --fork-session flag", () => {
+    expect(terminalOptions(ID, "/code/shop", "/bin/claude", { fork: true })).toEqual({
+      name: "Claude · shop (new branch)",
+      shellPath: "/bin/claude",
+      shellArgs: ["--resume", ID, "--fork-session"],
+      cwd: "/code/shop",
+    });
+  });
+});
+
+describe("resumeCommand for a fork", () => {
+  it("adds --fork-session", () => {
+    expect(resumeCommand(ID, "/code/shop", "linux", { fork: true })).toBe(
+      `cd '/code/shop' && claude --resume ${ID} --fork-session`,
+    );
+  });
 });
 
 describe("resumeCommand (for the clipboard)", () => {

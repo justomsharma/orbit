@@ -7,7 +7,7 @@ import type { OrbitState } from "./state";
 export interface HandlerDeps {
   getSession(id: string): Session | undefined;
   opener: Pick<Opener, "continueChat" | "continueInTerminal" | "copyResume" | "newChat">;
-  state: Pick<OrbitState, "setPin" | "setRename">;
+  state: Pick<OrbitState, "setPin" | "setRename" | "setTags">;
   quota: { enable(): Promise<QuotaResult>; disable(): Promise<QuotaResult> };
   /** The current weekly recap as Markdown, or null before usage is loaded. */
   recapMarkdown(): string | null;
@@ -47,6 +47,8 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         return withSession(m.id, (s) => d.opener.continueChat(s));
       case "openTerminal":
         return withSession(m.id, (s) => d.opener.continueInTerminal(s));
+      case "forkChat":
+        return withSession(m.id, (s) => d.opener.continueInTerminal(s, { fork: true }));
       case "copyResume":
         return withSession(m.id, (s) => d.opener.copyResume(s));
       case "newChat":
@@ -56,6 +58,9 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         return d.refresh();
       case "rename":
         await d.state.setRename(m.id, m.title);
+        return d.refresh();
+      case "tags":
+        await d.state.setTags(m.id, m.tags);
         return d.refresh();
       case "openLink":
         if (!d.isKnownLink(m.url)) return;

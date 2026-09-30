@@ -12,13 +12,14 @@ function setup(opts: { known?: boolean; quota?: QuotaResult; recap?: string | nu
     getSession: (id) => ((opts.known ?? true) && id === ID ? S : undefined),
     opener: {
       continueChat: async (s) => void log.push(`chat ${s.id}`),
-      continueInTerminal: async (s) => void log.push(`terminal ${s.id}`),
+      continueInTerminal: async (s, o) => void log.push(`${o?.fork ? "fork" : "terminal"} ${s.id}`),
       copyResume: async (s) => void log.push(`copy ${s.id}`),
       newChat: async () => void log.push("new chat"),
     },
     state: {
       setPin: async (id, on) => void log.push(`pin ${id} ${on}`),
       setRename: async (id, t) => void log.push(`rename ${id} ${t}`),
+      setTags: async (id, t) => void log.push(`tags ${id} ${t.join(",")}`),
     },
     quota: {
       enable: async () => {
@@ -54,6 +55,8 @@ describe("createHandler", () => {
     await handle({ type: "rename", id: ID, title: "New" });
     await handle({ type: "openLink", url: "https://github.com/a/b/pull/1" });
     await handle({ type: "newChat" });
+    await handle({ type: "forkChat", id: ID });
+    await handle({ type: "tags", id: ID, tags: ["bug", "release"] });
     expect(log).toEqual([
       "refresh",
       `chat ${ID}`,
@@ -65,6 +68,9 @@ describe("createHandler", () => {
       "refresh",
       "link https://github.com/a/b/pull/1",
       "new chat",
+      `fork ${ID}`,
+      `tags ${ID} bug,release`,
+      "refresh",
     ]);
   });
 
