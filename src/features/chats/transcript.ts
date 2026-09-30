@@ -48,8 +48,12 @@ function codeSpan(s: string): string {
   return `${ticks}${pad}${s}${pad}${ticks}`;
 }
 
-/** Outside code: `<` can't start HTML, `![` can't load an image. */
-const escapeText = (s: string) => s.replace(/</g, "\\<").replace(/!\[/g, "!\\[");
+/**
+ * Outside code: `<` can't start HTML, `![` can't load an image, and `](` can't
+ * make a link (a chat's link could otherwise run a VS Code command when clicked).
+ */
+const escapeText = (s: string) =>
+  s.replace(/</g, "\\<").replace(/!\[/g, "!\\[").replace(/\]\(/g, "]\\(");
 
 function escapeLine(line: string): string {
   // A person's "# …" line must not look like one of the transcript's own headings.

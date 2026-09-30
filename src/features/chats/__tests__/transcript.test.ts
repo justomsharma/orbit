@@ -162,7 +162,7 @@ describe("safeMarkdown: what people wrote shows as written, and nothing loads fr
 
   it("never lets an image load", () => {
     expect(safeMarkdown("![badge](https://img.shields.io/x.svg) and <img src=https://x>")).toBe(
-      String.raw`!\[badge](https://img.shields.io/x.svg) and \<img src=https://x>`,
+      String.raw`!\[badge]\(https://img.shields.io/x.svg) and \<img src=https://x>`,
     );
   });
 
@@ -171,6 +171,13 @@ describe("safeMarkdown: what people wrote shows as written, and nothing loads fr
     expect(safeMarkdown(text.join("\n"))).toBe(
       [...text.slice(0, 4), String.raw`Done \<ok>`].join("\n"),
     );
+  });
+
+  it("shows Markdown links as text, so no link in a chat can run a command", () => {
+    expect(safeMarkdown("[run](command:workbench.action.terminal.new) or [x](vscode://a/b)")).toBe(
+      String.raw`[run]\(command:workbench.action.terminal.new) or [x]\(vscode://a/b)`,
+    );
+    expect(safeMarkdown("see `[a](command:x)` in code")).toBe("see `[a](command:x)` in code");
   });
 
   it("keeps a person's '# heading' from breaking the transcript's structure", () => {
@@ -190,7 +197,7 @@ describe("transcriptMarkdown safety", () => {
     ]);
     const md = await transcriptMarkdown(file, { title: "<script>" });
     expect(md.startsWith(String.raw`# \<script>`)).toBe(true);
-    expect(md).toContain(String.raw`see !\[x](https://tracker.example/p.png)`);
+    expect(md).toContain(String.raw`see !\[x]\(https://tracker.example/p.png)`);
     expect(md).not.toContain("sk-live-abcdef1234567890abcd");
   });
 });
