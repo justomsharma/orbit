@@ -80,6 +80,12 @@ export function PromptsView() {
         Reading your prompts…
       </div>
     );
+  } else if (store.promptsError.value) {
+    body = (
+      <Empty icon="warning" title="Couldn't read your prompts">
+        {store.promptsError.value}
+      </Empty>
+    );
   } else if (all.length === 0) {
     body = (
       <Empty icon="history" title="No prompts yet">

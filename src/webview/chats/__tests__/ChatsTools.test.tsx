@@ -51,6 +51,7 @@ beforeEach(() => {
   store.chatsMode.value = "chats";
   store.details.value = null;
   store.prompts.value = null;
+  store.promptsError.value = null;
   store.promptQuery.value = "";
   store.inMessages.value = false;
   store.messageHits.value = null;
@@ -124,6 +125,14 @@ describe("Prompts", () => {
     store.prompts.value = [prompt({ sessionId: null })];
     render(<ChatsView />);
     expect(screen.queryByRole("button", { name: /Open the chat/ })).toBeNull();
+  });
+
+  it("says so when the history couldn't be read, instead of waiting forever", () => {
+    render(<ChatsView />);
+    act(() =>
+      store.applyHostMessage({ type: "prompts", items: [], error: "Orbit couldn't read it." }),
+    );
+    expect(screen.getByText(/Couldn't read your prompts/)).toBeTruthy();
   });
 
   it("explains an empty history", () => {

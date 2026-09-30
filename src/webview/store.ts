@@ -39,6 +39,7 @@ export const chatsMode = signal<"chats" | "prompts">(saved.chatsMode ?? "chats")
 export const details = signal<{ id: string; files: ChangedFileView[] | null } | null>(null);
 /** Prompt library; null until the host has read the history. */
 export const prompts = signal<PromptEntry[] | null>(null);
+export const promptsError = signal<string | null>(null);
 export const promptQuery = signal("");
 /** Search inside messages, and the answer to the latest search only. */
 export const inMessages = signal(false);
@@ -111,6 +112,7 @@ export function applyHostMessage(m: HostMsg): void {
       break;
     case "prompts":
       prompts.value = m.items;
+      promptsError.value = m.error ?? null;
       break;
     case "search":
       if (messageSearch.value?.req === m.req) messageHits.value = m;

@@ -58,7 +58,8 @@ const CHUNK = 4 * 1024 * 1024;
 export async function forEachAppendedLine(
   p: string,
   start: number,
-  fn: (line: string) => void,
+  /** `at` is the byte offset where the line starts, for readLineAt later. */
+  fn: (line: string, at: number) => void,
 ): Promise<number | null> {
   const st = await statSafe(p);
   if (!st?.isFile() || st.size < start) return null;
@@ -78,7 +79,7 @@ export async function forEachAppendedLine(
         : buf.subarray(0, bytesRead);
       let from = 0;
       for (let nl = data.indexOf(0x0a); nl !== -1; nl = data.indexOf(0x0a, from)) {
-        fn(data.subarray(from, nl).toString("utf8").replace(/\r$/, ""));
+        fn(data.subarray(from, nl).toString("utf8").replace(/\r$/, ""), pos - data.length + from);
         from = nl + 1;
       }
       next = pos - (data.length - from);
@@ -97,4 +98,39 @@ export async function readAppendedLines(
   const lines: string[] = [];
   const next = await forEachAppendedLine(p, start, (l) => lines.push(l));
   return next === null ? null : { lines, next };
+}
+
+/**
+ * The one line starting at byte `at` (as forEachAppendedLine reported it), or
+ * null when the file is missing, `at` is past its end, or the line is longer
+ * than `maxBytes`.
+ */
+export async function readLineAt(
+  p: string,
+  at: number,
+  maxBytes = 32 * 1024 * 1024,
+): Promise<string | null> {
+  const st = await statSafe(p);
+  if (!st?.isFile() || at < 0 || at >= st.size) return null;
+  const fh = await open(p, "r");
+  try {
+    const parts: Buffer[] = [];
+    let pos = at;
+    while (pos < st.size && pos - at <= maxBytes) {
+      const buf = Buffer.alloc(Math.min(1024 * 1024, st.size - pos));
+      const { bytesRead } = await fh.read(buf, 0, buf.length, pos);
+      if (bytesRead === 0) break;
+      const chunk = buf.subarray(0, bytesRead);
+      const nl = chunk.indexOf(0x0a);
+      if (nl !== -1) {
+        parts.push(chunk.subarray(0, nl));
+        return Buffer.concat(parts).toString("utf8").replace(/\r$/, "");
+      }
+      parts.push(chunk);
+      pos += bytesRead;
+    }
+    return pos - at > maxBytes ? null : Buffer.concat(parts).toString("utf8");
+  } finally {
+    await fh.close();
+  }
 }

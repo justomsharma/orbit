@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { readTextSafe } from "../../core/fsSafe";
 import { num, obj, str } from "../../core/jsonl";
-import { forEachAppendedLine } from "../../core/lines";
+import { forEachAppendedLine, readLineAt } from "../../core/lines";
 import { historyFile } from "../../core/paths";
 import { isSessionId } from "../../core/uuid";
 
@@ -28,7 +28,10 @@ export interface PromptEntry {
 }
 
 interface Stored extends PromptEntry {
-  pasted: Record<string, PastedRef>;
+  /** Where the latest copy's line starts in history.jsonl; its pastes are read from there when needed. */
+  at: number;
+  /** The dedupe key, to check that line is still the same prompt. */
+  key: string;
 }
 
 /** Bare commands like "/model" or "/compact" aren't worth keeping as prompts. */
@@ -56,6 +59,12 @@ function pastedRefs(v: unknown): Record<string, PastedRef> {
   return out;
 }
 
+const pasteCount = (v: unknown) => Object.keys(obj(v) ?? {}).length;
+
+/** The text plus what was pasted, so prompts that look alike but pasted different text stay apart. */
+const keyOf = (text: string, pasted: Record<string, PastedRef>) =>
+  `${text}\u0000${pasteSignature(pasted)}`;
+
 /** What was pasted, so two prompts that look alike but pasted different text stay apart. */
 function pasteSignature(pasted: Record<string, PastedRef>): string {
   return Object.keys(pasted)
@@ -78,7 +87,9 @@ export class PromptLibrary {
 
   constructor(private readonly home: string) {}
 
-  private add(line: string): void {
+  private pending: Promise<PromptEntry[]> | null = null;
+
+  private add(line: string, at: number): void {
     if (!line.startsWith("{")) return;
     let o: Record<string, unknown> | null;
     try {
@@ -94,8 +105,7 @@ export class PromptLibrary {
     const sid = str(o.sessionId);
     const sessionId = isSessionId(sid) ? sid : null;
     const project = str(o.project);
-    const pasted = pastedRefs(o.pastedContents);
-    const key = `${text}\u0000${pasteSignature(pasted)}`;
+    const key = keyOf(text, pastedRefs(o.pastedContents));
     const e = this.byKey.get(key);
     if (!e) {
       const s: Stored = {
@@ -106,8 +116,9 @@ export class PromptLibrary {
         last: t,
         project,
         sessionId,
-        pastes: Object.keys(pasted).length,
-        pasted,
+        pastes: pasteCount(o.pastedContents),
+        at,
+        key,
       };
       this.byKey.set(key, s);
       this.byId.set(s.id, s);
@@ -120,29 +131,56 @@ export class PromptLibrary {
       e.text = display.trim();
       e.project = project ?? e.project;
       e.sessionId = sessionId ?? e.sessionId;
-      e.pasted = pasted;
-      e.pastes = Object.keys(pasted).length;
+      e.at = at;
+      e.pastes = pasteCount(o.pastedContents);
     }
   }
 
-  async update(): Promise<PromptEntry[]> {
+  /** Reads what Claude appended since last time. Overlapping calls share one read. */
+  update(): Promise<PromptEntry[]> {
+    if (this.pending) return this.pending;
+    this.pending = this.read().finally(() => {
+      this.pending = null;
+    });
+    return this.pending;
+  }
+
+  private async read(): Promise<PromptEntry[]> {
     const file = historyFile(this.home);
-    let next = await forEachAppendedLine(file, this.offset, (l) => this.add(l));
+    const add = (l: string, at: number) => this.add(l, at);
+    let next = await forEachAppendedLine(file, this.offset, add);
     if (next === null) {
       // Missing or rewritten: start over.
       this.byKey = new Map();
       this.byId = new Map();
-      next = (await forEachAppendedLine(file, 0, (l) => this.add(l))) ?? 0;
+      next = (await forEachAppendedLine(file, 0, add)) ?? 0;
     }
     this.offset = next;
     return [...this.byKey.values()]
       .sort((a, b) => b.last - a.last)
-      .map(({ pasted: _, ...entry }) => entry);
+      .map(({ at: _at, key: _key, ...entry }) => entry);
   }
 
-  /** An entry with its latest pasted blocks, for copying or reusing it. */
-  get(id: string): (PromptEntry & { pasted: Record<string, PastedRef> }) | null {
-    return this.byId.get(id) ?? null;
+  /**
+   * An entry with its latest pasted blocks, for copying or reusing it. Pastes are
+   * read from history now rather than kept in memory; if the file was rewritten
+   * since, the prompt comes back without them (placeholders stay).
+   */
+  async get(id: string): Promise<(PromptEntry & { pasted: Record<string, PastedRef> }) | null> {
+    const e = this.byId.get(id);
+    if (!e) return null;
+    const { at, key, ...entry } = e;
+    const line = await readLineAt(historyFile(this.home), at);
+    let pasted: Record<string, PastedRef> = {};
+    try {
+      const o = line ? obj(JSON.parse(line)) : null;
+      const display = str(o?.display);
+      const refs = pastedRefs(o?.pastedContents);
+      if (display !== null && keyOf(normalize(display), refs) === key) pasted = refs;
+    } catch {
+      // Not the same line any more.
+    }
+    return { ...entry, pasted };
   }
 }
 

@@ -174,12 +174,18 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
     if (!this.view?.visible) return;
     if (this.tab === "prompts") {
       try {
-        this.postOnce("prompts", {
-          type: "prompts",
-          items: await this.d.chatsDeps.prompts.update(),
-        });
+        const items = await this.d.chatsDeps.prompts.update();
+        // Any new or repeated prompt changes the newest entry or the total count.
+        const uses = items.reduce((n, p) => n + p.count, 0);
+        const sig = `${items.length}:${uses}:${items[0]?.id ?? ""}:${items[0]?.last ?? 0}`;
+        this.postOnce("prompts", { type: "prompts", items }, sig);
       } catch (e) {
         this.d.log.error("Could not read Claude Code prompt history", errText(e));
+        this.postOnce("prompts", {
+          type: "prompts",
+          items: [],
+          error: "Orbit couldn't read Claude Code's prompt history.",
+        });
       }
       return;
     }
@@ -204,8 +210,12 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private postOnce(kind: keyof OrbitViewProvider["sent"], m: HostMsg): void {
-    const sig = JSON.stringify(m);
+  /** `sig` replaces the full JSON comparison for big payloads (the prompt list). */
+  private postOnce(
+    kind: keyof OrbitViewProvider["sent"],
+    m: HostMsg,
+    sig = JSON.stringify(m),
+  ): void {
     if (sig === this.sent[kind]) return;
     this.sent[kind] = sig;
     this.post(m);

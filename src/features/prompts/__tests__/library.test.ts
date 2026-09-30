@@ -109,6 +109,26 @@ describe("PromptLibrary", () => {
     expect((await lib.update()).map((p) => p.text)).toEqual(["new"]);
   });
 
+  it("counts each line once even when updates overlap", async () => {
+    const h = home([line("one", 1), line("one", 2), line("two", 3)]);
+    const lib = new PromptLibrary(h);
+    const [a, b] = await Promise.all([lib.update(), lib.update()]);
+    expect(a.find((p) => p.text === "one")?.count).toBe(2);
+    expect(b.find((p) => p.text === "one")?.count).toBe(2);
+  });
+
+  it("reads pasted text from history only when asked, and copes with a rewritten file", async () => {
+    const big = "x".repeat(100_000);
+    const h = home([
+      line("[Pasted text #1] a", 1, { pasted: { "1": { id: 1, type: "text", content: big } } }),
+    ]);
+    const lib = new PromptLibrary(h);
+    const [p] = await lib.update();
+    expect((await lib.get(p!.id))?.pasted["1"]?.content).toBe(big);
+    writeFileSync(join(h, "history.jsonl"), `${line("something else", 1)}\n`);
+    expect((await lib.get(p!.id))?.pasted).toEqual({});
+  });
+
   it("is empty without history", async () => {
     expect(await new PromptLibrary(tmp()).update()).toEqual([]);
   });
@@ -125,8 +145,8 @@ describe("PromptLibrary", () => {
     const lib = new PromptLibrary(h);
     const [p] = await lib.update();
     expect(p?.pastes).toBe(1);
-    expect(lib.get(p!.id)?.pasted).toEqual({ "1": { type: "text", content: "new" } });
-    expect(lib.get("missing")).toBeNull();
+    expect((await lib.get(p!.id))?.pasted).toEqual({ "1": { type: "text", content: "new" } });
+    expect(await lib.get("missing")).toBeNull();
   });
 });
 

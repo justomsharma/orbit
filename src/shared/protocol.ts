@@ -215,7 +215,7 @@ export type HostMsg =
   | { type: "setup"; data: SetupSnapshot }
   | { type: "catalog"; data: SettingDef[] }
   | { type: "chat:details"; id: string; files: ChangedFileView[] }
-  | { type: "prompts"; items: PromptEntry[] }
+  | { type: "prompts"; items: PromptEntry[]; error?: string }
   /** Search results for request `req`; `done` false while more chats are still being read. */
   | {
       type: "search";

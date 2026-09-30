@@ -154,10 +154,10 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
 
     case "prompts:copy":
     case "prompts:use": {
-      let entry = d.prompts.get(msg.id);
+      let entry = await d.prompts.get(msg.id);
       if (!entry) {
         await d.prompts.update();
-        entry = d.prompts.get(msg.id);
+        entry = await d.prompts.get(msg.id);
       }
       if (!entry) {
         warn("That prompt is no longer in Claude's history.");
