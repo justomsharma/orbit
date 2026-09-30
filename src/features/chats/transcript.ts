@@ -3,6 +3,7 @@ import { MiB } from "../../core/fsSafe";
 import { type JsonObject, str } from "../../core/jsonl";
 import { parseJsonLine, streamLines } from "../../core/lines";
 import { isInside } from "../../core/paths";
+import { redactText } from "../setup/redact";
 import { type AssistantPart, assistantParts, type UserPart, userParts } from "./messages";
 
 export interface TranscriptOptions {
@@ -39,21 +40,74 @@ function timeLine(l: JsonObject): string | null {
   return `*${pad(d.getHours())}:${pad(d.getMinutes())}*`;
 }
 
+/** Plain text shown as inline code, whatever backticks it contains. */
+function codeSpan(s: string): string {
+  const longest = Math.max(0, ...[...s.matchAll(/`+/g)].map((m) => m[0].length));
+  const ticks = "`".repeat(longest + 1);
+  const pad = s.startsWith("`") || s.endsWith("`") ? " " : "";
+  return `${ticks}${pad}${s}${pad}${ticks}`;
+}
+
+/** Outside code: `<` can't start HTML, `![` can't load an image. */
+const escapeText = (s: string) => s.replace(/</g, "\\<").replace(/!\[/g, "!\\[");
+
+function escapeLine(line: string): string {
+  // A person's "# …" line must not look like one of the transcript's own headings.
+  const l = line.replace(/^(\s{0,3})(#{1,6})(?=\s|$)/, "$1\\$2");
+  let out = "";
+  let at = 0;
+  for (const m of l.matchAll(/(`+)[\s\S]*?\1/g)) {
+    out += escapeText(l.slice(at, m.index)) + m[0];
+    at = m.index + m[0].length;
+  }
+  return out + escapeText(l.slice(at));
+}
+
+/**
+ * Chat text as Markdown that shows exactly what was written: no raw HTML, no
+ * images (which the preview would fetch from the web), no stray headings.
+ * Code blocks and inline code are left as they are.
+ */
+export function safeMarkdown(text: string): string {
+  let fence: string | null = null;
+  return text
+    .split("\n")
+    .map((line) => {
+      const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1];
+      if (marker) {
+        if (!fence) fence = marker;
+        else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+        return line;
+      }
+      return fence ? line : escapeLine(line);
+    })
+    .join("\n");
+}
+
 function toolLine(p: { name: string; input: JsonObject }, cwd: string, max: number): string {
   for (const f of TOOL_FIELDS) {
     let v = str(p.input[f]);
     if (!v?.trim()) continue;
     if (PATH_FIELDS.has(f) && cwd && isInside(cwd, v)) v = relative(cwd, v) || ".";
-    return `> 🔧 ${p.name} · ${clip(oneLine(v), max)}`;
+    // Commands often carry tokens; the transcript may be exported and shared.
+    return `> 🔧 ${p.name} · ${codeSpan(clip(oneLine(redactText(v)), max))}`;
   }
   return `> 🔧 ${p.name}`;
 }
 
 const userBlock = (p: UserPart) =>
-  p.kind === "text" ? p.text : p.kind === "image" ? "> 🖼 image" : `> ${p.text}`;
+  p.kind === "text"
+    ? safeMarkdown(p.text)
+    : p.kind === "image"
+      ? "> 🖼 image"
+      : `> ${escapeText(p.text)}`;
 
 const assistantBlock = (p: AssistantPart, cwd: string, max: number) =>
-  p.kind === "text" ? p.text : p.kind === "image" ? "> 🖼 image" : toolLine(p, cwd, max);
+  p.kind === "text"
+    ? safeMarkdown(p.text)
+    : p.kind === "image"
+      ? "> 🖼 image"
+      : toolLine(p, cwd, max);
 
 /**
  * A readable Markdown rendering of a chat: prompts, replies and one line per
@@ -64,7 +118,7 @@ export async function transcriptMarkdown(file: string, o: TranscriptOptions): Pr
   const maxTool = o.maxToolChars ?? 300;
   const maxBytes = o.maxBytes ?? 20 * MiB;
   const maxTurns = o.maxTurns ?? 5000;
-  const out = [`# ${oneLine(o.title) || "Untitled chat"}`];
+  const out = [`# ${escapeText(oneLine(o.title)) || "Untitled chat"}`];
   let role: "user" | "assistant" | null = null;
   let turns = 0;
   let read = 0;

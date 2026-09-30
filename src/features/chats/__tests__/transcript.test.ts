@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { type Ctx, L, writeSession } from "../../../../test/helpers/fakeHome";
 import { useTmpDir } from "../../../../test/helpers/tmp";
-import { transcriptMarkdown } from "../transcript";
+import { safeMarkdown, transcriptMarkdown } from "../transcript";
 
 const tmp = useTmpDir();
 const CWD = join("/work", "shop");
@@ -58,7 +58,7 @@ describe("transcriptMarkdown", () => {
       "## Claude",
       hm(lines.a1!),
       "Sure, here:\n\n```ts\nconst a = 1;\n```",
-      `> 🔧 Edit · ${join("src", "a.ts")}`,
+      `> 🔧 Edit · \`${join("src", "a.ts")}\``,
       "All done.",
       "## You",
       hm(lines.u2!),
@@ -87,13 +87,13 @@ describe("transcriptMarkdown", () => {
     const md = await transcriptMarkdown(file, { title: "T", maxToolChars: 20 });
     const tools = md.split("\n").filter((l) => l.startsWith("> 🔧"));
     expect(tools).toEqual([
-      "> 🔧 Bash · npm test -- -u",
-      "> 🔧 Grep · src",
-      "> 🔧 WebFetch · https://example.com…",
-      "> 🔧 Agent · Find the bug",
-      `> 🔧 Read · ${join("/elsewhere", "x.ts")}`,
+      "> 🔧 Bash · `npm test -- -u`",
+      "> 🔧 Grep · `src`",
+      "> 🔧 WebFetch · `https://example.com…`",
+      "> 🔧 Agent · `Find the bug`",
+      `> 🔧 Read · \`${join("/elsewhere", "x.ts")}\``,
       "> 🔧 TodoWrite",
-      "> 🔧 Write · a-very-long-file-na…",
+      "> 🔧 Write · `a-very-long-file-na…`",
     ]);
   });
 
@@ -150,5 +150,47 @@ describe("transcriptMarkdown", () => {
     expect(await transcriptMarkdown(join(tmp(), "no.jsonl"), { title: "Old\nchat" })).toBe(
       "# Old chat\n",
     );
+  });
+});
+
+describe("safeMarkdown: what people wrote shows as written, and nothing loads from the web", () => {
+  it("keeps HTML-looking text as text", () => {
+    expect(safeMarkdown("Use <Button onClick={go}> and List<T>")).toBe(
+      String.raw`Use \<Button onClick={go}> and List\<T>`,
+    );
+  });
+
+  it("never lets an image load", () => {
+    expect(safeMarkdown("![badge](https://img.shields.io/x.svg) and <img src=https://x>")).toBe(
+      String.raw`!\[badge](https://img.shields.io/x.svg) and \<img src=https://x>`,
+    );
+  });
+
+  it("leaves code blocks and inline code exactly as they were", () => {
+    const text = ["Run `a <b> ![c]` then:", "```html", "<img src=https://x>", "```", "Done <ok>"];
+    expect(safeMarkdown(text.join("\n"))).toBe(
+      [...text.slice(0, 4), String.raw`Done \<ok>`].join("\n"),
+    );
+  });
+
+  it("keeps a person's '# heading' from breaking the transcript's structure", () => {
+    expect(safeMarkdown("## You\n  # not a heading")).toBe(
+      String.raw`\## You` + "\n" + String.raw`  \# not a heading`,
+    );
+  });
+});
+
+describe("transcriptMarkdown safety", () => {
+  it("escapes chat text and hides secrets in tool lines", async () => {
+    const file = write((c) => [
+      L.user(c, "see ![x](https://tracker.example/p.png)"),
+      L.toolUse(c, "Bash", {
+        command: "curl -H 'Authorization: Bearer sk-live-abcdef1234567890abcd' x",
+      }),
+    ]);
+    const md = await transcriptMarkdown(file, { title: "<script>" });
+    expect(md.startsWith(String.raw`# \<script>`)).toBe(true);
+    expect(md).toContain(String.raw`see !\[x](https://tracker.example/p.png)`);
+    expect(md).not.toContain("sk-live-abcdef1234567890abcd");
   });
 });
