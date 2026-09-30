@@ -282,7 +282,13 @@ async function run(msg: SetupMsg, d: SetupHandlerDeps, state: { changed: boolean
           workspace: ws ?? undefined,
           platform: d.platform,
         }),
-        `Remove the MCP server "${msg.name}"? You can undo this.`,
+        `Remove the MCP server "${msg.name}" from ${
+          msg.scope === "project"
+            ? "this project's .mcp.json (shared with everyone using this repository)"
+            : msg.scope === "local"
+              ? "this folder (just you)"
+              : "all your projects"
+        }? You can undo this.`,
         `Removed MCP ${msg.name}`,
       );
       return true;

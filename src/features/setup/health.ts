@@ -62,6 +62,12 @@ export interface HealthInput {
   platform?: NodeJS.Platform;
 }
 
+/** `./notes.md`, `~/rules`, `docs/x.md` — not `types/node` (a package) or `alice` (a mention). */
+function looksLikeFile(ref: string): boolean {
+  if (/^(\.{1,2}[\\/]|~[\\/]|[\\/]|[A-Za-z]:[\\/])/.test(ref)) return true;
+  return /\.[A-Za-z0-9]{1,8}$/.test(ref.split(/[\\/]/).pop() ?? "");
+}
+
 const MEMORY_INDEX_LINES = 200;
 const MEMORY_INDEX_BYTES = 25 * 1024;
 const BIG_CLAUDE_MD = 40 * 1024;
@@ -419,7 +425,8 @@ export function checkHealth(h: HealthInput): Issue[] {
   // Memory
   for (const f of h.memory.claudeMd) {
     for (const imp of f.imports) {
-      if (imp.exists) continue;
+      // Claude reads a missing target as plain text, so only flag refs that are clearly paths.
+      if (imp.exists || !looksLikeFile(imp.ref.replace(/^@/, ""))) continue;
       add({
         id: `claudemd-import:${f.path}:${imp.ref}`,
         severity: "warning",

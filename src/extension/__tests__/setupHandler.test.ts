@@ -308,6 +308,21 @@ describe("handleSetup: forms", () => {
   });
 });
 
+describe("handleSetup: remove says where", () => {
+  it.each([
+    ["local", /this folder \(just you\)/],
+    ["user", /all your projects/],
+    ["project", /shared .*everyone/],
+  ])("names the %s scope in the question", async (scope, where) => {
+    const { handle, log, ws, claudeJson, json } = await setup();
+    const cj = json(claudeJson);
+    writeFileSync(claudeJson, JSON.stringify({ ...cj, mcpServers: { db: { command: "db" } } }));
+    writeFileSync(join(ws, ".mcp.json"), JSON.stringify({ mcpServers: { db: { command: "db" } } }));
+    await handle({ type: "setup:mcpRemove", scope, name: "db" });
+    expect(log[0]).toMatch(where);
+  });
+});
+
 describe("handleSetup: masked values", () => {
   const rule = 'Bash(curl -H "Authorization: Bearer rule-TOKEN-10" https://api.x)';
 

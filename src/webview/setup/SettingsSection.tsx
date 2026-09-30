@@ -171,6 +171,7 @@ function SettingRow({ def, scope }: { def: SettingDef; scope: EditScope }) {
         <button
           type="button"
           class={`setting-desc${more ? " open" : ""}`}
+          aria-expanded={more}
           onClick={() => setMore(!more)}
         >
           {def.description.replace(/\s*See https?:\/\/\S+/g, "")}

@@ -281,6 +281,26 @@ describe("checkHealth", () => {
     expect(issues.map((i) => i.severity)).toEqual(["warning", "info"]);
   });
 
+  it("doesn't mistake package names and @mentions in CLAUDE.md for broken imports", () => {
+    const imp = (ref: string) => ({ ref, path: `/w/${ref.slice(1)}`, exists: false });
+    const issues = checkHealth(
+      input({
+        memory: memory({}, [
+          {
+            scope: "project",
+            path: "/w/CLAUDE.md",
+            exists: true,
+            bytes: 10,
+            imports: ["@types/node", "@tanstack/query", "@alice", "@./notes.md", "@~/rules"].map(
+              imp,
+            ),
+          },
+        ]),
+      }),
+    );
+    expect(issues.map((i) => i.detail.split(" ")[0])).toEqual(["@./notes.md", "@~/rules"]);
+  });
+
   it("orders errors before warnings before tips", () => {
     const issues = checkHealth(
       input({
