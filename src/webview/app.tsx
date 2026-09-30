@@ -37,6 +37,7 @@ function TabBar() {
             aria-selected={on}
             tabIndex={on ? 0 : -1}
             class={`tab${on ? " on" : ""}`}
+            title={t.label}
             onClick={() => (store.tab.value = t.id)}
           >
             <Icon name={t.icon} />

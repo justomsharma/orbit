@@ -84,6 +84,17 @@ button {
   white-space: nowrap;
 }
 
+/* A narrow sidebar shows icons only; the names stay for screen readers and tooltips. */
+@media (max-width: 280px) {
+  .tab span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+
 .tab:hover {
   color: var(--fg);
 }
