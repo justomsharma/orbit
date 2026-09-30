@@ -8,3 +8,4 @@ coverage/
 test/local/
 .vscode-test/
 .gstack/
+.claude/
