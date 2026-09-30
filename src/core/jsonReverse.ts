@@ -46,7 +46,9 @@ function diff(
 ): void {
   if (equal(before, after)) return;
   const b = before === MISSING && isObject(after) ? {} : before;
-  const a = after === MISSING && isObject(before) ? {} : after;
+  // A removed object is one value: it comes back whole, and only while its place is empty,
+  // so it can never be mixed into a new object someone made under the same name.
+  const a = after;
   if (isObject(b) && isObject(a)) {
     if (before === MISSING) created.push(path);
     for (const k of new Set([...Object.keys(b), ...Object.keys(a)]))

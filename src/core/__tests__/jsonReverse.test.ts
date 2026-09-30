@@ -114,11 +114,23 @@ describe("reverseJsonEdit", () => {
       expect(() => undo({ mcpServers: { db: { command: "y" } } })).toThrow(/changed again/);
     });
 
-    it("puts back a removed object next to things Claude added since", () => {
-      const before = { hooks: { Stop: [{ hooks: [] }] } };
-      expect(run(before, {}, { hooks: { Start: [1] } })).toEqual({
-        hooks: { Start: [1], Stop: [{ hooks: [] }] },
+    it("puts back a removed object whole while its place is still empty", () => {
+      const before = { mcpServers: { db: { command: "npx", args: ["db-mcp"] } }, n: 1 };
+      const after = { mcpServers: {}, n: 1 };
+      expect(run(before, after, { mcpServers: { gh: { url: "u" } }, n: 7 })).toEqual({
+        mcpServers: { gh: { url: "u" }, db: { command: "npx", args: ["db-mcp"] } },
+        n: 7,
       });
+    });
+
+    it("never mixes a removed object into a new one with the same name", () => {
+      const undo = reverseJsonEdit(
+        { mcpServers: { db: { command: "npx", args: ["db-mcp"] } } },
+        { mcpServers: {} },
+      );
+      expect(() => undo({ mcpServers: { db: { type: "http", url: "https://x" } } })).toThrow(
+        /changed again/,
+      );
     });
   });
 
