@@ -28,6 +28,10 @@ const INSTALL_DOCS = "https://code.claude.com/docs/en/setup";
 export class Opener {
   constructor(private readonly host: OpenerHost) {}
 
+  claudeExtensionInstalled(): boolean {
+    return this.host.claudeExtensionInstalled();
+  }
+
   private inWorkspace(cwd: string): boolean {
     return this.host.workspaceFolders().some((f) => samePath(f, cwd, this.host.platform));
   }

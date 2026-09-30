@@ -6,3 +6,4 @@ out/
 coverage/
 .vscode-test/
 test/local/
+.vscode-test/

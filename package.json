@@ -73,7 +73,8 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:perf": "vitest run --config vitest.perf.mts",
-    "package": "npm run build && vsce package --no-dependencies -o dist/"
+    "test:integration": "npm run build && node test/integration/runTest.cjs",
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository -o dist/"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
