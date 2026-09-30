@@ -32,22 +32,51 @@ function equal(a: Value, b: Value): boolean {
   return false;
 }
 
-function diff(before: Value, after: Value, path: string[], out: (Change | ListChange)[]): void {
+/**
+ * Records every value Orbit changed. Objects Orbit created or removed are walked
+ * into (so Claude may add its own keys inside them meanwhile); `created` collects
+ * the containers Orbit made, to tidy away if the undo leaves them empty.
+ */
+function diff(
+  before: Value,
+  after: Value,
+  path: string[],
+  out: (Change | ListChange)[],
+  created: string[][],
+): void {
   if (equal(before, after)) return;
-  if (isObject(before) && isObject(after)) {
-    for (const k of new Set([...Object.keys(before), ...Object.keys(after)]))
-      diff(k in before ? before[k] : MISSING, k in after ? after[k] : MISSING, [...path, k], out);
+  const b = before === MISSING && isObject(after) ? {} : before;
+  const a = after === MISSING && isObject(before) ? {} : after;
+  if (isObject(b) && isObject(a)) {
+    if (before === MISSING) created.push(path);
+    for (const k of new Set([...Object.keys(b), ...Object.keys(a)]))
+      diff(k in b ? b[k] : MISSING, k in a ? a[k] : MISSING, [...path, k], out, created);
     return;
   }
-  if (isPrimitiveList(before) && isPrimitiveList(after)) {
+  const bl = before === MISSING && isPrimitiveList(after) ? [] : before;
+  const al = after === MISSING && isPrimitiveList(before) ? [] : after;
+  if (isPrimitiveList(bl) && isPrimitiveList(al)) {
+    if (before === MISSING) created.push(path);
     out.push({
       path,
-      added: after.filter((x) => !before.includes(x)),
-      removed: before.filter((x) => !after.includes(x)),
+      added: al.filter((x) => !bl.includes(x)),
+      removed: bl.filter((x) => !al.includes(x)),
     });
     return;
   }
   out.push({ path, before, after });
+}
+
+/** Removes containers Orbit created that the undo left empty, deepest first. */
+function prune(root: Json, created: string[][]): void {
+  for (const path of [...created].sort((x, y) => y.length - x.length)) {
+    if (!path.length) continue;
+    const p = parentOf(root, path, false);
+    const k = path[path.length - 1]!;
+    const v = p?.[k];
+    if (p && ((Array.isArray(v) && v.length === 0) || (isObject(v) && !Object.keys(v).length)))
+      delete p[k];
+  }
 }
 
 /** The object holding `path`'s last key, or null when a parent is not an object. */
@@ -90,13 +119,14 @@ export class ReverseConflict extends Error {}
  */
 export function reverseJsonEdit(before: Json, after: Json): (current: Json) => void {
   const changes: (Change | ListChange)[] = [];
-  diff(before, after, [], changes);
+  const created: string[][] = [];
+  diff(before, after, [], changes, created);
   return (current) => {
     const where = (c: { path: string[] }) => c.path.join(".");
     for (const c of changes) {
       const now = read(current, c.path);
       if ("added" in c) {
-        if (now !== MISSING && !isPrimitiveList(now))
+        if (now === null || (now !== MISSING && !isPrimitiveList(now)))
           throw new ReverseConflict(`"${where(c)}" changed again since Orbit's edit.`);
       } else if (now === null || !equal(now, c.after)) {
         throw new ReverseConflict(`"${where(c)}" changed again since Orbit's edit.`);
@@ -116,5 +146,6 @@ export function reverseJsonEdit(before: Json, after: Json): (current: Json) => v
         parentOf(current, c.path, true)![k] = structuredClone(c.before);
       }
     }
+    prune(current, created);
   };
 }

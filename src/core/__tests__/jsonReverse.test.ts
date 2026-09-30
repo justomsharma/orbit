@@ -79,6 +79,49 @@ describe("reverseJsonEdit", () => {
     expect(() => undo({ a: "text" })).toThrow(/changed again/);
   });
 
+  describe("objects Orbit created or removed", () => {
+    it("undoes the first rule even after Claude added its own rule to the new list", () => {
+      expect(
+        run(
+          {},
+          { permissions: { allow: ["Read"] } },
+          { permissions: { allow: ["Read", "Bash(ls)"] } },
+        ),
+      ).toEqual({ permissions: { allow: ["Bash(ls)"] } });
+    });
+
+    it("leaves no empty containers behind when nothing else was added", () => {
+      expect(
+        run(
+          { a: 1 },
+          { a: 1, permissions: { allow: ["Read"] } },
+          { a: 2, permissions: { allow: ["Read"] } },
+        ),
+      ).toEqual({ a: 2 });
+    });
+
+    it("undoes a folder's first local MCP server while keeping what Claude stored there since", () => {
+      const before = { projects: {} };
+      const after = { projects: { "C:/x": { mcpServers: { db: { command: "x" } } } } };
+      const current = {
+        projects: { "C:/x": { mcpServers: { db: { command: "x" } }, history: ["hi"] } },
+      };
+      expect(run(before, after, current)).toEqual({ projects: { "C:/x": { history: ["hi"] } } });
+    });
+
+    it("still refuses when Claude changed the very thing Orbit added", () => {
+      const undo = reverseJsonEdit({}, { mcpServers: { db: { command: "x" } } });
+      expect(() => undo({ mcpServers: { db: { command: "y" } } })).toThrow(/changed again/);
+    });
+
+    it("puts back a removed object next to things Claude added since", () => {
+      const before = { hooks: { Stop: [{ hooks: [] }] } };
+      expect(run(before, {}, { hooks: { Start: [1] } })).toEqual({
+        hooks: { Start: [1], Stop: [{ hooks: [] }] },
+      });
+    });
+  });
+
   it("does nothing for an edit that changed nothing", () => {
     expect(run({ a: 1 }, { a: 1 }, { a: 2 })).toEqual({ a: 2 });
   });
