@@ -51,7 +51,8 @@ function TabBar() {
 export function App() {
   const t = store.tab.value;
   // Tell the host which tab is open, so it only reads what this tab shows.
-  useEffect(() => post({ type: "tab", tab: t }), [t]);
+  const reading = t === "chats" && store.chatsMode.value === "prompts" ? "prompts" : t;
+  useEffect(() => post({ type: "tab", tab: reading }), [reading]);
   return (
     <div class="app">
       <TabBar />

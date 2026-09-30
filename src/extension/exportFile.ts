@@ -16,7 +16,7 @@ export function pngBytes(dataUrl: string): Buffer | null {
  * Saves the recap card to a file the person picks in VS Code's own save dialog
  * (which asks before replacing an existing file). The only place Orbit writes
  * outside its own storage without going through SafeWriter — and only on an
- * explicit click, to a path the person chose.
+ * explicit click, to a path the person chose. (saveMarkdown below is the same.)
  */
 export async function saveRecapImage(dataUrl: string): Promise<void> {
   const bytes = pngBytes(dataUrl);
@@ -37,4 +37,20 @@ export async function saveRecapImage(dataUrl: string): Promise<void> {
     "Show file",
   );
   if (pick === "Show file") await vscode.commands.executeCommand("revealFileInOS", uri);
+}
+
+/** Saves a chat as Markdown to a file the person picks in VS Code's save dialog. */
+export async function saveMarkdown(text: string, suggestedName: string): Promise<void> {
+  const uri = await vscode.window.showSaveDialog({
+    defaultUri: vscode.Uri.file(path.join(os.homedir(), "Downloads", suggestedName)),
+    filters: { Markdown: ["md"] },
+    saveLabel: "Export chat",
+  });
+  if (!uri) return;
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(text, "utf8"));
+  const pick = await vscode.window.showInformationMessage(
+    `Saved ${path.basename(uri.fsPath)}.`,
+    "Open",
+  );
+  if (pick === "Open") await vscode.window.showTextDocument(uri);
 }

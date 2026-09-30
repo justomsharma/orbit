@@ -5,15 +5,18 @@ import { OrbitStore } from "../core/orbitStore";
 import { claudeHome, claudeJsonPath, projectsDir, sessionsDir, settingsFile } from "../core/paths";
 import { SafeWriter } from "../core/safeWriter";
 import { RefreshScheduler } from "../core/scheduler";
+import { PromptLibrary } from "../features/prompts/library";
 import { findNode } from "../features/usage/findNode";
 import { QuotaInstaller } from "../features/usage/quotaInstall";
 import { ChatsService, type ChatsSnapshot } from "./chatsService";
+import { saveMarkdown } from "./exportFile";
 import { Opener } from "./opener";
 import { SetupService } from "./setupService";
 import { OrbitState } from "./state";
 import { UsageService, type UsageSnapshot } from "./usageService";
 import { OrbitViewProvider, VIEW_ID } from "./view";
 import { vscodeConfirmHost } from "./vscodeConfirm";
+import { ReadOnlyDocs } from "./vscodeDocs";
 import { runClaudeInTerminal, vscodeOpenerHost } from "./vscodeHost";
 
 /** What `activate` returns — used by the integration tests. */
@@ -39,7 +42,8 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   const storage = context.globalStorageUri.fsPath;
   const store = new OrbitStore(storage);
   const writer = new SafeWriter(path.join(storage, "backups"));
-  const confirm = vscodeConfirmHost(context);
+  const docs = ReadOnlyDocs.register(context);
+  const confirm = vscodeConfirmHost(docs);
   const workspace = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
   const claudeJson = claudeJsonPath();
   const setup = new SetupService({
@@ -94,6 +98,18 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
       },
       runClaude: (args, cwd) => runClaudeInTerminal(args, cwd),
       newChat: (prompt) => opener.newChat(prompt),
+    },
+    chatsDeps: {
+      home,
+      prompts: new PromptLibrary(home),
+      writer,
+      confirm,
+      newChat: (prompt) => opener.newChat(prompt),
+      copy: async (t) => vscode.env.clipboard.writeText(t),
+      info: (m) => void vscode.window.showInformationMessage(m),
+      showDiff: (left, right, title) => docs.showDiff(left, right, title),
+      showMarkdown: (text, title) => docs.showMarkdown(text, title),
+      saveMarkdown,
     },
     log,
     onSnapshot: (s) => showStatus(s.live.length),

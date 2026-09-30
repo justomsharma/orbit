@@ -51,7 +51,7 @@ function copyCss() {
   // Stylesheets are concatenated into one file the webview loads.
   writeFileSync(
     "dist/webview/main.css",
-    ["styles.css", "styles-usage.css", "styles-setup.css"]
+    ["styles.css", "styles-usage.css", "styles-setup.css", "styles-chats.css"]
       .map((f) => readFileSync(`src/webview/${f}`, "utf8"))
       .join("\n"),
   );

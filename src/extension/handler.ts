@@ -15,7 +15,7 @@ export interface HandlerDeps {
   saveImage(dataUrl: string): Promise<void>;
   refresh(): Promise<void>;
   /** The tab the person is looking at, so only its data is read. */
-  setTab(tab: "home" | "chats" | "usage" | "setup"): void;
+  setTab(tab: "home" | "chats" | "prompts" | "usage" | "setup"): void;
   /** Only links that appear in the person's own chats (PR links) may be opened. */
   isKnownLink(url: string): boolean;
   openLink(url: string): Promise<void>;

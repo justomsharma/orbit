@@ -57,4 +57,9 @@ export class ChatsService {
   get(id: string): Session | undefined {
     return this.byId.get(id);
   }
+
+  /** Every chat from the last snapshot, most recent first. */
+  all(): Session[] {
+    return [...this.byId.values()].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  }
 }

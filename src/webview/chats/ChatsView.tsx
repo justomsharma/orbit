@@ -6,7 +6,10 @@ import * as store from "../store";
 import { Empty } from "../ui/Empty";
 import { Icon, IconButton } from "../ui/Icon";
 import { VirtualList } from "../ui/VirtualList";
+import { ChatDetails, openDetails } from "./ChatDetails";
+import { MessageResults, useMessageSearch } from "./MessageSearch";
 import { buildItems, type ChatVM, type Filter, type Item, relativeTime } from "./model";
+import { PromptsView } from "./PromptsView";
 
 const HEADER_H = 30;
 const ROW_H = 54;
@@ -107,6 +110,7 @@ function ChatRow({ vm, active, now, renaming, onRename }: RowProps) {
             onClick={() => post({ type: "openLink", url: s.prLinks[s.prLinks.length - 1]! })}
           />
         ) : null}
+        <IconButton icon="history" label="Files and transcript" onClick={() => openDetails(s.id)} />
         <IconButton
           icon="terminal"
           label="Continue in terminal"
@@ -146,7 +150,40 @@ function Chip({ value, label, count }: { value: Filter; label: string; count?: n
   );
 }
 
+/** Chats, or the prompt library, with one chat's details when opened. */
 export function ChatsView() {
+  const mode = store.chatsMode.value;
+  return (
+    <div class="chats-tab">
+      <fieldset class="segmented mode-switch">
+        <legend class="sr-only">Show</legend>
+        {(["chats", "prompts"] as const).map((m) => (
+          <label key={m} class={mode === m ? "on" : ""}>
+            <input
+              type="radio"
+              name="chats-mode"
+              class="sr-only"
+              checked={mode === m}
+              onChange={() => (store.chatsMode.value = m)}
+            />
+            {m === "chats" ? "Chats" : "Prompts"}
+          </label>
+        ))}
+      </fieldset>
+      {mode === "prompts" ? (
+        <section class="chats">
+          <PromptsView />
+        </section>
+      ) : store.details.value ? (
+        <ChatDetails />
+      ) : (
+        <ChatList />
+      )}
+    </div>
+  );
+}
+
+function ChatList() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [active, setActive] = useState(0);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -173,6 +210,7 @@ export function ChatsView() {
   const activeChatId = activeEntry?.kind === "chat" ? `chat-${activeEntry.vm.s.id}` : undefined;
 
   useEffect(() => setActive(0), [store.query.value, store.filter.value]);
+  useMessageSearch();
 
   // "/" focuses search from anywhere in the view.
   useEffect(() => {
@@ -195,6 +233,7 @@ export function ChatsView() {
     if (e.key === "Enter") post({ type: e.shiftKey ? "openTerminal" : "openChat", id });
     else if (is("p")) post({ type: "pin", id, on: !vm.pinned });
     else if (is("c")) post({ type: "copyResume", id });
+    else if (is("d")) openDetails(id);
     else if (e.key === "F2") setRenaming(id);
     else return false;
     return true;
@@ -219,7 +258,9 @@ export function ChatsView() {
   const liveCount = store.live.value.filter((l) => all.some((s) => s.id === l.sessionId)).length;
 
   let body: ComponentChildren;
-  if (!store.loaded.value) {
+  if (store.inMessages.value && store.loaded.value && all.length > 0) {
+    body = <MessageResults />;
+  } else if (!store.loaded.value) {
     body = (
       <div class="loading" role="status">
         Loading your chats…
@@ -301,8 +342,8 @@ export function ChatsView() {
             role="combobox"
             aria-expanded="true"
             aria-autocomplete="list"
-            aria-keyshortcuts="Enter Shift+Enter Alt+P Alt+C F2"
-            title="↑↓ to move · Enter: continue · Shift+Enter: terminal · Alt+P: pin · Alt+C: copy command · F2: rename"
+            aria-keyshortcuts="Enter Shift+Enter Alt+P Alt+C Alt+D F2"
+            title="↑↓ to move · Enter: continue · Shift+Enter: terminal · Alt+P: pin · Alt+C: copy command · Alt+D: files and transcript · F2: rename"
             placeholder="Search chats"
             aria-label="Search chats"
             aria-controls="chat-list"
@@ -315,6 +356,14 @@ export function ChatsView() {
           />
           <kbd class="hint">/</kbd>
         </div>
+        <label class="check" title="Also search everything you and Claude wrote in your chats">
+          <input
+            type="checkbox"
+            checked={store.inMessages.value}
+            onChange={(e) => (store.inMessages.value = (e.target as HTMLInputElement).checked)}
+          />
+          In messages
+        </label>
         <fieldset class="chips">
           <legend class="sr-only">Filter chats</legend>
           {hasWorkspace ? (

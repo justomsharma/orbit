@@ -1,8 +1,11 @@
 import * as v from "valibot";
 import type { SetupSnapshot } from "../extension/setupService";
 import type { UsageSnapshot } from "../extension/usageService";
+import type { MessageHit } from "../features/chats/search";
 import type { LiveStatus, Session } from "../features/chats/types";
+import type { PromptEntry } from "../features/prompts/library";
 import type { SettingDef } from "../features/setup/catalog";
+import type { ChangedFile, FileVersion } from "../features/timeline/types";
 import { ITEM_NAME, isServerUrl, MCP_NAME } from "./validate";
 
 const SessionId = v.pipe(
@@ -46,10 +49,36 @@ export const ViewMsgSchema = v.variant("type", [
   v.object({ type: v.literal("newChat") }),
   v.object({ type: v.literal("quota"), on: v.boolean() }),
   v.object({ type: v.literal("copyRecap") }),
-  v.object({ type: v.literal("tab"), tab: v.picklist(["home", "chats", "usage", "setup"]) }),
+  v.object({
+    type: v.literal("tab"),
+    tab: v.picklist(["home", "chats", "prompts", "usage", "setup"]),
+  }),
   v.object({ type: v.literal("saveRecapImage"), dataUrl: PngDataUrl }),
   ...setupMessages(),
+  ...chatsMessages(),
 ]);
+
+/** Chats tab: file timeline, transcripts, prompts and search. The host re-checks every id. */
+function chatsMessages() {
+  const Version = v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(1_000_000));
+  const FilePath = v.pipe(v.string(), v.minLength(1), v.maxLength(4096));
+  const PromptId = v.pipe(v.string(), v.regex(/^[0-9a-f]{12}$/));
+  return [
+    v.object({ type: v.literal("chat:details"), id: SessionId }),
+    v.object({ type: v.literal("chat:diff"), id: SessionId, path: FilePath, version: Version }),
+    v.object({ type: v.literal("chat:restore"), id: SessionId, path: FilePath, version: Version }),
+    v.object({ type: v.literal("chat:transcript"), id: SessionId }),
+    v.object({ type: v.literal("chat:export"), id: SessionId }),
+    v.object({ type: v.literal("prompts:list") }),
+    v.object({ type: v.literal("prompts:copy"), id: PromptId }),
+    v.object({ type: v.literal("prompts:use"), id: PromptId }),
+    v.object({
+      type: v.literal("search"),
+      query: v.pipe(v.string(), v.maxLength(200)),
+      req: v.pipe(v.string(), v.maxLength(40)),
+    }),
+  ] as const;
+}
 
 /** Setup tab messages. Every value is bounded here and checked again by the host. */
 function setupMessages() {
@@ -147,6 +176,11 @@ export function parseViewMsg(raw: unknown): ViewMsg | null {
   return r.success ? r.output : null;
 }
 
+/** A changed file as the view sees it: no blob paths, only what it shows. */
+export type ChangedFileView = Omit<ChangedFile, "versions"> & {
+  versions: Pick<FileVersion, "version" | "at" | "available">[];
+};
+
 export interface Environment {
   /** Anthropic's Claude Code extension is installed. */
   claudeExtension: boolean;
@@ -170,6 +204,10 @@ export type HostMsg =
   | { type: "usage"; data: UsageSnapshot }
   | { type: "setup"; data: SetupSnapshot }
   | { type: "catalog"; data: SettingDef[] }
+  | { type: "chat:details"; id: string; files: ChangedFileView[] }
+  | { type: "prompts"; items: PromptEntry[] }
+  /** Search results for request `req`; `done` false while more chats are still being read. */
+  | { type: "search"; req: string; hits: MessageHit[]; done: boolean }
   /** Whether the change a form asked for (by its request id) was made. */
   | { type: "setup:result"; req: string; ok: boolean }
   | { type: "loading" }

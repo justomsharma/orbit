@@ -2,34 +2,10 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import type { ConfirmHost } from "../core/applyEdit";
 import type { EditPlan } from "../core/safeWriter";
-
-const SCHEME = "orbit-preview";
-
-/** Serves the "after" text of pending edits so VS Code's diff editor can show them. */
-class PreviewProvider implements vscode.TextDocumentContentProvider {
-  private readonly docs = new Map<string, string>();
-  private next = 0;
-
-  add(text: string, name: string): vscode.Uri {
-    const id = String(++this.next);
-    this.docs.set(id, text);
-    // Keep only a handful of previews around.
-    if (this.docs.size > 20) this.docs.delete(this.docs.keys().next().value!);
-    return vscode.Uri.from({ scheme: SCHEME, path: `/${name}`, query: id });
-  }
-
-  provideTextDocumentContent(uri: vscode.Uri): string {
-    return this.docs.get(uri.query) ?? "";
-  }
-}
+import type { ReadOnlyDocs } from "./vscodeDocs";
 
 /** The VS Code prompts around every Orbit edit: modal question, diff preview, Undo notice. */
-export function vscodeConfirmHost(context: vscode.ExtensionContext): ConfirmHost {
-  const previews = new PreviewProvider();
-  context.subscriptions.push(
-    vscode.workspace.registerTextDocumentContentProvider(SCHEME, previews),
-  );
-
+export function vscodeConfirmHost(previews: ReadOnlyDocs): ConfirmHost {
   return {
     confirm: async (summary, warning) => {
       const backup = "Orbit keeps a backup, and you can undo this afterwards.";

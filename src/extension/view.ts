@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { settingsCatalog } from "../features/setup/catalog";
 import type { QuotaInstaller } from "../features/usage/quotaInstall";
 import type { HostMsg } from "../shared/protocol";
+import { type ChatsHandlerDeps, handleChats } from "./chatsHandler";
 import type { ChatsService, ChatsSnapshot } from "./chatsService";
 import { saveRecapImage } from "./exportFile";
 import { createHandler } from "./handler";
@@ -24,6 +25,8 @@ export interface ViewDeps {
   setup: SetupService;
   /** Everything the Setup actions need except the snapshot, which the view owns. */
   setupDeps: Omit<SetupHandlerDeps, "snapshot" | "refresh">;
+  /** Everything the Chats-tab actions need except posting, which the view owns. */
+  chatsDeps: Omit<ChatsHandlerDeps, "post" | "getSession" | "sessions">;
   log: vscode.LogOutputChannel;
   onSnapshot(s: ChatsSnapshot): void;
 }
@@ -41,15 +44,15 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   /** Host copy with real values, for Setup actions. Post only `viewSnapshot(lastSetup)`. */
   lastSetup: SetupSnapshot | null = null;
   /** The tab the person is looking at; only its data is read (chats always, for the status bar). */
-  private tab: "home" | "chats" | "usage" | "setup" = "home";
+  private tab: "home" | "chats" | "prompts" | "usage" | "setup" = "home";
   /** Signatures of the data the view last received; identical refreshes are not re-sent. */
-  private sent = { sessions: "", usage: "", setup: "", catalog: "" };
+  private sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
 
   constructor(private readonly d: ViewDeps) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    this.sent = { sessions: "", usage: "", setup: "", catalog: "" };
+    this.sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
     const root = vscode.Uri.joinPath(this.d.extensionUri, "dist", "webview");
     const w = view.webview;
     w.options = { enableScripts: true, enableForms: false, localResourceRoots: [root] };
@@ -87,15 +90,22 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       refresh: () => this.refresh(),
       reply: (req, ok) => this.post({ type: "setup:result", req, ok }),
     };
+    const chatsDeps: ChatsHandlerDeps = {
+      ...this.d.chatsDeps,
+      getSession: (id) => this.d.chats.get(id),
+      sessions: () => this.d.chats.all(),
+      post: (msg) => this.post(msg),
+    };
     w.onDidReceiveMessage(async (m) => {
       try {
-        if (!(await handleSetup(m, setupDeps))) await handle(m);
+        if (!(await handleSetup(m, setupDeps)) && !(await handleChats(m, chatsDeps)))
+          await handle(m);
       } catch (e) {
         this.d.log.error("Action failed", errText(e));
       }
     });
     view.onDidChangeVisibility(() => {
-      this.sent = { sessions: "", usage: "", setup: "", catalog: "" };
+      this.sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
       if (view.visible) void this.refresh();
     });
     view.onDidDispose(() => {
@@ -152,6 +162,17 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
     }
     // The rest only while the sidebar is visible; it refreshes as soon as it is shown again.
     if (!this.view?.visible) return;
+    if (this.tab === "prompts") {
+      try {
+        this.postOnce("prompts", {
+          type: "prompts",
+          items: await this.d.chatsDeps.prompts.update(),
+        });
+      } catch (e) {
+        this.d.log.error("Could not read Claude Code prompt history", errText(e));
+      }
+      return;
+    }
     if (this.tab === "setup") {
       try {
         const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
