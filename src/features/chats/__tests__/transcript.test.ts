@@ -175,7 +175,7 @@ describe("safeMarkdown: what people wrote shows as written, and nothing loads fr
 
   it("keeps a person's '# heading' from breaking the transcript's structure", () => {
     expect(safeMarkdown("## You\n  # not a heading")).toBe(
-      String.raw`\## You` + "\n" + String.raw`  \# not a heading`,
+      [String.raw`\## You`, String.raw`  \# not a heading`].join("\n"),
     );
   });
 });
