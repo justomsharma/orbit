@@ -1,26 +1,33 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChangedFileView } from "../../shared/protocol";
 import { post } from "../bus";
 import * as store from "../store";
 import { Icon } from "../ui/Icon";
 import { relativeTime } from "./model";
 
-/** Where a file is, shown relative to the chat's folder when it's inside it. */
-function whereIs(path: string, cwd: string): string {
-  const dir = path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")));
-  const base = cwd.replace(/[\\/]+$/, "").toLowerCase();
+/**
+ * Where a file is, shown relative to the chat's folder when it's inside it.
+ * Only Windows folds case; either slash counts as a separator.
+ */
+function whereIs(path: string, cwd: string, platform: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  const dir = cut > 0 ? path.slice(0, cut) : "";
+  const norm = (p: string) => {
+    const n = p.replace(/\\/g, "/").replace(/\/+$/, "");
+    return platform === "win32" ? n.toLowerCase() : n;
+  };
+  const base = norm(cwd);
   if (!base) return dir;
-  if (dir.toLowerCase() === base) return "";
-  const inside =
-    dir.slice(0, base.length).toLowerCase() === base && /[\\/]/.test(dir.charAt(base.length));
-  return inside ? dir.slice(base.length + 1) : dir;
+  const d = norm(dir);
+  if (d === base) return "";
+  return d.startsWith(`${base}/`) ? dir.slice(base.length + 1) : dir;
 }
 
 const time = (at: number) =>
   at ? new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
 
 function FileCard({ id, f, cwd }: { id: string; f: ChangedFileView; cwd: string }) {
-  const where = whereIs(f.path, cwd);
+  const where = whereIs(f.path, cwd, store.env.value?.platform ?? "linux");
   return (
     <li>
       <fieldset class="file-card">
@@ -37,13 +44,12 @@ function FileCard({ id, f, cwd }: { id: string; f: ChangedFileView; cwd: string 
         <ul class="versions">
           {f.versions.map((v, i) => {
             const created = f.createdByClaude && i === 0;
-            const n = i + 1;
             const gone = !v.available;
             const why = gone ? "Claude no longer has this checkpoint" : undefined;
             return (
               <li key={v.version} class="version">
                 <span class="version-label">
-                  {created ? "Created by Claude" : `Before edit ${n}`}
+                  {created ? "Created by Claude" : `Before change ${v.version}`}
                   {v.at ? (
                     <span class="muted" title={time(v.at)}>
                       {" "}
@@ -59,7 +65,7 @@ function FileCard({ id, f, cwd }: { id: string; f: ChangedFileView; cwd: string 
                       class="btn small secondary"
                       disabled={gone}
                       title={why ?? "See what Claude changed since then"}
-                      aria-label={`Compare ${f.name} before edit ${n} with now`}
+                      aria-label={`Compare ${f.name} before change ${v.version} with now`}
                       onClick={() =>
                         post({ type: "chat:diff", id, path: f.path, version: v.version })
                       }
@@ -71,7 +77,7 @@ function FileCard({ id, f, cwd }: { id: string; f: ChangedFileView; cwd: string 
                       class="btn small secondary"
                       disabled={gone}
                       title={why ?? "Put the file back to how it was (asks first, can be undone)"}
-                      aria-label={`Restore ${f.name} to before edit ${n}`}
+                      aria-label={`Restore ${f.name} to before change ${v.version}`}
                       onClick={() =>
                         post({ type: "chat:restore", id, path: f.path, version: v.version })
                       }
@@ -94,11 +100,18 @@ export function ChatDetails() {
   const d = store.details.value!;
   const s = store.sessions.value.find((x) => x.id === d.id);
   const title = store.renames.value[d.id] || s?.title || "Chat";
-  const back = () => (store.details.value = null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  // Opening details moves focus here; going back returns it to the search box.
+  useEffect(() => backRef.current?.focus(), []);
+  const back = () => {
+    store.focusSearch.value = true;
+    store.details.value = null;
+  };
   return (
     <section class="details" aria-labelledby="details-title">
       <div class="details-head">
         <button
+          ref={backRef}
           type="button"
           class="icon-btn"
           aria-label="Back to chats"

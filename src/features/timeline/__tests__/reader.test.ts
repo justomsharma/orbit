@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { type Ctx, L, writeBlob, writeSession } from "../../../../test/helpers/fakeHome";
@@ -258,5 +258,30 @@ describe("readVersion", () => {
     mkdirSync(join(d, "file-history", "not-a-session"), { recursive: true });
     writeFileSync(fake, "x");
     expect(await readVersion(v(fake))).toBeNull();
+  });
+});
+
+describe("readVersion and linked folders", () => {
+  it("won't read a checkpoint through a linked session folder", async () => {
+    const root = tmp();
+    const id = randomUUID();
+    const real = join(root, "elsewhere");
+    mkdirSync(real, { recursive: true });
+    writeFileSync(join(real, "0123456789abcdef@v1"), "secret");
+    const hist = join(root, ".claude", "file-history");
+    mkdirSync(hist, { recursive: true });
+    try {
+      symlinkSync(real, join(hist, id), "junction");
+    } catch {
+      return; // this machine can't make folder links
+    }
+    const v: FileVersion = {
+      version: 1,
+      at: 0,
+      messageId: null,
+      blob: join(hist, id, "0123456789abcdef@v1"),
+      available: true,
+    };
+    expect(await readVersion(v)).toBeNull();
   });
 });

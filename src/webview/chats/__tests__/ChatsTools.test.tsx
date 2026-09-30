@@ -480,3 +480,70 @@ describe("Search inside messages, done right", () => {
     await waitFor(() => expect(lastSearch()?.query).toBe(""));
   });
 });
+
+describe("Chat details: small things done right", () => {
+  const show = (
+    files: import("../../../shared/protocol").ChangedFileView[],
+    platform = "linux",
+  ) => {
+    store.applyHostMessage({
+      type: "sessions",
+      items: [{ ...chat, cwd: "/code/Shop" }],
+      live: [],
+      pins: [],
+      renames: {},
+      tags: {},
+      here: [ID],
+      env: { claudeExtension: true, hasWorkspace: true, platform },
+    });
+    render(<ChatsView />);
+    fireEvent.click(screen.getByRole("button", { name: /Files and transcript/ }));
+    act(() => store.applyHostMessage({ type: "chat:details", id: ID, files }));
+  };
+
+  it("labels versions with Claude's own numbers", () => {
+    show([
+      {
+        path: "/code/Shop/a.ts",
+        name: "a.ts",
+        exists: true,
+        createdByClaude: false,
+        versions: [
+          { version: 1, at: 0, available: true },
+          { version: 3, at: 0, available: true },
+        ],
+      },
+    ]);
+    expect(screen.getByText("Before change 1")).toBeTruthy();
+    expect(screen.getByText("Before change 3")).toBeTruthy();
+  });
+
+  it("shows paths relative to the chat's folder, matching case exactly on Linux", () => {
+    show([
+      {
+        path: "/code/Shop/src/a.ts",
+        name: "a.ts",
+        exists: true,
+        createdByClaude: false,
+        versions: [{ version: 1, at: 0, available: true }],
+      },
+      {
+        path: "/code/shop/lib/b.ts",
+        name: "b.ts",
+        exists: true,
+        createdByClaude: false,
+        versions: [{ version: 1, at: 0, available: true }],
+      },
+    ]);
+    expect(screen.getByText("src")).toBeTruthy();
+    expect(screen.getByText("/code/shop/lib")).toBeTruthy();
+  });
+
+  it("moves focus into the panel, and back to the search box after", async () => {
+    show([]);
+    const focused = () => document.activeElement?.getAttribute("aria-label");
+    await waitFor(() => expect(focused()).toBe("Back to chats"));
+    fireEvent.click(screen.getByRole("button", { name: /Back to chats/ }));
+    await waitFor(() => expect(focused()).toBe("Search chats"));
+  });
+});

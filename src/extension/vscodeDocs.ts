@@ -37,8 +37,7 @@ export class ReadOnlyDocs implements vscode.TextDocumentContentProvider {
   }
 
   /** An old version (text) next to the file as it is now (or empty when it is gone). */
-  async showDiff(left: string, right: string | null, title: string): Promise<void> {
-    const name = title.split(":")[0] ?? "file";
+  async showDiff(left: string, right: string | null, title: string, name: string): Promise<void> {
     const r = right ? vscode.Uri.file(right) : this.add("", `${name} (deleted)`);
     await vscode.commands.executeCommand("vscode.diff", this.add(left, name), r, title, {
       preview: true,

@@ -171,6 +171,9 @@ export async function readVersion(
 ): Promise<{ text: string } | { binary: true } | null> {
   const p = v.blob;
   if (!p || !isBlobPath(p)) return null;
+  // The session folder must be a real folder, not a link to somewhere else.
+  const dir = await statSafe(dirname(p));
+  if (!dir?.isDirectory()) return null;
   const st = await statSafe(p);
   if (!st?.isFile() || st.size > maxBytes) return null;
   let buf: Buffer;

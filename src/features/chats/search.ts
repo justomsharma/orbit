@@ -65,6 +65,8 @@ export async function searchMessages(
       await streamLines(file, (raw) => {
         if (++n % CHECK_EVERY === 0 && aborted()) return false;
         if (!raw.includes('"type":"user"') && !raw.includes('"type":"assistant"')) return;
+        // Tool output is never searched; skip parsing what would be thrown away.
+        if (raw.includes('"type":"tool_result"')) return;
         if (!inJson.test(raw)) return;
         for (const text of readableTexts(raw)) {
           const found = [...text.matchAll(inText)];

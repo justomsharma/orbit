@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { L, writeBlob, writeSession } from "../../../test/helpers/fakeHome";
@@ -9,7 +9,7 @@ import { SafeWriter } from "../../core/safeWriter";
 import type { Session } from "../../features/chats/types";
 import { PromptLibrary } from "../../features/prompts/library";
 import type { HostMsg } from "../../shared/protocol";
-import { type ChatsHandlerDeps, handleChats } from "../chatsHandler";
+import { type ChatsHandlerDeps, exportName, handleChats } from "../chatsHandler";
 
 const tmp = useTmpDir();
 const V1 = "0123456789abcdef@v1";
@@ -173,6 +173,26 @@ describe("handleChats: files Claude changed", () => {
     expect(log.filter((l) => l.startsWith("confirm"))).toEqual([]);
   });
 
+  it("brings back a deleted file with honest wording, and refreshes the panel after", async () => {
+    const { handle, log, posted, id, a } = setup();
+    rmSync(a);
+    await handle({ type: "chat:restore", id, path: a, version: 2 });
+    expect(log[0]).toMatch(/^confirm Bring back a\.ts .*Undo removes it again/);
+    expect(readFileSync(a, "utf8")).toBe("middle\n");
+    const refreshed = posted.find((m) => m.type === "chat:details") as Extract<
+      HostMsg,
+      { type: "chat:details" }
+    >;
+    expect(refreshed.files.find((f) => f.path === a)?.exists).toBe(true);
+  });
+
+  it("says so when the file already matches that version", async () => {
+    const { handle, log, id, a } = setup();
+    writeFileSync(a, "middle\n");
+    await handle({ type: "chat:restore", id, path: a, version: 2 });
+    expect(log).toEqual([expect.stringMatching(/^info a\.ts is already the same/)]);
+  });
+
   it("won't restore a binary checkpoint", async () => {
     const { handle, log, id, a, home } = setup();
     writeBlob(home, id, V1, Buffer.from([0xff, 0xfe, 0x00, 0x01]));
@@ -194,6 +214,14 @@ describe("handleChats: transcript", () => {
     const { handle, log, id } = setup();
     await handle({ type: "chat:export", id });
     expect(log[0]).toMatch(/^save fix-the-parser\.md\n# Fix the parser/);
+  });
+});
+
+describe("exportName", () => {
+  it("keeps non-Latin titles in the file name", () => {
+    expect(exportName("Исправить парсер")).toBe("исправить-парсер.md");
+    expect(exportName("修复 解析器!")).toBe("修复-解析器.md");
+    expect(exportName("???")).toBe("chat.md");
   });
 });
 

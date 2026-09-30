@@ -1,4 +1,5 @@
 import { applyTextEdit, type ConfirmHost } from "../core/applyEdit";
+import { MiB, readTextSafe } from "../core/fsSafe";
 import { samePath } from "../core/paths";
 import type { SafeWriter } from "../core/safeWriter";
 import { searchMessages } from "../features/chats/search";
@@ -22,7 +23,7 @@ export interface ChatsHandlerDeps {
   copy(text: string): Promise<void>;
   info(message: string): void;
   /** VS Code's diff: `left` is text, `right` a file on disk (null shows it empty). */
-  showDiff(left: string, right: string | null, title: string): Promise<void>;
+  showDiff(left: string, right: string | null, title: string, name: string): Promise<void>;
   /** A read-only Markdown preview. */
   showMarkdown(text: string, title: string): Promise<void>;
   /** Save dialog for a Markdown file. */
@@ -53,7 +54,7 @@ function toView(f: ChangedFile): ChangedFileView {
 export function exportName(title: string): string {
   const slug = title
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60)
     .replace(/-+$/, "");
@@ -126,15 +127,25 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
           content.text,
           file.exists ? file.path : null,
           `${file.name}: before Claude's edit (${when(v.at)}) ↔ now`,
+          file.name,
         );
         return true;
       }
-      await applyTextEdit(d.writer, d.confirm, {
+      if (file.exists && (await readTextSafe(file.path, 5 * MiB)) === content.text) {
+        d.info(`${file.name} is already the same as it was before that edit.`);
+        return true;
+      }
+      const restored = await applyTextEdit(d.writer, d.confirm, {
         file: file.path,
         transform: () => content.text,
-        summary: `Put ${file.name} back to how it was before Claude's edit at ${when(v.at)}? Orbit backs up the current version, and you can undo this.`,
+        summary: file.exists
+          ? `Put ${file.name} back to how it was before Claude's edit at ${when(v.at)}? Orbit backs up the current version, and you can undo this.`
+          : `Bring back ${file.name} as it was before Claude's edit at ${when(v.at)}? Undo removes it again.`,
         label: `Restored ${file.name}`,
       });
+      // The panel shows whether each file exists, so it has to catch up.
+      const s = restored ? d.getSession(msg.id) : undefined;
+      if (s) d.post({ type: "chat:details", id: s.id, files: (await timeline(s)).map(toView) });
       return true;
     }
 

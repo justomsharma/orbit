@@ -109,7 +109,7 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
       newChat: (prompt) => opener.newChat(prompt),
       copy: async (t) => vscode.env.clipboard.writeText(t),
       info: (m) => void vscode.window.showInformationMessage(m),
-      showDiff: (left, right, title) => docs.showDiff(left, right, title),
+      showDiff: (left, right, title, name) => docs.showDiff(left, right, title, name),
       showMarkdown: (text, title) => docs.showMarkdown(text, title),
       saveMarkdown,
     },

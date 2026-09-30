@@ -242,6 +242,12 @@ function ChatList() {
     setActiveHit(0);
   }, [store.query.value, store.filter.value, inMessages]);
 
+  useEffect(() => {
+    if (!store.focusSearch.value) return;
+    store.focusSearch.value = false;
+    searchRef.current?.focus();
+  }, []);
+
   // "/" focuses search from anywhere in the view.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

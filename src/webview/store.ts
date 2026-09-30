@@ -37,6 +37,8 @@ export const openSections = signal<string[]>(["health"]);
 export const chatsMode = signal<"chats" | "prompts">(saved.chatsMode ?? "chats");
 /** The chat whose files and transcript are open; `files` null until the host answers. */
 export const details = signal<{ id: string; files: ChangedFileView[] | null } | null>(null);
+/** Put focus back in the chat search box when the list shows again. */
+export const focusSearch = signal(false);
 /** Prompt library; null until the host has read the history. */
 export const prompts = signal<PromptEntry[] | null>(null);
 export const promptsError = signal<string | null>(null);
