@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "..", "src");
 /** Files allowed to write. Each one is reviewed and tested for backup/undo behaviour. */
-const WRITERS: string[] = [];
+const WRITERS: string[] = ["core/safeWriter.ts", "core/orbitStore.ts"];
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
