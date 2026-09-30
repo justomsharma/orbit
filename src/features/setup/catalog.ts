@@ -1,0 +1,158 @@
+import type { SettingsFile, SettingsScope } from "./settings";
+import schema from "./settingsSchema.json";
+
+export type SettingKind = "boolean" | "string" | "number" | "enum" | "json";
+
+export interface SettingDef {
+  key: string;
+  kind: SettingKind;
+  description: string;
+  enum?: string[];
+  minimum?: number;
+  deprecated: boolean;
+  group: string;
+  /** Only meaningful in organisation-managed settings; not offered for personal editing. */
+  managedOnly: boolean;
+}
+
+/** Friendly sections, most useful first. Keys not listed go to "More". */
+const GROUPS: [string, string[]][] = [
+  [
+    "Model & thinking",
+    [
+      "model",
+      "effortLevel",
+      "alwaysThinkingEnabled",
+      "fastMode",
+      "fallbackModel",
+      "advisorModel",
+      "showThinkingSummaries",
+      "availableModels",
+      "modelOverrides",
+    ],
+  ],
+  [
+    "Permissions & safety",
+    [
+      "permissions",
+      "autoMode",
+      "sandbox",
+      "disableAutoMode",
+      "skipDangerousModePermissionPrompt",
+      "permissionExplainerEnabled",
+    ],
+  ],
+  [
+    "Memory & context",
+    [
+      "autoMemoryEnabled",
+      "autoMemoryDirectory",
+      "autoCompactEnabled",
+      "claudeMdExcludes",
+      "cleanupPeriodDays",
+      "fileCheckpointingEnabled",
+      "respectGitignore",
+    ],
+  ],
+  [
+    "Look & feel",
+    [
+      "theme",
+      "tui",
+      "viewMode",
+      "outputStyle",
+      "language",
+      "editorMode",
+      "prefersReducedMotion",
+      "spinnerTipsEnabled",
+      "spinnerVerbs",
+      "showTurnDuration",
+      "terminalProgressBarEnabled",
+      "syntaxHighlightingDisabled",
+      "verbose",
+      "autoScrollEnabled",
+    ],
+  ],
+  [
+    "Git & pull requests",
+    ["attribution", "includeCoAuthoredBy", "includeGitInstructions", "prUrlTemplate", "worktree"],
+  ],
+  [
+    "Automation",
+    ["hooks", "disableAllHooks", "statusLine", "subagentStatusLine", "env", "defaultShell"],
+  ],
+  [
+    "Plugins, skills & MCP",
+    [
+      "enabledPlugins",
+      "extraKnownMarketplaces",
+      "skillOverrides",
+      "disableBundledSkills",
+      "enableAllProjectMcpServers",
+      "enabledMcpjsonServers",
+      "disabledMcpjsonServers",
+    ],
+  ],
+  ["Notifications", ["inputNeededNotifEnabled", "agentPushNotifEnabled", "preferredNotifChannel"]],
+  ["Updates", ["autoUpdatesChannel", "minimumVersion"]],
+];
+
+const MANAGED_ONLY =
+  /^(allowManaged|forceLogin|strict|blocked|required(Min|Max)imumVersion|managed|allowed(Mcp|Channel|HttpHook)|denied|httpHookAllowedEnvVars|companyAnnouncements|policyHelper|allowAllClaudeAiMcps|enforceAvailableModels|forceRemoteSettingsRefresh|requireCowork|disableSideloadFlags|parentSettingsBehavior|otelHeadersHelper|pluginTrustMessage)/;
+
+interface RawDef {
+  kind: SettingKind;
+  description: string;
+  enum?: string[];
+  minimum?: number;
+  deprecated?: boolean;
+}
+
+let cached: SettingDef[] | null = null;
+
+export function settingsCatalog(): SettingDef[] {
+  if (cached) return cached;
+  const keys = (schema as { keys: Record<string, RawDef> }).keys;
+  const groupOf = new Map<string, string>();
+  for (const [g, list] of GROUPS) for (const k of list) groupOf.set(k, g);
+  const order = [...GROUPS.map(([g]) => g), "More"];
+  cached = Object.entries(keys)
+    .map(([key, d]) => ({
+      key,
+      kind: d.kind,
+      description: d.description,
+      ...(d.enum ? { enum: d.enum } : {}),
+      ...(d.minimum !== undefined ? { minimum: d.minimum } : {}),
+      deprecated: d.deprecated === true,
+      group: groupOf.get(key) ?? "More",
+      managedOnly: MANAGED_ONLY.test(key),
+    }))
+    .sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || a.key.localeCompare(b.key));
+  return cached;
+}
+
+export const SCHEMA_SOURCE = (schema as { source: string; fetchedAt: string }).source;
+export const SCHEMA_FETCHED_AT = (schema as { fetchedAt: string }).fetchedAt;
+
+/** Highest precedence first: managed > local > project > user. */
+export const PRECEDENCE: SettingsScope[] = ["managed", "local", "project", "user"];
+
+/** The value Claude Code will use for `key`, and the file it comes from. */
+export function effectiveSetting(
+  files: SettingsFile[],
+  key: string,
+): { value: unknown; scope: SettingsScope } | null {
+  for (const scope of PRECEDENCE) {
+    const f = files.find((x) => x.scope === scope);
+    if (f?.data && Object.hasOwn(f.data, key)) return { value: f.data[key], scope };
+  }
+  return null;
+}
+
+/** Top-level keys Claude Code doesn't know (usually typos), sorted. */
+export function unknownKeys(data: Record<string, unknown>): string[] {
+  const known = (schema as { keys: Record<string, unknown> }).keys;
+  return Object.keys(data)
+    .filter((k) => k !== "$schema" && !Object.hasOwn(known, k))
+    .sort();
+}
