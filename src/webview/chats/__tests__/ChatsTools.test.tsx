@@ -54,6 +54,8 @@ beforeEach(() => {
   store.promptQuery.value = "";
   store.inMessages.value = false;
   store.messageHits.value = null;
+  store.messageSearch.value = null;
+  store.narrow.value = { project: null, branch: null, since: null };
   store.applyHostMessage({
     type: "sessions",
     items: [chat],
@@ -318,5 +320,154 @@ describe("Search inside messages", () => {
       }),
     );
     expect(screen.queryByText("stale")).toBeNull();
+  });
+});
+
+describe("Tags, fork and more filters", () => {
+  const OTHER = "00000000-0000-4000-8000-000000000002";
+  const loadTwo = (tags: Record<string, string[]> = {}) =>
+    store.applyHostMessage({
+      type: "sessions",
+      items: [
+        chat,
+        {
+          ...chat,
+          id: OTHER,
+          title: "Docs chat",
+          cwd: "/code/api",
+          project: "api",
+          branch: "docs",
+          lastActiveAt: Date.now() - 40 * 86_400_000,
+        },
+      ],
+      live: [],
+      pins: [],
+      renames: {},
+      tags,
+      here: [ID],
+      env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
+    });
+
+  it("shows a chat's tags and finds chats by #tag", () => {
+    loadTwo({ [ID]: ["bug"] });
+    render(<ChatsView />);
+    expect(screen.getByText("#bug")).toBeTruthy();
+    fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
+      target: { value: "#bug" },
+    });
+    expect(screen.queryByText("Docs chat")).toBeNull();
+    expect(screen.getByText("Fix the parser")).toBeTruthy();
+  });
+
+  it("adds and removes tags, and forks, from the details panel", () => {
+    loadTwo({ [ID]: ["bug"] });
+    render(<ChatsView />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Files and transcript/ })[0]!);
+    const input = screen.getByRole("textbox", { name: /Add a tag/ });
+    fireEvent.input(input, { target: { value: "Release" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: /Remove tag bug/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fork into a new chat/ }));
+    expect(sent).toContainEqual({ type: "tags", id: ID, tags: ["bug", "Release"] });
+    expect(sent).toContainEqual({ type: "tags", id: ID, tags: [] });
+    expect(sent).toContainEqual({ type: "forkChat", id: ID });
+  });
+
+  it("narrows by folder, branch and date from More filters", () => {
+    loadTwo();
+    render(<ChatsView />);
+    fireEvent.click(screen.getByRole("button", { name: /More filters/ }));
+    fireEvent.change(screen.getByLabelText("Folder"), { target: { value: "/code/api" } });
+    expect(screen.getByText("Docs chat")).toBeTruthy();
+    expect(screen.queryByText("Fix the parser")).toBeNull();
+    expect((screen.getByLabelText("Branch") as HTMLSelectElement).options.length).toBe(2);
+    fireEvent.change(screen.getByLabelText("When"), { target: { value: "week" } });
+    expect(screen.queryByText("Docs chat")).toBeNull();
+  });
+});
+
+describe("Search inside messages, done right", () => {
+  const OTHER = "00000000-0000-4000-8000-000000000002";
+  beforeEach(() => {
+    store.messageSearch.value = null;
+    store.messageHits.value = null;
+    store.applyHostMessage({
+      type: "sessions",
+      items: [chat, { ...chat, id: OTHER, title: "Elsewhere", cwd: "/code/api" }],
+      live: [],
+      pins: [],
+      renames: {},
+      tags: {},
+      here: [ID],
+      env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
+    });
+    store.filter.value = "workspace";
+    store.inMessages.value = true;
+  });
+  const type = (v: string) =>
+    fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
+      target: { value: v },
+    });
+  const lastSearch = () =>
+    [...sent].reverse().find((m) => m.type === "search") as {
+      req: string;
+      query: string;
+      ids?: string[];
+    };
+
+  it("asks the host to search only the chats in view, and says when results were capped", async () => {
+    render(<ChatsView />);
+    type("golden");
+    await waitFor(() => expect(lastSearch()?.query).toBe("golden"));
+    expect(lastSearch().ids).toEqual([ID]);
+    act(() =>
+      store.applyHostMessage({
+        type: "search",
+        req: lastSearch().req,
+        done: true,
+        capped: true,
+        hits: [{ sessionId: ID, snippet: "golden", count: 1 }],
+      }),
+    );
+    expect(screen.getByText(/first 200 chats/)).toBeTruthy();
+  });
+
+  it("works the results with the keyboard", async () => {
+    render(<ChatsView />);
+    type("golden");
+    await waitFor(() => expect(lastSearch()?.query).toBe("golden"));
+    act(() =>
+      store.applyHostMessage({
+        type: "search",
+        req: lastSearch().req,
+        done: true,
+        hits: [{ sessionId: ID, snippet: "golden", count: 1 }],
+      }),
+    );
+    const box = screen.getByRole("combobox", { name: /Search chats/ });
+    expect(box.getAttribute("aria-activedescendant")).toBe(`hit-${ID}`);
+    fireEvent.keyDown(box, { key: "Enter" });
+    fireEvent.keyDown(box, { key: "d", altKey: true });
+    expect(sent).toContainEqual({ type: "openChat", id: ID });
+    expect(sent).toContainEqual({ type: "chat:details", id: ID });
+  });
+
+  it("cancels the host search when the box is cleared, and never shows hits for another query", async () => {
+    render(<ChatsView />);
+    type("golden");
+    await waitFor(() => expect(lastSearch()?.query).toBe("golden"));
+    const req = lastSearch().req;
+    type("go");
+    act(() =>
+      store.applyHostMessage({
+        type: "search",
+        req,
+        done: true,
+        hits: [{ sessionId: ID, snippet: "golden", count: 1 }],
+      }),
+    );
+    expect(screen.queryByText(/golden/)).toBeNull();
+    type("");
+    await waitFor(() => expect(lastSearch()?.query).toBe(""));
   });
 });

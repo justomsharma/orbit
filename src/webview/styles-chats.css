@@ -207,3 +207,73 @@
   background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
   border-radius: 2px;
 }
+
+/* ---------- Tags and filters ---------- */
+.chat-tags {
+  margin-left: 6px;
+}
+
+.chat-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+}
+
+.tag-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-remove {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tag-remove .codicon {
+  font-size: 11px;
+}
+
+.tag-input {
+  flex: 1;
+  min-width: 90px;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--border));
+  border-radius: 4px;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.filter-row select {
+  max-width: 150px;
+}
+
+.hits-note {
+  padding: 0 14px 6px;
+}
+
+.hit.active {
+  background: var(--active);
+  color: var(--active-fg);
+}

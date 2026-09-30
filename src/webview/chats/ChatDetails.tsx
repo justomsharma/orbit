@@ -1,3 +1,4 @@
+import { useState } from "preact/hooks";
 import type { ChangedFileView } from "../../shared/protocol";
 import { post } from "../bus";
 import * as store from "../store";
@@ -132,7 +133,16 @@ export function ChatDetails() {
         >
           Export as Markdown
         </button>
+        <button
+          type="button"
+          class="btn small secondary"
+          title="Start a new chat from this one's history. This chat stays as it is."
+          onClick={() => post({ type: "forkChat", id: d.id })}
+        >
+          Fork into a new chat
+        </button>
       </div>
+      <TagEditor id={d.id} />
       <h4 class="subgroup-title">Files Claude changed</h4>
       {d.files === null ? (
         <div class="loading" role="status">
@@ -155,4 +165,47 @@ export function ChatDetails() {
 export function openDetails(id: string): void {
   store.details.value = { id, files: null };
   post({ type: "chat:details", id });
+}
+
+/** Orbit-only tags for a chat: shown on its row, found with #tag in search. */
+function TagEditor({ id }: { id: string }) {
+  const tags = store.tags.value[id] ?? [];
+  const [draft, setDraft] = useState("");
+  const save = (next: string[]) => post({ type: "tags", id, tags: next });
+  const add = () => {
+    const t = draft.trim();
+    if (!t) return;
+    setDraft("");
+    if (!tags.includes(t.toLowerCase())) save([...tags, t]);
+  };
+  return (
+    <div class="tag-editor">
+      {tags.map((t) => (
+        <span key={t} class="chat-tag editable">
+          #{t}
+          <button
+            type="button"
+            class="tag-remove"
+            aria-label={`Remove tag ${t}`}
+            title="Remove"
+            onClick={() => save(tags.filter((x) => x !== t))}
+          >
+            <Icon name="close" />
+          </button>
+        </span>
+      ))}
+      <input
+        class="tag-input"
+        aria-label="Add a tag"
+        placeholder={tags.length ? "Add tag" : "Add a tag, e.g. bug"}
+        maxLength={24}
+        value={draft}
+        onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") add();
+        }}
+        onBlur={add}
+      />
+    </div>
+  );
 }

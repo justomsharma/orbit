@@ -82,6 +82,8 @@ function chatsMessages() {
       type: v.literal("search"),
       query: v.pipe(v.string(), v.maxLength(200)),
       req: v.pipe(v.string(), v.maxLength(40)),
+      /** Only these chats (the ones the view shows); all chats when left out. */
+      ids: v.optional(v.pipe(v.array(SessionId), v.maxLength(50_000))),
     }),
   ] as const;
 }
@@ -223,6 +225,8 @@ export type HostMsg =
       /** How many chats were read so far, of `total`. */
       searched?: number;
       total?: number;
+      /** Stopped at the most chats it shows; there may be more. */
+      capped?: boolean;
     }
   /** Whether the change a form asked for (by its request id) was made. */
   | { type: "setup:result"; req: string; ok: boolean }

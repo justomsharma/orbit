@@ -8,8 +8,16 @@ import { Icon, IconButton } from "../ui/Icon";
 import { VirtualList } from "../ui/VirtualList";
 import { ChatDetails, openDetails } from "./ChatDetails";
 import { effectiveFilter } from "./filter";
-import { MessageResults, useMessageSearch } from "./MessageSearch";
-import { buildItems, type ChatVM, type Filter, type Item, relativeTime } from "./model";
+import { currentHits, MessageResults, useMessageSearch } from "./MessageSearch";
+import {
+  branchesOf,
+  buildItems,
+  type ChatVM,
+  type Filter,
+  type Item,
+  projectsOf,
+  relativeTime,
+} from "./model";
 import { PromptsView } from "./PromptsView";
 
 const HEADER_H = 30;
@@ -95,6 +103,15 @@ function ChatRow({ vm, active, now, renaming, onRename }: RowProps) {
             <span class={`live-label ${vm.live.status}`}>{LIVE_LABEL[vm.live.status]} ·</span>
           ) : null}
           {meta}
+          {vm.tags.length ? (
+            <span class="chat-tags">
+              {vm.tags.map((t) => (
+                <span key={t} class="chat-tag">
+                  #{t}
+                </span>
+              ))}
+            </span>
+          ) : null}
         </div>
       </div>
       <div class="chat-actions">
@@ -145,9 +162,25 @@ function Chip({ value, label, count }: { value: Filter; label: string; count?: n
   );
 }
 
+const chatsInput = () => ({
+  sessions: store.sessions.value,
+  live: store.live.value,
+  pins: store.pins.value,
+  renames: store.renames.value,
+  here: store.here.value,
+  tags: store.tags.value,
+});
+
 /** Chats, or the prompt library, with one chat's details when opened. */
 export function ChatsView() {
   const mode = store.chatsMode.value;
+  // The chats in view (chip + filter menus), which search inside messages covers.
+  const inView = useComputed(() =>
+    buildItems(chatsInput(), "", effectiveFilter(), store.now.value, store.narrow.value).flatMap(
+      (i) => (i.kind === "chat" ? [i.vm.s.id] : []),
+    ),
+  ).value;
+  useMessageSearch(mode === "chats", inView);
   return (
     <div class="chats-tab">
       <fieldset class="segmented mode-switch">
@@ -187,25 +220,27 @@ function ChatList() {
 
   const items = useComputed(() =>
     buildItems(
-      {
-        sessions: store.sessions.value,
-        live: store.live.value,
-        pins: store.pins.value,
-        renames: store.renames.value,
-        here: store.here.value,
-      },
+      chatsInput(),
       store.query.value,
       effectiveFilter(),
-      Date.now(),
+      store.now.value,
+      store.narrow.value,
     ),
   ).value;
+  const inMessages = store.inMessages.value;
+  const hits = inMessages ? currentHits() : [];
+  const [activeHit, setActiveHit] = useState(0);
+  const hit = hits[Math.min(activeHit, hits.length - 1)];
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const chatIdx = items.flatMap((it, i) => (it.kind === "chat" ? [i] : []));
   const activeItem = chatIdx[Math.min(active, chatIdx.length - 1)];
   const activeEntry = activeItem === undefined ? undefined : items[activeItem];
   const activeChatId = activeEntry?.kind === "chat" ? `chat-${activeEntry.vm.s.id}` : undefined;
 
-  useEffect(() => setActive(0), [store.query.value, store.filter.value]);
-  useMessageSearch();
+  useEffect(() => {
+    setActive(0);
+    setActiveHit(0);
+  }, [store.query.value, store.filter.value, inMessages]);
 
   // "/" focuses search from anywhere in the view.
   useEffect(() => {
@@ -234,7 +269,23 @@ function ChatList() {
     return true;
   };
 
+  /** While searching messages, the keys work the results you can see. */
+  const onHitKey = (e: KeyboardEvent): boolean => {
+    const altD = e.altKey && (e.key.toLowerCase() === "d" || e.code === "KeyD");
+    if (e.key === "ArrowDown") setActiveHit((a) => Math.min(a + 1, hits.length - 1));
+    else if (e.key === "ArrowUp") setActiveHit((a) => Math.max(a - 1, 0));
+    else if (e.key === "Enter" && hit) post({ type: "openChat", id: hit.sessionId });
+    else if (altD && hit) openDetails(hit.sessionId);
+    else return false;
+    return true;
+  };
+
   const onSearchKey = (e: KeyboardEvent) => {
+    if (inMessages && onHitKey(e)) {
+      e.preventDefault();
+      return;
+    }
+    if (inMessages && e.key !== "Escape") return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActive((a) => Math.min(a + 1, chatIdx.length - 1));
@@ -253,8 +304,8 @@ function ChatList() {
   const liveCount = store.live.value.filter((l) => all.some((s) => s.id === l.sessionId)).length;
 
   let body: ComponentChildren;
-  if (store.inMessages.value && store.loaded.value && all.length > 0) {
-    body = <MessageResults />;
+  if (inMessages && store.loaded.value && all.length > 0) {
+    body = <MessageResults active={Math.min(activeHit, Math.max(hits.length - 1, 0))} />;
   } else if (!store.loaded.value) {
     body = (
       <div class="loading" role="status">
@@ -341,8 +392,10 @@ function ChatList() {
             title="↑↓ to move · Enter: continue · Shift+Enter: terminal · Alt+P: pin · Alt+C: copy command · Alt+D: files and transcript · F2: rename"
             placeholder="Search chats"
             aria-label="Search chats"
-            aria-controls="chat-list"
-            aria-activedescendant={activeChatId}
+            aria-controls={inMessages ? "hit-list" : "chat-list"}
+            aria-activedescendant={
+              inMessages ? (hit ? `hit-${hit.sessionId}` : undefined) : activeChatId
+            }
             value={store.query.value}
             onInput={(e) => (store.query.value = (e.target as HTMLInputElement).value)}
             onKeyDown={onSearchKey}
@@ -367,9 +420,93 @@ function ChatList() {
           <Chip value="all" label="All" count={all.length} />
           <Chip value="pinned" label="Pinned" />
           {liveCount > 0 ? <Chip value="live" label="Running" count={liveCount} /> : null}
+          <IconButton
+            icon="filter"
+            label="More filters"
+            pressed={filtersOpen || narrowed()}
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          />
         </fieldset>
+        {filtersOpen || narrowed() ? <FilterRow /> : null}
       </div>
       {body}
     </section>
+  );
+}
+
+const narrowed = () => {
+  const n = store.narrow.value;
+  return n.project !== null || n.since !== null;
+};
+
+/** Folder, branch (within a folder) and how recent. */
+function FilterRow() {
+  const n = store.narrow.value;
+  const sessions = store.sessions.value;
+  const projects = projectsOf(sessions);
+  const branches = n.project ? branchesOf(sessions, n.project) : [];
+  const set = (next: Partial<typeof n>) => {
+    store.narrow.value = { ...n, ...next };
+  };
+  return (
+    <div class="filter-row">
+      <label class="field inline">
+        <span>Folder</span>
+        <select
+          value={n.project ?? ""}
+          onChange={(e) =>
+            set({ project: (e.target as HTMLSelectElement).value || null, branch: null })
+          }
+        >
+          <option value="">All folders</option>
+          {projects.map((p) => (
+            <option key={p.cwd} value={p.cwd}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {branches.length ? (
+        <label class="field inline">
+          <span>Branch</span>
+          <select
+            value={n.branch ?? ""}
+            onChange={(e) => set({ branch: (e.target as HTMLSelectElement).value || null })}
+          >
+            <option value="">All branches</option>
+            {branches.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      <label class="field inline">
+        <span>When</span>
+        <select
+          value={n.since ?? ""}
+          onChange={(e) =>
+            set({ since: ((e.target as HTMLSelectElement).value || null) as typeof n.since })
+          }
+        >
+          <option value="">Any time</option>
+          <option value="today">Today</option>
+          <option value="week">Last 7 days</option>
+          <option value="month">Last 30 days</option>
+        </select>
+      </label>
+      {narrowed() ? (
+        <button
+          type="button"
+          class="btn small secondary"
+          onClick={() => {
+            store.narrow.value = { project: null, branch: null, since: null };
+          }}
+        >
+          Clear
+        </button>
+      ) : null}
+    </div>
   );
 }

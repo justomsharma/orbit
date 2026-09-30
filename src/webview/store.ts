@@ -42,13 +42,15 @@ export const prompts = signal<PromptEntry[] | null>(null);
 export const promptQuery = signal("");
 /** Search inside messages, and the answer to the latest search only. */
 export const inMessages = signal(false);
-export const messageSearch = signal<{ req: string; query: string } | null>(null);
+/** The search in flight: its id, text, and which chats it covers. */
+export const messageSearch = signal<{ req: string; query: string; key: string } | null>(null);
 export const messageHits = signal<{
   req: string;
   hits: MessageHit[];
   done: boolean;
   searched?: number;
   total?: number;
+  capped?: boolean;
 } | null>(null);
 
 /** Host replies to Setup forms: request id → whether the change was made. */

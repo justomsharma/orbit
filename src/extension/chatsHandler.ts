@@ -32,6 +32,9 @@ export interface ChatsHandlerDeps {
 
 type ChatsMsg = Extract<ViewMsg, { type: `chat:${string}` | `prompts:${string}` | "search" }>;
 
+/** Search shows at most this many chats. */
+const MAX_HITS = 200;
+
 /** Links longer than this may not open; the prompt is copied instead. */
 const MAX_PROMPT_IN_LINK = 8000;
 
@@ -182,11 +185,13 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
       searches.get(d)?.abort();
       const ac = new AbortController();
       searches.set(d, ac);
-      const files = d.sessions();
+      const wanted = msg.ids ? new Set(msg.ids) : null;
+      const files = wanted ? d.sessions().filter((s) => wanted.has(s.id)) : d.sessions();
       let searched = 0;
       let last = Date.now();
       const hits = await searchMessages(files, msg.query, {
         signal: ac.signal,
+        maxHits: MAX_HITS,
         onProgress: (done, total) => {
           searched = done;
           // A few updates a second is plenty for "Searched 45 of 117 chats".
@@ -197,7 +202,15 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
       });
       // A newer search replaced this one: its results would be stale.
       if (!ac.signal.aborted)
-        d.post({ type: "search", req: msg.req, hits, done: true, searched, total: files.length });
+        d.post({
+          type: "search",
+          req: msg.req,
+          hits,
+          done: true,
+          searched,
+          total: files.length,
+          capped: hits.length >= MAX_HITS,
+        });
       return true;
     }
   }

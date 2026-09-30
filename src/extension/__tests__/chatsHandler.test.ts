@@ -247,6 +247,22 @@ describe("handleChats: search", () => {
     expect(msgs.slice(0, -1).every((m) => m.done === false && m.hits.length === 0)).toBe(true);
   });
 
+  it("searches only the chats the view asked for, and says when it hit the cap", async () => {
+    const { handle, posted, deps, id } = setup();
+    const other = { ...deps.sessions()[0]!, id: randomUUID() };
+    deps.sessions = () => [other, deps.getSession(id)!];
+    await handle({ type: "search", query: "parser", req: "s3", ids: [id] });
+    const m = posted.at(-1) as Extract<HostMsg, { type: "search" }>;
+    expect(m.hits.map((h) => h.sessionId)).toEqual([id]);
+    expect(m).toMatchObject({ total: 1, capped: false });
+  });
+
+  it("stops a running search when asked with an empty query", async () => {
+    const { handle, posted } = setup();
+    await handle({ type: "search", query: "", req: "cancel" });
+    expect(posted.at(-1)).toMatchObject({ req: "cancel", hits: [], done: true });
+  });
+
   it("leaves other messages to other handlers", async () => {
     const { handle } = setup();
     expect(await handle({ type: "refresh" })).toBe(false);
