@@ -86,12 +86,14 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@testing-library/preact": "3.2.4",
+    "@types/markdown-it": "14.2.0",
     "@types/node": "22.20.4",
     "@types/vscode": "1.94.0",
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",
     "happy-dom": "20.14.5",
+    "markdown-it": "14.3.2",
     "typescript": "6.0.3",
     "vitest": "5.0.2"
   },

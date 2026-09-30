@@ -49,43 +49,72 @@ function codeSpan(s: string): string {
 }
 
 /**
- * Outside code: `<` can't start HTML, `![` can't load an image, and `](` can't
- * make a link (a chat's link could otherwise run a VS Code command when clicked).
+ * Every ASCII punctuation mark escaped: Markdown then shows the text exactly as
+ * written and can make nothing of it — no HTML, image, link, heading, list or code.
  */
-const escapeText = (s: string) =>
-  s.replace(/</g, "\\<").replace(/!\[/g, "!\\[").replace(/\]\(/g, "]\\(");
+const escapeText = (s: string) => s.replace(/[!-/:-@[-`{-~]/g, "\\$&");
 
-function escapeLine(line: string): string {
-  // A person's "# …" line must not look like one of the transcript's own headings.
-  const l = line.replace(/^(\s{0,3})(#{1,6})(?=\s|$)/, "$1\\$2");
-  let out = "";
-  let at = 0;
-  for (const m of l.matchAll(/(`+)[\s\S]*?\1/g)) {
-    out += escapeText(l.slice(at, m.index)) + m[0];
-    at = m.index + m[0].length;
-  }
-  return out + escapeText(l.slice(at));
+/** One line of prose: escaped, with its indentation kept as non-breaking spaces. */
+function proseLine(line: string): string {
+  const indent = line.match(/^[ \t]*/)![0];
+  const nbsp = indent.replace(/\t/g, "    ").replace(/ /g, " ");
+  return nbsp + escapeText(line.slice(indent.length));
 }
 
+/** Code as a fenced block Orbit writes itself: longer than any backtick run inside, so it can't end early. */
+function codeBlock(lines: string[], info: string): string {
+  const body = lines.join("\n");
+  const longest = Math.max(0, ...[...body.matchAll(/`+/g)].map((m) => m[0].length));
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  const lang = info.match(/^[\w+#.-]{1,30}/)?.[0] ?? "";
+  return `${fence}${lang}\n${body}\n${fence}`;
+}
+
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
 /**
- * Chat text as Markdown that shows exactly what was written: no raw HTML, no
- * images (which the preview would fetch from the web), no stray headings.
- * Code blocks and inline code are left as they are.
+ * Chat text as Markdown that shows exactly what was written, and nothing else:
+ * no raw HTML, no images (the preview would fetch them), no links, no headings.
+ *
+ * Safe by construction: code blocks are re-fenced by Orbit so their content is
+ * never interpreted, and everything else has every punctuation mark escaped.
+ * Spotting a code block wrongly can only change how text looks, never let it run.
  */
 export function safeMarkdown(text: string): string {
-  let fence: string | null = null;
-  return text
-    .split("\n")
-    .map((line) => {
-      const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1];
-      if (marker) {
-        if (!fence) fence = marker;
-        else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
-        return line;
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const out: string[] = [];
+  let para: string[] = [];
+  const endPara = () => {
+    // Line breaks inside a paragraph stay line breaks (a trailing "\" is a hard break).
+    if (para.length) out.push(para.join("\\\n"));
+    para = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const open = line.match(FENCE);
+    if (open && !(open[1]![0] === "`" && open[2]!.includes("`"))) {
+      endPara();
+      const mark = open[1]!;
+      const body: string[] = [];
+      // People nest fences ("```markdown" holding a "```bash" block): keep them together.
+      let depth = 0;
+      for (i++; i < lines.length; i++) {
+        const m = lines[i]!.match(FENCE);
+        if (m && m[1]![0] === mark[0] && m[1]!.length >= mark.length) {
+          if (m[2]!.trim()) depth++;
+          else if (depth === 0) break;
+          else depth--;
+        }
+        body.push(lines[i]!);
       }
-      return fence ? line : escapeLine(line);
-    })
-    .join("\n");
+      out.push(codeBlock(body, open[2]!.trim()));
+      continue;
+    }
+    if (line.trim() === "") endPara();
+    else para.push(proseLine(line));
+  }
+  endPara();
+  return out.join("\n\n");
 }
 
 function toolLine(p: { name: string; input: JsonObject }, cwd: string, max: number): string {
@@ -94,9 +123,9 @@ function toolLine(p: { name: string; input: JsonObject }, cwd: string, max: numb
     if (!v?.trim()) continue;
     if (PATH_FIELDS.has(f) && cwd && isInside(cwd, v)) v = relative(cwd, v) || ".";
     // Commands often carry tokens; the transcript may be exported and shared.
-    return `> 🔧 ${p.name} · ${codeSpan(clip(oneLine(redactText(v)), max))}`;
+    return `> 🔧 ${escapeText(p.name)} · ${codeSpan(clip(oneLine(redactText(v)), max))}`;
   }
-  return `> 🔧 ${p.name}`;
+  return `> 🔧 ${escapeText(p.name)}`;
 }
 
 const userBlock = (p: UserPart) =>

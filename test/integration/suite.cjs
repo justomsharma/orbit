@@ -69,8 +69,9 @@ exports.run = async () => {
     const doc = await until("the transcript document", () =>
       vscode.workspace.textDocuments.find((d) => d.uri.scheme === "orbit-view"),
     );
-    assert.match(doc.getText(), /^# Fix checkout \(title\)/);
-    assert.match(doc.getText(), /Fix checkout/);
+    // Chat text is escaped so the preview shows it exactly: "(title)" is written "\(title\)".
+    assert.ok(doc.getText().startsWith("# Fix checkout \\(title\\)"), doc.getText().slice(0, 80));
+    assert.match(doc.getText(), /## You[\s\S]*Fix checkout/);
   });
 
   await check("compares a checkpoint with the file as it is now", async () => {
