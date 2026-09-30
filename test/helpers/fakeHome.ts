@@ -32,6 +32,24 @@ const base = (c: Ctx) => ({
   timestamp: tick(),
 });
 
+/** Knobs for `L.assistant`; defaults match a typical cached Opus reply. */
+export interface AssistantOpts {
+  /** Reuse an id to write one message as several lines (one per content block). */
+  id?: string;
+  text?: string;
+  input?: number;
+  output?: number;
+  read?: number;
+  write5m?: number;
+  write1h?: number;
+  webSearches?: number;
+  speed?: "standard" | "fast";
+  geo?: string;
+  sidechain?: boolean;
+  /** Replaces the whole `usage` object (e.g. an older shape without `cache_creation`). */
+  usage?: Record<string, unknown>;
+}
+
 export const L = {
   mode: (c: Ctx): Line => ({ type: "mode", mode: "normal", sessionId: c.sessionId }),
   user: (c: Ctx, text: string, at?: string): Line => ({
@@ -65,23 +83,32 @@ export const L = {
       content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "ok" }],
     },
   }),
-  assistant: (c: Ctx, model = "claude-opus-5-5", at?: string): Line => ({
+  assistant: (c: Ctx, model = "claude-opus-5-5", at?: string, o: AssistantOpts = {}): Line => ({
     ...base(c),
     type: "assistant",
     ...(at ? { timestamp: at } : {}),
+    ...(o.sidechain ? { isSidechain: true, agentId: "a1b2c3d4" } : {}),
     requestId: `req_${randomUUID()}`,
     message: {
-      id: `msg_${randomUUID()}`,
+      id: o.id ?? `msg_${randomUUID()}`,
       model,
       role: "assistant",
       type: "message",
-      content: [{ type: "text", text: "Done." }],
-      usage: {
-        input_tokens: 10,
-        cache_creation_input_tokens: 100,
-        cache_read_input_tokens: 1000,
-        output_tokens: 50,
-        cache_creation: { ephemeral_1h_input_tokens: 100, ephemeral_5m_input_tokens: 0 },
+      content: [{ type: "text", text: o.text ?? "Done." }],
+      usage: o.usage ?? {
+        input_tokens: o.input ?? 10,
+        cache_creation_input_tokens: (o.write5m ?? 0) + (o.write1h ?? 100),
+        cache_read_input_tokens: o.read ?? 1000,
+        output_tokens: o.output ?? 50,
+        server_tool_use: { web_search_requests: o.webSearches ?? 0, web_fetch_requests: 0 },
+        service_tier: "standard",
+        cache_creation: {
+          ephemeral_1h_input_tokens: o.write1h ?? 100,
+          ephemeral_5m_input_tokens: o.write5m ?? 0,
+        },
+        inference_geo: o.geo ?? "not_available",
+        iterations: [],
+        speed: o.speed ?? "standard",
       },
     },
   }),
@@ -140,4 +167,23 @@ export function writeSession(
   writeFileSync(file, `${body}\n`);
   if (opts.mtime) utimesSync(file, opts.mtime, opts.mtime);
   return { id, file, ctx };
+}
+
+/** Writes `projects/<slug>/<sessionId>/subagents/agent-<name>.jsonl`. */
+export function writeSubagent(
+  home: string,
+  cwd: string,
+  sessionId: string,
+  build: (c: Ctx) => (Line | string)[],
+  name = "a1b2c3d4",
+): string {
+  const ctx: Ctx = { sessionId, cwd };
+  const dir = join(home, "projects", slugFor(cwd), sessionId, "subagents");
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `agent-${name}.jsonl`);
+  const body = build(ctx)
+    .map((l) => (typeof l === "string" ? l : JSON.stringify(l)))
+    .join("\n");
+  writeFileSync(file, `${body}\n`);
+  return file;
 }

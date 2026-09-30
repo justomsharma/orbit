@@ -1,5 +1,6 @@
 import { basename, join } from "node:path";
 import type { MtimeCache } from "../../core/cache";
+import { mapLimit } from "../../core/concurrency";
 import { type HeadTail, listDirSafe, readHeadTail, statSafe } from "../../core/fsSafe";
 import { forEachJsonLine, type JsonObject, obj, str } from "../../core/jsonl";
 import { streamJsonLines } from "../../core/lines";
@@ -181,19 +182,6 @@ async function transcriptFiles(home: string): Promise<{ id: string; file: string
       if (isSessionId(id)) out.push({ id, file: join(dirPath, f.name) });
     }
   }
-  return out;
-}
-
-async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return out;
 }
 
