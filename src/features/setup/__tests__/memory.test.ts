@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../../test/helpers/tmp";
@@ -162,6 +163,42 @@ describe("readMemory — auto memory", () => {
     });
     expect(m.auto.dir).toBe(join(home, "projects", "C--Learnings-MakeMyLifeEasy", "memory"));
     expect(m.auto.indexPath).toBeNull();
+  });
+
+  describe("follows the git repository, as Claude does", () => {
+    it("uses the repository root when a subfolder is open", async () => {
+      const { root, userHome, home } = setup();
+      const repo = join(root, "repo");
+      mkdirSync(join(repo, ".git"), { recursive: true });
+      mkdirSync(join(repo, "packages", "web"), { recursive: true });
+      const m = await readMemory({
+        home,
+        workspace: join(repo, "packages", "web"),
+        settings: {},
+        userHome,
+      });
+      expect(m.auto.dir).toBe(join(home, "projects", slug(repo), "memory"));
+    });
+
+    it("shares the main checkout's folder from a git worktree", async () => {
+      const { root, userHome, home } = setup();
+      const repo = join(root, "repo");
+      const wt = join(root, "wt-feature");
+      const gitdir = join(repo, ".git", "worktrees", "wt-feature");
+      mkdirSync(gitdir, { recursive: true });
+      mkdirSync(wt, { recursive: true });
+      writeFileSync(join(wt, ".git"), `gitdir: ${gitdir}\n`);
+      writeFileSync(join(gitdir, "commondir"), "../..\n");
+      const m = await readMemory({ home, workspace: wt, settings: {}, userHome });
+      expect(m.auto.dir).toBe(join(home, "projects", slug(repo), "memory"));
+    });
+
+    it("keeps the folder itself outside a repository", async () => {
+      const { userHome, home, ws } = setup();
+      mkdirSync(ws, { recursive: true });
+      const m = await readMemory({ home, workspace: ws, settings: {}, userHome });
+      expect(m.auto.dir).toBe(join(home, "projects", slug(ws), "memory"));
+    });
   });
 
   it("uses autoMemoryDirectory with ~ expanded", async () => {

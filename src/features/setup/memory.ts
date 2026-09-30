@@ -2,6 +2,7 @@ import * as os from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { mapLimit } from "../../core/concurrency";
 import { listDirSafe, readTextSafe, statSafe } from "../../core/fsSafe";
+import { gitRoot } from "../../core/gitRoot";
 import { MAX_FILE_BYTES, PARALLEL, strOrNull } from "./content";
 import { parseFrontmatter } from "./frontmatter";
 
@@ -119,13 +120,16 @@ function claudeMdCandidates(o: MemoryOpts, platform: NodeJS.Platform) {
 /** Claude's per-project folder name: every non-alphanumeric character becomes `-`. */
 export const projectSlug = (workspace: string) => workspace.replace(/[^a-zA-Z0-9]/g, "-");
 
-function autoMemoryDir(o: MemoryOpts, userHome: string): string {
+/** The folder is named after the git repository (shared by its worktrees), else the folder itself. */
+async function autoMemoryDir(o: MemoryOpts, userHome: string): Promise<string> {
   const custom = strOrNull(o.settings.autoMemoryDirectory);
   if (custom) {
     const p = expandHome(custom, userHome);
     return isAbsolute(p) ? join(p) : resolve(o.workspace ?? userHome, p);
   }
-  return o.workspace ? join(o.home, "projects", projectSlug(o.workspace), "memory") : "";
+  if (!o.workspace) return "";
+  const project = (await gitRoot(o.workspace)) ?? o.workspace;
+  return join(o.home, "projects", projectSlug(project), "memory");
 }
 
 /** `[[target]]` links, also `[[target|label]]` and `[[target#part]]`. */
@@ -242,7 +246,7 @@ export async function readMemory(opts: MemoryOpts): Promise<MemoryInfo> {
       ),
     ),
   );
-  const dir = autoMemoryDir(opts, userHome);
+  const dir = await autoMemoryDir(opts, userHome);
   const auto = await readAuto(dir).catch(() => ({
     indexPath: null,
     indexLines: 0,
