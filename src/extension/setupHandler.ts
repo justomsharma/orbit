@@ -6,6 +6,7 @@ import {
   addHook,
   addMcpServer,
   addPermissionRule,
+  dropMcpRejection,
   EditError,
   type Mutate,
   removeHook,
@@ -17,6 +18,7 @@ import {
   setSkillVisibility,
 } from "../features/setup/edits";
 import { HOOK_EVENTS, humanize } from "../features/setup/hookEvents";
+import { decidingScope, readSettingsFiles, toggleScope } from "../features/setup/settings";
 import { newItem } from "../features/setup/templates";
 import { parseViewMsg, type ViewMsg } from "../shared/protocol";
 import type { SetupSnapshot } from "./setupService";
@@ -77,8 +79,28 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       warn("Open a folder first: project settings belong to a folder.");
       return;
     }
-    if (await applyJsonEdit(d.writer, d.confirm, { file, mutate, summary, label }))
-      await d.refresh();
+    const ok = await applyJsonEdit(d.writer, d.confirm, { file, mutate, summary, label });
+    if (ok) await d.refresh();
+    return ok;
+  };
+
+  /**
+   * Where a toggle must write to take effect (see toggleScope), and whether another
+   * file also sets it — then "off" is written out instead of just removing the key.
+   * Null (after saying why) when the organisation's managed settings decide it.
+   */
+  const toggleTarget = async (
+    keyPath: string[],
+    label: string,
+  ): Promise<{ scope: EditScope; elsewhere: boolean } | null> => {
+    const files = await readSettingsFiles(d.home, ws, d.platform);
+    const scope = toggleScope(files, keyPath);
+    if (scope === "managed") {
+      warn(`Your organisation's managed settings decide "${label}", so it can't be changed here.`);
+      return null;
+    }
+    const others = files.filter((f) => f.scope !== scope);
+    return { scope, elsewhere: decidingScope(others, keyPath) !== null };
   };
 
   switch (msg.type) {
@@ -87,8 +109,14 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       return true;
 
     case "setup:setSetting": {
-      const where = SCOPE_WORD[msg.scope];
       const label = humanize(msg.key);
+      let scope: EditScope;
+      if (msg.scope === "auto") {
+        const t = await toggleTarget(msg.key.split("."), label);
+        if (!t) return true;
+        scope = t.scope;
+      } else scope = msg.scope;
+      const where = SCOPE_WORD[scope];
       if (msg.key === "permissions.defaultMode") {
         if (msg.value !== null && !MODES.includes(String(msg.value))) {
           warn(`"${msg.value}" isn't one of Claude Code's permission modes.`);
@@ -133,7 +161,7 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
           ? `Reset "${label}" to Claude's default in your ${where} settings?`
           : `Set "${label}" to "${msg.value}" in your ${where} settings?`;
       await edit(
-        settingsPath(msg.scope),
+        settingsPath(scope),
         setSetting(msg.key, msg.value ?? undefined),
         summary,
         `${label}: ${msg.value ?? "default"}`,
@@ -141,23 +169,67 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       return true;
     }
 
-    case "setup:plugin":
+    case "setup:plugin": {
+      let scope: EditScope;
+      if (msg.scope === "auto") {
+        const t = await toggleTarget(["enabledPlugins", msg.id], `the plugin ${msg.id}`);
+        if (!t) return true;
+        scope = t.scope;
+      } else scope = msg.scope;
       await edit(
-        settingsPath(msg.scope),
+        settingsPath(scope),
         setPluginEnabled(msg.id, msg.enabled),
-        `Turn ${msg.enabled ? "on" : "off"} the plugin "${msg.id}" in your ${SCOPE_WORD[msg.scope]} settings?`,
+        `Turn ${msg.enabled ? "on" : "off"} the plugin "${msg.id}" in your ${SCOPE_WORD[scope]} settings?`,
         `Plugin ${msg.id} ${msg.enabled ? "on" : "off"}`,
       );
       return true;
+    }
 
-    case "setup:mcpApproval":
-      await edit(
+    case "setup:mcpApproval": {
+      if (msg.state === "rejected") {
+        await edit(
+          settingsPath("local"),
+          setMcpApproval(msg.name, msg.state),
+          `Stop using the project MCP server "${msg.name}" for you in this folder?`,
+          `MCP ${msg.name} rejected`,
+        );
+        return true;
+      }
+      // A rejection in any settings file wins, so approving lifts each one it finds.
+      const files = await readSettingsFiles(d.home, ws, d.platform);
+      const rejectedIn = (scope: string) => {
+        const list = files.find((f) => f.scope === scope)?.data?.disabledMcpjsonServers;
+        return Array.isArray(list) && list.includes(msg.name);
+      };
+      if (rejectedIn("managed")) {
+        warn(
+          `Your organisation's managed settings block "${msg.name}", so it can't be approved here.`,
+        );
+        return true;
+      }
+      const approved = await edit(
         settingsPath("local"),
-        setMcpApproval(msg.name, msg.state),
-        `${msg.state === "approved" ? "Approve" : "Reject"} the project MCP server "${msg.name}" for you in this folder?`,
-        `MCP ${msg.name} ${msg.state}`,
+        setMcpApproval(msg.name, "approved"),
+        `Approve the project MCP server "${msg.name}" for you in this folder?`,
+        `MCP ${msg.name} approved`,
       );
+      if (!approved) return true;
+      if (rejectedIn("user"))
+        await edit(
+          settingsPath("user"),
+          dropMcpRejection(msg.name),
+          `Your user settings also reject "${msg.name}" in every project. Remove that rejection too?`,
+          `MCP ${msg.name}: user rejection removed`,
+        );
+      if (rejectedIn("project"))
+        await edit(
+          settingsPath("project"),
+          dropMcpRejection(msg.name),
+          `The shared project settings (.claude/settings.json) reject "${msg.name}". Remove that rejection? This changes it for everyone using this repository.`,
+          `MCP ${msg.name}: project rejection removed`,
+        );
       return true;
+    }
 
     case "setup:mcpRemove": {
       const file =
@@ -249,16 +321,19 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       );
       return true;
 
-    case "setup:hooksPaused":
+    case "setup:hooksPaused": {
+      const t = await toggleTarget(["disableAllHooks"], "Pause all hooks");
+      if (!t) return true;
       await edit(
-        settingsPath("user"),
-        setSetting("disableAllHooks", msg.paused ? true : undefined),
+        settingsPath(t.scope),
+        setSetting("disableAllHooks", msg.paused ? true : t.elsewhere ? false : undefined),
         msg.paused
           ? "Pause all hooks (and the statusline) until you turn them back on?"
           : "Turn hooks back on?",
         msg.paused ? "Hooks paused" : "Hooks on",
       );
       return true;
+    }
 
     case "setup:rule":
       await edit(
@@ -272,13 +347,19 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       return true;
 
     case "setup:skillVisibility": {
-      const word = { on: "Show", "name-only": "Show only the name of", off: "Hide" }[
-        msg.visibility
-      ];
+      const n = `"${msg.name}"`;
+      const question = {
+        on: `Show the skill ${n} to Claude?`,
+        "name-only": `Show only the name of the skill ${n} to Claude?`,
+        "user-invocable-only": `Keep the skill ${n} for when you type /${msg.name}, so Claude doesn't use it on its own?`,
+        off: `Hide the skill ${n} from Claude?`,
+      }[msg.visibility];
+      const t = await toggleTarget(["skillOverrides", msg.name], `the skill ${msg.name}`);
+      if (!t) return true;
       await edit(
-        settingsPath("user"),
-        setSkillVisibility(msg.name, msg.visibility),
-        `${word} the skill "${msg.name}" ${msg.visibility === "off" ? "from" : "to"} Claude?`,
+        settingsPath(t.scope),
+        setSkillVisibility(msg.name, msg.visibility, t.elsewhere),
+        question,
         `Skill ${msg.name}: ${msg.visibility}`,
       );
       return true;

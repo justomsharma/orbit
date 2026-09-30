@@ -96,7 +96,98 @@ describe("SetupView", () => {
       type: "setup:plugin",
       id: "frontend-design@claude-plugins-official",
       enabled: true,
-      scope: "user",
+      scope: "auto",
+    });
+  });
+
+  describe("toggles show what Claude actually uses", () => {
+    const withSettings = (scope: string, values: Record<string, unknown>) => {
+      const s = sampleSetup();
+      const f = s.settings.find((x) => x.scope === scope)!;
+      f.exists = true;
+      f.values = { ...f.values, ...(values as typeof f.values) };
+      return s;
+    };
+
+    it("shows hooks as paused when the project settings pause them", () => {
+      store.setup.value = withSettings("project", { disableAllHooks: { value: true } });
+      render(<SetupView />);
+      const hooks = section(/Hooks/);
+      expect(
+        within(hooks)
+          .getByRole("switch", { name: /Pause all hooks/ })
+          .getAttribute("aria-checked"),
+      ).toBe("true");
+    });
+
+    it("shows the mode that applies and locks it when the organisation sets it", () => {
+      store.setup.value = sampleSetup({
+        permissions: {
+          ...sampleSetup().permissions,
+          defaultMode: [
+            { scope: "user", mode: "plan" },
+            { scope: "managed", mode: "default" },
+          ],
+        },
+      });
+      render(<SetupView />);
+      const select = within(section(/Permissions/)).getByLabelText(
+        "Default permission mode",
+      ) as HTMLSelectElement;
+      expect(select.value).toBe("default");
+      expect(select.disabled).toBe(true);
+    });
+
+    it("changes the mode wherever it is decided", () => {
+      render(<SetupView />);
+      fireEvent.change(within(section(/Permissions/)).getByLabelText("Default permission mode"), {
+        target: { value: "acceptEdits" },
+      });
+      expect(sent).toContainEqual({
+        type: "setup:setSetting",
+        scope: "auto",
+        key: "permissions.defaultMode",
+        value: "acceptEdits",
+      });
+    });
+
+    it("shows a skill hidden in the project settings as off", () => {
+      store.setup.value = withSettings("project", {
+        skillOverrides: { entries: { "release-notes": "off" } },
+      });
+      render(<SetupView />);
+      const select = within(section(/Skills/)).getByLabelText(
+        /release-notes visibility/,
+      ) as HTMLSelectElement;
+      expect(select.value).toBe("off");
+      expect(within(select).getByRole("option", { name: /you type/i })).toBeTruthy();
+    });
+
+    it("offers no visibility choice for plugin skills (Claude manages those through /plugin)", () => {
+      const s = sampleSetup();
+      s.skills.push({
+        ...s.skills[0]!,
+        name: "brainstorming",
+        plugin: "superpowers@x",
+        file: "/p",
+      });
+      store.setup.value = s;
+      render(<SetupView />);
+      expect(within(section(/Skills/)).queryByLabelText(/brainstorming visibility/)).toBeNull();
+    });
+
+    it("turns auto memory on explicitly, so another file's off doesn't win", () => {
+      store.setup.value = withSettings("local", { autoMemoryEnabled: { value: false } });
+      render(<SetupView />);
+      const sw = within(section(/Memory/)).getByRole("switch", { name: /Auto memory/ });
+      expect(sw.getAttribute("aria-checked")).toBe("false");
+      fireEvent.click(sw);
+      expect(sent).toContainEqual({
+        type: "setup:setSetting",
+        scope: "auto",
+        key: "autoMemoryEnabled",
+        value: true,
+      });
     });
   });
 

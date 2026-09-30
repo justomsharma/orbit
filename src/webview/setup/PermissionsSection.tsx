@@ -2,7 +2,17 @@ import { useState } from "preact/hooks";
 import { post } from "../bus";
 import * as store from "../store";
 import { IconButton } from "../ui/Icon";
-import { Badge, type EditScope, matches, Row, SCOPE_LABEL, ScopeSelect, Section } from "./parts";
+import {
+  Badge,
+  type EditScope,
+  LOCKED,
+  matches,
+  PRECEDENCE,
+  Row,
+  SCOPE_LABEL,
+  ScopeSelect,
+  Section,
+} from "./parts";
 
 const MODES: [string, string][] = [
   ["default", "Ask before acting (default)"],
@@ -26,7 +36,10 @@ export function PermissionsSection() {
   const [list, setList] = useState<"allow" | "ask" | "deny">("allow");
   const [scope, setScope] = useState<EditScope>("user");
   const rules = s.permissions.rules.filter((r) => matches(q, r.rule, r.list));
-  const userMode = s.permissions.defaultMode.find((m) => m.scope === "user")?.mode ?? "";
+  const byScope = (sc: string) => s.permissions.defaultMode.find((m) => m.scope === sc);
+  const modeFrom = PRECEDENCE.map(byScope).find(Boolean);
+  const mode = modeFrom?.mode ?? "";
+  const locked = modeFrom?.scope === "managed";
   return (
     <Section
       id="permissions"
@@ -39,12 +52,14 @@ export function PermissionsSection() {
         <span>Claude starts in</span>
         <select
           aria-label="Default permission mode"
-          value={userMode}
+          value={mode}
+          disabled={locked}
+          title={locked ? LOCKED : undefined}
           onChange={(e) => {
             const v = (e.target as HTMLSelectElement).value;
             post({
               type: "setup:setSetting",
-              scope: "user",
+              scope: "auto",
               key: "permissions.defaultMode",
               value: v || null,
             });

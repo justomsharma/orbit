@@ -71,6 +71,14 @@ export function setMcpApproval(name: string, state: "approved" | "rejected"): Mu
   };
 }
 
+/** Removes a `.mcp.json` server from this file's rejection list (nothing else). */
+export function dropMcpRejection(name: string): Mutate {
+  return (o) => {
+    const off = list(o, "disabledMcpjsonServers");
+    for (let i = off.length - 1; i >= 0; i--) if (off[i] === name) off.splice(i, 1);
+  };
+}
+
 const MCP_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 
 interface McpTarget {
@@ -188,13 +196,14 @@ export function removePermissionRule(which: RuleList, rule: string): Mutate {
   };
 }
 
-export type SkillVisibility = "on" | "name-only" | "off";
+export type SkillVisibility = "on" | "name-only" | "user-invocable-only" | "off";
 
 /** Claude Code's `skillOverrides`; "on" is the default, so it removes the override. */
-export function setSkillVisibility(name: string, v: SkillVisibility): Mutate {
+/** `explicit` writes "on" instead of removing the entry, to outvote another file that hides it. */
+export function setSkillVisibility(name: string, v: SkillVisibility, explicit = false): Mutate {
   return (o) => {
     const overrides = child(o, "skillOverrides");
-    if (v === "on") delete overrides[name];
+    if (v === "on" && !explicit) delete overrides[name];
     else overrides[name] = v;
   };
 }

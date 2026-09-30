@@ -55,6 +55,8 @@ function setupMessages() {
   const text = (max: number) => v.pipe(v.string(), v.maxLength(max));
   const nonEmpty = (max: number) => v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(max));
   const EditScope = v.picklist(["user", "project", "local"]);
+  // "auto": the file that decides the value now (see toggleScope).
+  const ToggleScope = v.picklist(["user", "project", "local", "auto"]);
   const McpName = v.pipe(v.string(), v.regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/));
   const ItemName = v.pipe(v.string(), v.regex(/^[a-z0-9][a-z0-9-]{0,63}$/));
   const Key = v.pipe(
@@ -78,7 +80,7 @@ function setupMessages() {
     v.object({ type: v.literal("setup:refresh") }),
     v.object({
       type: v.literal("setup:setSetting"),
-      scope: EditScope,
+      scope: ToggleScope,
       key: Key,
       value: v.union([v.pipe(v.string(), v.maxLength(2000)), v.number(), v.boolean(), v.null()]),
     }),
@@ -86,7 +88,7 @@ function setupMessages() {
       type: v.literal("setup:plugin"),
       id: v.pipe(v.string(), v.maxLength(200), v.regex(/^[^@\s]+@[^@\s]+$/)),
       enabled: v.boolean(),
-      scope: EditScope,
+      scope: ToggleScope,
     }),
     v.object({
       type: v.literal("setup:mcpApproval"),
@@ -124,7 +126,7 @@ function setupMessages() {
     v.object({
       type: v.literal("setup:skillVisibility"),
       name: v.pipe(v.string(), v.maxLength(100)),
-      visibility: v.picklist(["on", "name-only", "off"]),
+      visibility: v.picklist(["on", "name-only", "user-invocable-only", "off"]),
     }),
     v.object({
       type: v.literal("setup:new"),

@@ -26,6 +26,29 @@ export const SCOPE_WORD: Record<string, string> = {
   managed: "managed",
 };
 
+/** Highest precedence first, as Claude Code applies settings files. */
+export const PRECEDENCE = ["managed", "local", "project", "user"] as const;
+
+/**
+ * The value Claude uses for a setting (or one entry of an object setting such as
+ * `skillOverrides`), and the file it comes from. Null when no file sets it.
+ */
+export function decided(key: string, entry?: string): { scope: string; value: unknown } | null {
+  const files = store.setup.value?.settings ?? [];
+  for (const scope of PRECEDENCE) {
+    const v = files.find((f) => f.scope === scope)?.values[key];
+    if (!v) continue;
+    if (entry === undefined) {
+      if ("value" in v) return { scope, value: v.value };
+      return { scope, value: undefined };
+    }
+    if ("entries" in v && entry in v.entries) return { scope, value: v.entries[entry] };
+  }
+  return null;
+}
+
+export const LOCKED = "Set by your organisation's managed settings";
+
 export function Badge({
   children,
   tone = "plain",
@@ -113,10 +136,13 @@ export function Switch({
   on,
   label,
   onChange,
+  disabled = false,
 }: {
   on: boolean;
   label: string;
   onChange: (on: boolean) => void;
+  /** Locked by the organisation's managed settings. */
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -124,7 +150,8 @@ export function Switch({
       role="switch"
       aria-checked={on}
       aria-label={label}
-      title={label}
+      title={disabled ? `${label}: ${LOCKED}` : label}
+      disabled={disabled}
       class={`switch${on ? " on" : ""}`}
       onClick={() => onChange(!on)}
     >

@@ -232,6 +232,97 @@ describe("handleSetup: plugins, MCP, hooks, permissions, skills", () => {
   });
 });
 
+describe("handleSetup: toggles change the file that decides them", () => {
+  const put = (p: string, o: object) => writeFileSync(p, JSON.stringify(o, null, 2));
+
+  it("overrides a plugin the shared project settings turn off in this folder's local file", async () => {
+    const { handle, ws, home, json, log } = await setup({ settings: {} });
+    put(join(ws, ".claude", "settings.json"), { enabledPlugins: { "x@m": false } });
+    await handle({ type: "setup:plugin", id: "x@m", enabled: true, scope: "auto" });
+    expect(json(join(ws, ".claude", "settings.local.json")).enabledPlugins).toEqual({
+      "x@m": true,
+    });
+    expect(json(join(home, "settings.json"))).toEqual({});
+    expect(log[0]).toMatch(/local project settings/);
+  });
+
+  it("changes a plugin in the file that already decides it", async () => {
+    const { handle, ws, json } = await setup({ settings: {} });
+    put(join(ws, ".claude", "settings.local.json"), { enabledPlugins: { "x@m": true } });
+    await handle({ type: "setup:plugin", id: "x@m", enabled: false, scope: "auto" });
+    expect(json(join(ws, ".claude", "settings.local.json")).enabledPlugins).toEqual({
+      "x@m": false,
+    });
+  });
+
+  it("un-pauses hooks with an explicit off when another file still pauses them", async () => {
+    const { handle, ws, home, json } = await setup({ settings: { disableAllHooks: true } });
+    put(join(ws, ".claude", "settings.json"), { disableAllHooks: true });
+    await handle({ type: "setup:hooksPaused", paused: false });
+    expect(json(join(ws, ".claude", "settings.local.json")).disableAllHooks).toBe(false);
+    expect(json(join(home, "settings.json")).disableAllHooks).toBe(true);
+  });
+
+  it("un-pauses by removing the key when nothing else pauses hooks", async () => {
+    const { handle, home, json } = await setup({ settings: { disableAllHooks: true } });
+    await handle({ type: "setup:hooksPaused", paused: false });
+    expect(json(join(home, "settings.json")).disableAllHooks).toBeUndefined();
+  });
+
+  it("sets the default mode where it is decided", async () => {
+    const { handle, ws, json } = await setup({ settings: {} });
+    put(join(ws, ".claude", "settings.json"), { permissions: { defaultMode: "plan" } });
+    await handle({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "permissions.defaultMode",
+      value: "acceptEdits",
+    });
+    expect(json(join(ws, ".claude", "settings.local.json")).permissions.defaultMode).toBe(
+      "acceptEdits",
+    );
+  });
+
+  it("shows a skill again even when another file hides it", async () => {
+    const { handle, ws, json } = await setup({ settings: {} });
+    put(join(ws, ".claude", "settings.json"), { skillOverrides: { deploy: "off" } });
+    await handle({ type: "setup:skillVisibility", name: "deploy", visibility: "on" });
+    expect(json(join(ws, ".claude", "settings.local.json")).skillOverrides).toEqual({
+      deploy: "on",
+    });
+  });
+
+  it("accepts Claude's user-invocable-only skill setting", async () => {
+    const { handle, home, json } = await setup({ settings: {} });
+    await handle({
+      type: "setup:skillVisibility",
+      name: "deploy",
+      visibility: "user-invocable-only",
+    });
+    expect(json(join(home, "settings.json")).skillOverrides).toEqual({
+      deploy: "user-invocable-only",
+    });
+  });
+
+  it("approving a project server also lifts a rejection in your user settings", async () => {
+    const { handle, ws, home, json, log } = await setup({
+      settings: { disabledMcpjsonServers: ["db", "other"] },
+    });
+    await handle({ type: "setup:mcpApproval", name: "db", state: "approved" });
+    expect(json(join(ws, ".claude", "settings.local.json")).enabledMcpjsonServers).toEqual(["db"]);
+    expect(json(join(home, "settings.json")).disabledMcpjsonServers).toEqual(["other"]);
+    expect(log.filter((l) => l.startsWith("confirm"))).toHaveLength(2);
+  });
+
+  it("says plainly when the shared project settings reject a server", async () => {
+    const { handle, ws, json, log } = await setup({ settings: {} });
+    put(join(ws, ".claude", "settings.json"), { disabledMcpjsonServers: ["db"] });
+    await handle({ type: "setup:mcpApproval", name: "db", state: "approved" });
+    expect(log.find((l) => l.includes("shared project settings"))).toMatch(/^confirm .*everyone/);
+    expect(json(join(ws, ".claude", "settings.json")).disabledMcpjsonServers).toEqual([]);
+  });
+});
+
 describe("handleSetup: files and Claude", () => {
   it("creates a new skill and opens it", async () => {
     const { handle, home, log } = await setup();

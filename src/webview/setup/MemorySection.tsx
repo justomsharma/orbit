@@ -1,6 +1,6 @@
 import { post } from "../bus";
 import * as store from "../store";
-import { Badge, matches, Row, Section, Switch } from "./parts";
+import { Badge, decided, matches, Row, Section, Switch } from "./parts";
 
 const MD_LABEL: Record<string, string> = {
   user: "Your instructions (all projects)",
@@ -18,8 +18,8 @@ export function MemorySection() {
     (f) => (f.exists || f.scope !== "managed") && matches(q, MD_LABEL[f.scope], f.path),
   );
   const memFiles = m.auto.files.filter((f) => matches(q, f.title, f.description, f.name));
-  const autoSetting = s.settings.find((f) => f.scope === "user")?.values.autoMemoryEnabled;
-  const autoOn = !(autoSetting && "value" in autoSetting && autoSetting.value === false);
+  const autoBy = decided("autoMemoryEnabled");
+  const autoOn = autoBy?.value !== false;
   return (
     <Section
       id="memory"
@@ -68,14 +68,10 @@ export function MemorySection() {
           <h4 class="subgroup-title">Auto memory</h4>
           <Switch
             on={autoOn}
+            disabled={autoBy?.scope === "managed"}
             label="Auto memory"
             onChange={(on) =>
-              post({
-                type: "setup:setSetting",
-                scope: "user",
-                key: "autoMemoryEnabled",
-                value: on ? null : false,
-              })
+              post({ type: "setup:setSetting", scope: "auto", key: "autoMemoryEnabled", value: on })
             }
           />
         </div>

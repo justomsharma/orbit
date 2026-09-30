@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { post } from "../bus";
 import * as store from "../store";
-import { Badge, Empty, Field, matches, Row, SCOPE_LABEL, Section } from "./parts";
+import { Badge, decided, Empty, Field, LOCKED, matches, Row, SCOPE_LABEL, Section } from "./parts";
 
 type Kind = "skill" | "agent" | "command";
 
@@ -76,10 +76,44 @@ function Adder({ kind }: { kind: Kind }) {
   );
 }
 
-function visibilityOf(name: string): "on" | "name-only" | "off" {
-  const user = store.setup.value?.settings.find((f) => f.scope === "user")?.values.skillOverrides;
-  const v = user && "entries" in user ? user.entries[name] : undefined;
-  return v === "off" || v === "name-only" ? v : "on";
+type Visibility = "on" | "name-only" | "user-invocable-only" | "off";
+const VISIBILITY: [Visibility, string][] = [
+  ["on", "On"],
+  ["name-only", "Name only"],
+  ["user-invocable-only", "Only when you type it"],
+  ["off", "Off"],
+];
+
+function visibilityOf(name: string): { value: Visibility; locked: boolean } {
+  const d = decided("skillOverrides", name);
+  const v = VISIBILITY.find(([k]) => k === d?.value)?.[0] ?? "on";
+  return { value: v, locked: d?.scope === "managed" };
+}
+
+function SkillVisibility({ name }: { name: string }) {
+  const { value, locked } = visibilityOf(name);
+  return (
+    <select
+      class="mini-select"
+      aria-label={`${name} visibility`}
+      title={locked ? LOCKED : "What Claude sees of this skill"}
+      value={value}
+      disabled={locked}
+      onChange={(e) =>
+        post({
+          type: "setup:skillVisibility",
+          name,
+          visibility: (e.target as HTMLSelectElement).value as Visibility,
+        })
+      }
+    >
+      {VISIBILITY.map(([v, label]) => (
+        <option key={v} value={v}>
+          {label}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 export function SkillsSection() {
@@ -108,26 +142,8 @@ export function SkillsSection() {
                 </>
               }
               actions={
-                <select
-                  class="mini-select"
-                  aria-label={`${k.name} visibility`}
-                  title="What Claude sees of this skill"
-                  value={visibilityOf(k.name)}
-                  onChange={(e) =>
-                    post({
-                      type: "setup:skillVisibility",
-                      name: k.name,
-                      visibility: (e.target as HTMLSelectElement).value as
-                        | "on"
-                        | "name-only"
-                        | "off",
-                    })
-                  }
-                >
-                  <option value="on">On</option>
-                  <option value="name-only">Name only</option>
-                  <option value="off">Off</option>
-                </select>
+                // Claude's skillOverrides don't apply to plugin skills; /plugin manages those.
+                k.plugin ? null : <SkillVisibility name={k.name} />
               }
               onOpen={() => post({ type: "setup:open", file: k.file })}
             />

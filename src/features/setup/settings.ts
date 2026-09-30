@@ -52,3 +52,30 @@ export function byPrecedence(settings: SettingsFile[]): SettingsFile[] {
     .filter((s) => s.data)
     .sort((a, b) => PRECEDENCE.indexOf(a.scope) - PRECEDENCE.indexOf(b.scope));
 }
+
+/** The file whose value Claude uses for a (nested) setting: the highest-precedence file that sets it. */
+export function decidingScope(settings: SettingsFile[], path: string[]): SettingsScope | null {
+  for (const f of byPrecedence(settings)) {
+    let v: unknown = f.data;
+    for (const k of path) {
+      v =
+        v && typeof v === "object" && !Array.isArray(v)
+          ? (v as Record<string, unknown>)[k]
+          : undefined;
+    }
+    if (v !== undefined) return f.scope;
+  }
+  return null;
+}
+
+/**
+ * Where a quick toggle (plugin switch, default mode, pause hooks…) must write so
+ * the change actually takes effect: the file that decides it now, except that a
+ * decision in the shared project file is overridden just for this person in
+ * this folder's local file. "managed" means it can't be changed here.
+ */
+export function toggleScope(settings: SettingsFile[], path: string[]): SettingsScope {
+  const s = decidingScope(settings, path);
+  if (s === "project") return "local";
+  return s ?? "user";
+}

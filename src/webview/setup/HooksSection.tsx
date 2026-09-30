@@ -5,6 +5,7 @@ import * as store from "../store";
 import { IconButton } from "../ui/Icon";
 import {
   Badge,
+  decided,
   type EditScope,
   Empty,
   Field,
@@ -74,8 +75,8 @@ export function HooksSection() {
   const q = store.setupQuery.value;
   const [adding, setAdding] = useState(false);
   const list = s.hooks.filter((h) => matches(q, h.event, h.matcher, h.command, h.url, h.plugin));
-  const user = s.settings.find((f) => f.scope === "user")?.values.disableAllHooks;
-  const paused = !!user && "value" in user && user.value === true;
+  const pausedBy = decided("disableAllHooks");
+  const paused = pausedBy?.value === true;
   const events = [...new Set(list.map((h) => h.event))];
   return (
     <Section
@@ -90,6 +91,7 @@ export function HooksSection() {
         <span>Pause all hooks</span>
         <Switch
           on={paused}
+          disabled={pausedBy?.scope === "managed"}
           label="Pause all hooks"
           onChange={(p) => post({ type: "setup:hooksPaused", paused: p })}
         />

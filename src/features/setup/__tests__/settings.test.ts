@@ -1,7 +1,14 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../../test/helpers/tmp";
-import { managedSettingsPath, readSettingsFile, readSettingsFiles } from "../settings";
+import {
+  decidingScope,
+  managedSettingsPath,
+  readSettingsFile,
+  readSettingsFiles,
+  type SettingsFile,
+  toggleScope,
+} from "../settings";
 import { put } from "./configFixture";
 
 const tmp = useTmpDir();
@@ -108,5 +115,36 @@ describe("readSettingsFile", () => {
       data: { disableAllHooks: true },
       error: null,
     });
+  });
+});
+
+describe("decidingScope / toggleScope", () => {
+  const f = (scope: SettingsFile["scope"], data: Record<string, unknown> | null): SettingsFile => ({
+    scope,
+    path: `/${scope}.json`,
+    exists: data !== null,
+    data,
+    error: null,
+  });
+  const files = [
+    f("user", { disableAllHooks: true, enabledPlugins: { "a@m": true, "b@m": true } }),
+    f("project", { enabledPlugins: { "b@m": false }, permissions: { defaultMode: "plan" } }),
+    f("local", { permissions: {} }),
+    f("managed", { autoMemoryEnabled: false }),
+  ];
+
+  it("finds the highest-precedence file that sets a value", () => {
+    expect(decidingScope(files, ["disableAllHooks"])).toBe("user");
+    expect(decidingScope(files, ["enabledPlugins", "b@m"])).toBe("project");
+    expect(decidingScope(files, ["permissions", "defaultMode"])).toBe("project");
+    expect(decidingScope(files, ["autoMemoryEnabled"])).toBe("managed");
+    expect(decidingScope(files, ["theme"])).toBeNull();
+  });
+
+  it("changes a toggle where it is decided, but never in the shared project file", () => {
+    expect(toggleScope(files, ["disableAllHooks"])).toBe("user");
+    expect(toggleScope(files, ["enabledPlugins", "b@m"])).toBe("local");
+    expect(toggleScope(files, ["autoMemoryEnabled"])).toBe("managed");
+    expect(toggleScope(files, ["theme"])).toBe("user");
   });
 });

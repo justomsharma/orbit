@@ -1,6 +1,6 @@
 import { post } from "../bus";
 import * as store from "../store";
-import { Badge, Empty, matches, Row, Section, Switch } from "./parts";
+import { Badge, decided, Empty, matches, Row, Section, Switch } from "./parts";
 
 export function PluginsSection() {
   const s = store.setup.value!;
@@ -43,9 +43,10 @@ export function PluginsSection() {
                 actions={
                   <Switch
                     on={p.enabled}
+                    disabled={decided("enabledPlugins", p.id)?.scope === "managed"}
                     label={`${p.name} ${p.enabled ? "on" : "off"}`}
                     onChange={(enabled) =>
-                      post({ type: "setup:plugin", id: p.id, enabled, scope: "user" })
+                      post({ type: "setup:plugin", id: p.id, enabled, scope: "auto" })
                     }
                   />
                 }
