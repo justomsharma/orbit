@@ -182,9 +182,22 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
       searches.get(d)?.abort();
       const ac = new AbortController();
       searches.set(d, ac);
-      const hits = await searchMessages(d.sessions(), msg.query, { signal: ac.signal });
+      const files = d.sessions();
+      let searched = 0;
+      let last = Date.now();
+      const hits = await searchMessages(files, msg.query, {
+        signal: ac.signal,
+        onProgress: (done, total) => {
+          searched = done;
+          // A few updates a second is plenty for "Searched 45 of 117 chats".
+          if (ac.signal.aborted || Date.now() - last < 250) return;
+          last = Date.now();
+          d.post({ type: "search", req: msg.req, hits: [], done: false, searched: done, total });
+        },
+      });
       // A newer search replaced this one: its results would be stale.
-      if (!ac.signal.aborted) d.post({ type: "search", req: msg.req, hits, done: true });
+      if (!ac.signal.aborted)
+        d.post({ type: "search", req: msg.req, hits, done: true, searched, total: files.length });
       return true;
     }
   }

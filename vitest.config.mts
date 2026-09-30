@@ -8,7 +8,8 @@ export default defineConfig({
   },
   test: {
     include: ["src/**/*.test.{ts,tsx}", "test/**/*.test.{ts,tsx}"],
-    exclude: ["test/integration/**", "test/perf/**", "node_modules/**"],
+    // test/local: probes against this machine's real ~/.claude (git-ignored); npm run test:local.
+    exclude: ["test/integration/**", "test/perf/**", "test/local/**", "node_modules/**"],
     testTimeout: 15000,
   },
 });

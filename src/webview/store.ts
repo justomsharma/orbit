@@ -43,7 +43,13 @@ export const promptQuery = signal("");
 /** Search inside messages, and the answer to the latest search only. */
 export const inMessages = signal(false);
 export const messageSearch = signal<{ req: string; query: string } | null>(null);
-export const messageHits = signal<{ req: string; hits: MessageHit[]; done: boolean } | null>(null);
+export const messageHits = signal<{
+  req: string;
+  hits: MessageHit[];
+  done: boolean;
+  searched?: number;
+  total?: number;
+} | null>(null);
 
 /** Host replies to Setup forms: request id → whether the change was made. */
 export const results = signal<Record<string, boolean>>({});

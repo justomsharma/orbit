@@ -207,7 +207,15 @@ export type HostMsg =
   | { type: "chat:details"; id: string; files: ChangedFileView[] }
   | { type: "prompts"; items: PromptEntry[] }
   /** Search results for request `req`; `done` false while more chats are still being read. */
-  | { type: "search"; req: string; hits: MessageHit[]; done: boolean }
+  | {
+      type: "search";
+      req: string;
+      hits: MessageHit[];
+      done: boolean;
+      /** How many chats were read so far, of `total`. */
+      searched?: number;
+      total?: number;
+    }
   /** Whether the change a form asked for (by its request id) was made. */
   | { type: "setup:result"; req: string; ok: boolean }
   | { type: "loading" }

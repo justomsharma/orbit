@@ -52,10 +52,12 @@ export function MessageResults() {
         Type at least two letters to search everything you and Claude wrote.
       </Empty>
     );
-  if (!res)
+  if (!res?.done)
     return (
       <div class="loading" role="status">
-        Searching your chats…
+        {res?.total
+          ? `Searched ${res.searched ?? 0} of ${res.total} chats…`
+          : "Searching your chats…"}
       </div>
     );
   const hits = res.hits.filter((h) => passesFilter(h.sessionId));

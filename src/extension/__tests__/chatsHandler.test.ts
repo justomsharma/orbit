@@ -237,6 +237,16 @@ describe("handleChats: search", () => {
     expect(m.hits.map((h) => h.sessionId)).toEqual([id]);
   });
 
+  it("reports progress while it reads, then the results", async () => {
+    const { handle, posted, deps } = setup();
+    const many = Array.from({ length: 30 }, () => deps.sessions()[0]!);
+    deps.sessions = () => many;
+    await handle({ type: "search", query: "parser", req: "s2" });
+    const msgs = posted.filter((m) => m.type === "search");
+    expect(msgs.at(-1)).toMatchObject({ req: "s2", done: true, searched: 30, total: 30 });
+    expect(msgs.slice(0, -1).every((m) => m.done === false && m.hits.length === 0)).toBe(true);
+  });
+
   it("leaves other messages to other handlers", async () => {
     const { handle } = setup();
     expect(await handle({ type: "refresh" })).toBe(false);

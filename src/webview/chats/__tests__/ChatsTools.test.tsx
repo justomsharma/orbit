@@ -283,6 +283,27 @@ describe("Search inside messages", () => {
     expect(screen.getByText("Golden", { selector: "mark" })).toBeTruthy();
   });
 
+  it("shows how far a long search has got", async () => {
+    store.inMessages.value = true;
+    render(<ChatsView />);
+    fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
+      target: { value: "golden" },
+    });
+    await waitFor(() => expect(sent.some((m) => m.type === "search")).toBe(true));
+    const { req } = sent.find((m) => m.type === "search") as { req: string };
+    act(() =>
+      store.applyHostMessage({
+        type: "search",
+        req,
+        done: false,
+        hits: [],
+        searched: 45,
+        total: 117,
+      }),
+    );
+    expect(screen.getByRole("status").textContent).toMatch(/45 of 117 chats/);
+  });
+
   it("ignores answers to an older search", () => {
     store.inMessages.value = true;
     render(<ChatsView />);
