@@ -277,3 +277,36 @@
   background: var(--active);
   color: var(--active-fg);
 }
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  background: var(--hover);
+}
+
+.link-btn.on {
+  color: var(--vscode-textLink-foreground, var(--accent));
+}
+
+.link-btn:focus-visible {
+  outline: 1px solid var(--focus);
+}

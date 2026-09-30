@@ -100,7 +100,7 @@ function ChatRow({ vm, active, now, renaming, onRename }: RowProps) {
         </div>
         <div class="chat-meta">
           {vm.live ? (
-            <span class={`live-label ${vm.live.status}`}>{LIVE_LABEL[vm.live.status]} ·</span>
+            <span class={`live-label ${vm.live.status}`}>{LIVE_LABEL[vm.live.status]} · </span>
           ) : null}
           {meta}
           {vm.tags.length ? (
@@ -410,14 +410,26 @@ function ChatList() {
           />
           <kbd class="hint">/</kbd>
         </div>
-        <label class="check" title="Also search everything you and Claude wrote in your chats">
-          <input
-            type="checkbox"
-            checked={store.inMessages.value}
-            onChange={(e) => (store.inMessages.value = (e.target as HTMLInputElement).checked)}
-          />
-          In messages
-        </label>
+        <div class="toolbar-row">
+          <label class="check" title="Also search everything you and Claude wrote in your chats">
+            <input
+              type="checkbox"
+              checked={store.inMessages.value}
+              onChange={(e) => (store.inMessages.value = (e.target as HTMLInputElement).checked)}
+            />
+            In messages
+          </label>
+          <button
+            type="button"
+            class={`link-btn${filtersOpen || narrowed() ? " on" : ""}`}
+            aria-label="More filters"
+            aria-expanded={filtersOpen || narrowed()}
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            <Icon name="filter" />
+            Filters{narrowed() ? " (on)" : ""}
+          </button>
+        </div>
         <fieldset class="chips">
           <legend class="sr-only">Filter chats</legend>
           {hasWorkspace ? (
@@ -426,12 +438,6 @@ function ChatList() {
           <Chip value="all" label="All" count={all.length} />
           <Chip value="pinned" label="Pinned" />
           {liveCount > 0 ? <Chip value="live" label="Running" count={liveCount} /> : null}
-          <IconButton
-            icon="filter"
-            label="More filters"
-            pressed={filtersOpen || narrowed()}
-            onClick={() => setFiltersOpen(!filtersOpen)}
-          />
         </fieldset>
         {filtersOpen || narrowed() ? <FilterRow /> : null}
       </div>
