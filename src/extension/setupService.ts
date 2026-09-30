@@ -242,6 +242,7 @@ export class SetupService {
       memory,
       missingCommands,
       missingHookScripts,
+      platform: this.d.platform,
     });
     return {
       workspace,

@@ -3,6 +3,7 @@ import {
   hookFormError,
   itemFormError,
   mcpFormError,
+  needsCmd,
   splitCommand,
   windowsLaunch,
 } from "../validate";
@@ -65,6 +66,13 @@ describe("hookFormError / itemFormError", () => {
     expect(itemFormError({ name: "", description: "x" })).toMatch(/name/i);
     expect(itemFormError({ name: "x", description: " " })).toMatch(/description/i);
     expect(itemFormError({ name: "x", description: "d".repeat(501) })).toMatch(/too long/);
+  });
+});
+
+describe("needsCmd", () => {
+  it("is true only for script shims, never for cmd itself or real programs", () => {
+    expect(["npx", "NPM", "yarn", "run.CMD", "a/b/tool.bat"].every(needsCmd)).toBe(true);
+    expect(["cmd", "node", "srv.exe", "python"].some(needsCmd)).toBe(false);
   });
 });
 

@@ -23,7 +23,7 @@ import { MODE_LABELS, riskWarning } from "../features/setup/risk";
 import { decidingScope, readSettingsFiles, toggleScope } from "../features/setup/settings";
 import { newItem } from "../features/setup/templates";
 import { parseViewMsg, type ViewMsg } from "../shared/protocol";
-import { windowsLaunch } from "../shared/validate";
+import { needsCmd, windowsLaunch } from "../shared/validate";
 import type { SetupSnapshot } from "./setupService";
 
 export interface SetupHandlerDeps {
@@ -295,11 +295,8 @@ async function run(msg: SetupMsg, d: SetupHandlerDeps, state: { changed: boolean
       const launch = wrap
         ? windowsLaunch(msg.command!, msg.args ?? [])
         : { command: msg.command, args: msg.args ?? [] };
-      const needsCmd =
-        d.platform === "win32" &&
-        msg.scope === "project" &&
-        !!msg.command &&
-        windowsLaunch(msg.command, []).command === "cmd";
+      const plainInShared =
+        d.platform === "win32" && msg.scope === "project" && !!msg.command && needsCmd(msg.command);
       const server: Record<string, unknown> =
         msg.transport === "stdio"
           ? {
@@ -334,7 +331,7 @@ async function run(msg: SetupMsg, d: SetupHandlerDeps, state: { changed: boolean
           platform: d.platform,
         }),
         `Add the MCP server "${msg.name}" for ${where}?${
-          needsCmd
+          plainInShared
             ? ` The shared file keeps plain "${msg.command}" for teammates on Mac and Linux; on this Windows machine Claude may need "cmd /c ${msg.command} …" to start it.`
             : ""
         }`,

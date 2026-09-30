@@ -85,6 +85,11 @@ export function itemFormError(f: { name: string; description: string }): string 
 /** Programs Windows can only start through cmd (npm's shims and batch files). */
 const NEEDS_CMD = /^(npx|npm|pnpm|pnpx|yarn|bunx)$|\.(cmd|bat)$/i;
 
+/** Does this program need `cmd /c` to start on native Windows? (Never true for cmd itself.) */
+export function needsCmd(command: string): boolean {
+  return NEEDS_CMD.test(command.split(/[\\/]/).pop() ?? command);
+}
+
 /**
  * On native Windows, Claude Code's docs say stdio servers started with npx
  * (and other script shims) need `cmd /c` in front.
@@ -93,8 +98,5 @@ export function windowsLaunch(
   command: string,
   args: string[],
 ): { command: string; args: string[] } {
-  const base = command.split(/[\\/]/).pop() ?? command;
-  return NEEDS_CMD.test(base)
-    ? { command: "cmd", args: ["/c", command, ...args] }
-    : { command, args };
+  return needsCmd(command) ? { command: "cmd", args: ["/c", command, ...args] } : { command, args };
 }

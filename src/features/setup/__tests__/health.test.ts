@@ -88,6 +88,30 @@ describe("checkHealth", () => {
     expect(checkHealth(input())).toEqual([]);
   });
 
+  it("on Windows, flags a personal server started with plain npx", () => {
+    const mcp = [
+      server({ name: "fs", command: "npx", args: ["-y", "srv"] }),
+      server({ name: "ok", command: "cmd", args: ["/c", "npx", "-y", "srv"] }),
+      server({ name: "team", scope: "project", source: "/w/.mcp.json", command: "npx" }),
+    ];
+    const issues = checkHealth(input({ mcp, platform: "win32" }));
+    expect(issues.map((i) => i.id)).toEqual(["mcp-windows-cmd:user:fs"]);
+    expect(issues[0]).toMatchObject({
+      severity: "warning",
+      claudePrompt: expect.stringMatching(/cmd \/c/),
+    });
+    expect(checkHealth(input({ mcp, platform: "darwin" }))).toEqual([]);
+  });
+
+  it("keeps issue ids apart for same-named servers from different plugins", () => {
+    const mcp = [
+      server({ name: "db", scope: "plugin", plugin: "a@m", command: "gone" }),
+      server({ name: "db", scope: "plugin", plugin: "b@m", command: "gone" }),
+    ];
+    const ids = checkHealth(input({ mcp, missingCommands: new Set(["gone"]) })).map((i) => i.id);
+    expect(new Set(ids).size).toBe(2);
+  });
+
   it("flags a settings file Claude can't read, with a Fix-with-Claude prompt", () => {
     const [i] = checkHealth(
       input({

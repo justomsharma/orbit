@@ -4,6 +4,7 @@
  * use to fix it. Pure — every file-system fact arrives in `HealthInput`.
  */
 import * as path from "node:path";
+import { needsCmd } from "../../shared/validate";
 import type { AgentInfo } from "./agents";
 import { settingsCatalog, unknownKeys } from "./catalog";
 import type { CommandInfo } from "./commands";
@@ -58,6 +59,7 @@ export interface HealthInput {
   missingCommands: Set<string>;
   /** Ids of hooks whose script file does not exist. */
   missingHookScripts: Set<string>;
+  platform?: NodeJS.Platform;
 }
 
 const MEMORY_INDEX_LINES = 200;
@@ -263,9 +265,11 @@ export function checkHealth(h: HealthInput): Issue[] {
 
   // MCP servers
   for (const m of h.mcp) {
+    // Plugin servers can share a name, so the plugin is part of the id.
+    const who = m.plugin ? `plugin:${m.plugin}:${m.name}` : `${m.scope}:${m.name}`;
     if (m.transport === "stdio" && m.command && h.missingCommands.has(m.command)) {
       add({
-        id: `mcp-command:${m.scope}:${m.name}`,
+        id: `mcp-command:${who}`,
         severity: "error",
         area: "mcp",
         title: `MCP server "${m.name}" can't start`,
@@ -273,9 +277,27 @@ export function checkHealth(h: HealthInput): Issue[] {
         file: m.plugin ? null : m.source,
         claudePrompt: `My MCP server "${m.name}" runs the command "${m.command}", which isn't installed or isn't on my PATH. Help me install it or correct the server configuration.`,
       });
+    } else if (
+      h.platform === "win32" &&
+      m.transport === "stdio" &&
+      m.command &&
+      !m.plugin &&
+      m.scope !== "project" &&
+      needsCmd(m.command)
+    ) {
+      // Claude Code's docs: on native Windows, stdio servers started with npx need cmd /c.
+      add({
+        id: `mcp-windows-cmd:${who}`,
+        severity: "warning",
+        area: "mcp",
+        title: `MCP server "${m.name}" may not start on Windows`,
+        detail: `On Windows, Claude Code starts "${m.command}" servers through "cmd /c ${m.command} …".`,
+        file: m.source,
+        claudePrompt: `My MCP server "${m.name}" is started with "${m.command}" directly. On native Windows Claude Code needs "cmd /c ${m.command} …" for this. Please update its configuration in ${m.source} to use command "cmd" with "/c" and "${m.command}" as the first arguments, keeping everything else the same.`,
+      });
     } else if (m.problem) {
       add({
-        id: `mcp-problem:${m.scope}:${m.name}`,
+        id: `mcp-problem:${who}`,
         severity: "warning",
         area: "mcp",
         title: `MCP server "${m.name}" looks incomplete`,
