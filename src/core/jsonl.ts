@@ -11,7 +11,7 @@ export function forEachJsonLine(text: string, fn: (obj: JsonObject) => void): vo
     if (end === -1) end = text.length;
     const line = text.slice(start, end).trim();
     start = end + 1;
-    if (!line || line[0] !== "{") continue;
+    if (!line.startsWith("{")) continue;
     let v: unknown;
     try {
       v = JSON.parse(line);
