@@ -77,15 +77,21 @@ function Today() {
   const t = u.today;
   const tokens = t.tokens.input + t.tokens.output + t.tokens.cacheRead + t.tokens.cacheWrite;
   return (
-    <section class="tiles" aria-label="Today">
-      <StatTile
-        label="API value today"
-        value={formatCost(t.cost)}
-        delta={costDelta(t.cost, u.yesterday.cost)}
-        hint="What today's usage would cost at API list prices."
-      />
-      <StatTile label="Replies" value={t.messages.toLocaleString()} />
-      <StatTile label="Tokens" value={formatTokens(tokens)} />
+    <section aria-label="Today">
+      <div class="tiles">
+        <StatTile
+          label="API value today"
+          value={formatCost(t.cost)}
+          delta={costDelta(t.cost, u.yesterday.cost)}
+          hint="What today's usage would cost at API list prices."
+        />
+        <StatTile label="Replies" value={t.messages.toLocaleString()} />
+        <StatTile label="Tokens" value={formatTokens(tokens)} />
+      </div>
+      <p class="hero-note tiles-note">
+        API value = what this usage would cost at API list prices. On a Pro or Max plan you pay your
+        subscription instead.
+      </p>
     </section>
   );
 }

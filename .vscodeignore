@@ -1,6 +1,7 @@
 **
 !dist/extension.js
 !dist/statusline-tap.js
+!dist/uninstall.js
 !dist/webview/**
 !media/**
 !package.json

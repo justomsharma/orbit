@@ -8,10 +8,9 @@ import type { QuotaFile } from "../tap/statusline";
 
 const INDEX_FILE = "usage-index.json";
 const PERSIST_EVERY_MS = 60_000;
-const DAY = 24 * 3600_000;
 
 export interface QuotaSource {
-  status(): Promise<{ enabled: boolean }>;
+  status(): Promise<{ enabled: boolean; shadowed?: boolean }>;
   readQuota(): Promise<QuotaFile | null>;
 }
 
@@ -25,7 +24,8 @@ export interface UsageSnapshot {
   heat: { day: string; tokens: number }[];
   recap: Recap;
   recapMarkdown: string;
-  quota: { enabled: boolean; data: QuotaFile | null };
+  /** `shadowed`: a project statusline hides Orbit's there, so limits won't update in it. */
+  quota: { enabled: boolean; shadowed: boolean; data: QuotaFile | null };
   pricingAsOf: string;
 }
 
@@ -41,6 +41,7 @@ export class UsageService {
   private index: UsageIndex | null = null;
   private dirty = false;
   private lastPersist = 0;
+  private last: { key: string; snap: UsageSnapshot } | null = null;
 
   constructor(
     private readonly home: string,
@@ -62,24 +63,39 @@ export class UsageService {
     if (changed) this.dirty = true;
     if (this.dirty && now - this.lastPersist > PERSIST_EVERY_MS) await this.flush(now);
 
-    const r = index.records();
     const today = startOfDay(now);
-    const end = now + 1;
     const [status, data] = await Promise.all([this.quota.status(), this.quota.readQuota()]);
+    // Nothing new since last time (same day, same quota, same chats): reuse it.
+    const newest = sessions.reduce((m, x) => Math.max(m, x.lastActiveAt), 0);
+    const key = [
+      today,
+      status.enabled,
+      status.shadowed,
+      data?.updatedAt,
+      sessions.length,
+      newest,
+    ].join("|");
+    if (!changed && this.last?.key === key) return this.last.snap;
+
+    const r = index.records();
+    const end = now + 1;
     const recap = weeklyRecap(r, sessions, now);
-    return {
+    const snap: UsageSnapshot = {
       ready: true,
       today: summarize(r, today, end),
-      yesterday: summarize(r, today - DAY, today),
+      // Calendar days, so a daylight-saving change can't shift "yesterday".
+      yesterday: summarize(r, startOfDay(now, 1), today),
       week: summarize(r, startOfDay(now, 6), end),
       month: summarize(r, startOfDay(now, 29), end),
       all: summarize(r, 0, end),
       heat: heatmap(r, now, 26),
       recap,
       recapMarkdown: recapMarkdown(recap),
-      quota: { enabled: status.enabled, data },
+      quota: { enabled: status.enabled, shadowed: status.shadowed === true, data },
       pricingAsOf: PRICING_AS_OF,
     };
+    this.last = { key, snap };
+    return snap;
   }
 
   /** Saves the index to Orbit's storage (also called on shutdown). */

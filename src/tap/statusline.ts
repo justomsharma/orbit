@@ -8,7 +8,7 @@
  * a broken statusline would be worse than a missing quota.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface Window {
@@ -81,17 +81,30 @@ export function defaultLine(s: StatusInput | null): string {
   return parts.filter(Boolean).join(" · ");
 }
 
+/** Where Git for Windows puts bash.exe (the one Claude Code uses, not WSL's). */
+function gitBashCandidates(env: Record<string, string | undefined>): string[] {
+  const out: string[] = [];
+  if (env.CLAUDE_CODE_GIT_BASH_PATH) out.push(env.CLAUDE_CODE_GIT_BASH_PATH);
+  for (const base of [env.ProgramFiles, env.ProgramW6432, env["ProgramFiles(x86)"]]) {
+    if (base) out.push(`${base}\\Git\\bin\\bash.exe`);
+  }
+  if (env.LOCALAPPDATA) out.push(`${env.LOCALAPPDATA}\\Programs\\Git\\bin\\bash.exe`);
+  return out;
+}
+
 /**
- * The shell Claude Code itself would use for a statusline command: sh on
- * macOS/Linux; on Windows Git Bash when present (we were launched from it),
+ * The shell Claude Code itself uses for a statusline command: sh on macOS/Linux;
+ * on Windows Git Bash when installed (by its real path, never WSL's bash),
  * otherwise PowerShell.
  */
 export function innerShell(
   platform: NodeJS.Platform,
   env: Record<string, string | undefined>,
+  exists: (p: string) => boolean = existsSync,
 ): { file: string; args: string[] } {
   if (platform !== "win32") return { file: "/bin/sh", args: ["-c"] };
-  if (env.MSYSTEM || env.SHELL?.includes("bash")) return { file: "bash", args: ["-c"] };
+  const bash = gitBashCandidates(env).find((p) => exists(p));
+  if (bash) return { file: bash, args: ["-c"] };
   return { file: "powershell.exe", args: ["-NoProfile", "-NonInteractive", "-Command"] };
 }
 
@@ -105,8 +118,16 @@ function readJson(p: string): unknown {
 
 function writeAtomic(p: string, text: string): void {
   const tmp = `${p}.${process.pid}.tmp`;
-  writeFileSync(tmp, text);
-  renameSync(tmp, p);
+  try {
+    writeFileSync(tmp, text);
+    renameSync(tmp, p);
+  } catch (e) {
+    // e.g. Windows EPERM while VS Code is reading quota.json: drop the temp file.
+    try {
+      unlinkSync(tmp);
+    } catch {}
+    throw e;
+  }
 }
 
 export interface TapDeps {
@@ -130,8 +151,11 @@ export function runTap(input: string, dir: string, deps: TapDeps): string {
   if (typeof inner === "string" && inner.trim()) {
     try {
       return deps.runInner(inner, input);
-    } catch {
-      // Fall through to Orbit's own line.
+    } catch (e) {
+      // A script can exit non-zero after printing its line (e.g. ending in `[ -n "$x" ] && echo`);
+      // show what it printed, like Claude does. Otherwise fall through to Orbit's own line.
+      const printed = (e as { stdout?: unknown }).stdout;
+      if (typeof printed === "string" && printed.trim()) return printed;
     }
   }
   return defaultLine(parsed);
@@ -146,6 +170,8 @@ export function runInnerCommand(command: string, input: string): string {
     timeout: 5000,
     windowsHide: true,
   });
-  if (r.error || r.status !== 0) throw r.error ?? new Error(`exit ${r.status}`);
+  if (r.error || r.status !== 0) {
+    throw Object.assign(r.error ?? new Error(`exit ${r.status}`), { stdout: r.stdout ?? "" });
+  }
   return r.stdout;
 }

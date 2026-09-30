@@ -29,7 +29,8 @@ export function recapPng(
 
   const font = (size: number, weight = 400) => `${weight} ${size}px ${fontFamily}`;
   const from = new Date(r.from).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const to = new Date(r.to).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // `to` is exclusive (start of tomorrow): show the last day included.
+  const to = new Date(r.to - 1).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
   c.fillStyle = "#9aa4bf";
   c.font = font(28);
@@ -60,8 +61,15 @@ export function recapPng(
     r.models.length ? `With ${[...new Set(r.models.map(modelLabel))].join(", ")}` : null,
     r.cost !== null ? `${formatCost(r.cost)} of API value` : null,
   ].filter((l): l is string => l !== null);
+  // Keep text clear of the chart on the right.
+  const fit = (text: string, max: number) => {
+    if (c.measureText(text).width <= max) return text;
+    let t = text;
+    while (t.length > 1 && c.measureText(`${t}…`).width > max) t = t.slice(0, -1);
+    return `${t}…`;
+  };
   lines.slice(0, 4).forEach((l, i) => {
-    c.fillText(l, 72, 390 + i * 46);
+    c.fillText(fit(l, 680), 72, 390 + i * 46);
   });
 
   // Seven small columns: tokens per day this week, weekday initials below.

@@ -128,6 +128,8 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       });
     }
     // Usage second: the first full index of a large history can take a few seconds.
+    // Only while the sidebar is visible; it refreshes as soon as it is shown again.
+    if (!this.view?.visible) return;
     try {
       this.lastUsage = await this.d.usage.snapshot(snap.items, Date.now());
       if (this.view?.visible) this.postOnce("usage", { type: "usage", data: this.lastUsage });

@@ -76,7 +76,7 @@ export function sampleUsage(over: Partial<UsageSnapshot> = {}, now = Date.now())
       models: ["claude-opus-5-5"],
     },
     recapMarkdown: "## My week with Claude Code\n- 12 chats",
-    quota: { enabled: false, data: null },
+    quota: { enabled: false, shadowed: false, data: null },
     pricingAsOf: "2026-09-30",
     ...over,
   };

@@ -38,6 +38,7 @@ beforeEach(() => {
   sent.length = 0;
   setPost((m) => sent.push(m));
   store.usage.value = null;
+  store.now.value = Date.now();
   store.range.value = "month";
   store.sessions.value = [chat()];
   store.here.value = [ID];
@@ -70,9 +71,11 @@ describe("UsageView", () => {
 
   it("shows the 5-hour and weekly meters when Claude has reported them", () => {
     const now = Date.now();
+    store.now.value = now;
     store.usage.value = sampleUsage({
       quota: {
         enabled: true,
+        shadowed: false,
         data: {
           v: 1,
           updatedAt: now - 60_000,
@@ -93,9 +96,39 @@ describe("UsageView", () => {
   });
 
   it("explains where plan limits come from while waiting for the first report", () => {
-    store.usage.value = sampleUsage({ quota: { enabled: true, data: null } });
+    store.usage.value = sampleUsage({ quota: { enabled: true, shadowed: false, data: null } });
     render(<UsageView />);
     expect(screen.getByText(/next message in a terminal/i)).toBeTruthy();
+  });
+
+  it("says when a project's own statusline hides Orbit's there", () => {
+    store.usage.value = sampleUsage({ quota: { enabled: true, shadowed: true, data: null } });
+    render(<UsageView />);
+    expect(screen.getByText(/project sets its own statusline/i)).toBeTruthy();
+  });
+
+  it("shows a window that already reset as reset, not as stale numbers", () => {
+    const now = Date.now();
+    store.usage.value = sampleUsage({
+      quota: {
+        enabled: true,
+        shadowed: false,
+        data: {
+          v: 1,
+          updatedAt: now - 6 * 3600_000,
+          sessionId: null,
+          model: null,
+          contextPct: null,
+          costUsd: null,
+          fiveHour: { pct: 97, resetsAt: now - 3600_000 },
+          sevenDay: null,
+          spendLimit: null,
+        },
+      },
+    });
+    render(<UsageView />);
+    expect(screen.queryByText("97%")).toBeNull();
+    expect(screen.getByText(/5-hour limit reset/i)).toBeTruthy();
   });
 
   it("copies the weekly recap", () => {

@@ -5,6 +5,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import { parseJsonObject, stringifyLike } from "./json";
 
 /** The file changed between preview and write (or after Orbit's edit, for undo). */
+/** Backups can contain secrets (settings `env`): only the person may read them. */
+const PRIVATE_FILE = 0o600;
+const PRIVATE_DIR = 0o700;
+
 export class ConflictError extends Error {
   override name = "ConflictError";
 }
@@ -239,6 +243,8 @@ export class SafeWriter {
           },
         });
       } else {
+        // Check again right before deleting, so a write in between is never lost.
+        if (hashOf(await readTarget(entry.file)) !== entry.afterHash) throw conflict();
         await unlink(entry.file);
       }
       await this.mutateLog((all) => {
@@ -269,12 +275,12 @@ export class SafeWriter {
   }
 
   private async saveBackup(file: string, bytes: Buffer, at: number): Promise<string> {
-    await mkdir(this.backupDir, { recursive: true });
+    await mkdir(this.backupDir, { recursive: true, mode: PRIVATE_DIR });
     const stem = `${at}-${basename(file)}-${sha256(bytes).slice(0, 8)}`;
     for (let n = 0; ; n++) {
       const p = join(this.backupDir, n === 0 ? `${stem}.bak` : `${stem}-${n}.bak`);
       try {
-        await writeFile(p, bytes, { flag: "wx" });
+        await writeFile(p, bytes, { flag: "wx", mode: PRIVATE_FILE });
         return p;
       } catch (e) {
         if (errCode(e) !== "EEXIST") throw e;
@@ -304,8 +310,10 @@ export class SafeWriter {
     return this.locked(LOG_KEY, async () => {
       const all = await this.readLog();
       const removed = fn(all);
-      await mkdir(this.backupDir, { recursive: true });
-      await writeFileAtomic(this.logPath, `${JSON.stringify({ v: 1, entries: all }, null, 2)}\n`);
+      await mkdir(this.backupDir, { recursive: true, mode: PRIVATE_DIR });
+      await writeFileAtomic(this.logPath, `${JSON.stringify({ v: 1, entries: all }, null, 2)}\n`, {
+        mode: PRIVATE_FILE,
+      });
       for (const e of removed) if (e.backup) await unlink(e.backup).catch(() => {});
     });
   }

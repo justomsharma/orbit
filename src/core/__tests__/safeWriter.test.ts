@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -33,6 +34,23 @@ function bakFiles(dir: string): string[] {
 function tmpFiles(dir: string): string[] {
   return readdirSync(dir).filter((n) => n.endsWith(".tmp"));
 }
+
+describe("SafeWriter privacy", () => {
+  // Settings files often hold API keys in `env`; copies must not be readable by others.
+  it.skipIf(process.platform === "win32")(
+    "keeps backups and the undo log private to the person (0600, folder 0700)",
+    async () => {
+      const { d, backups, w } = setup();
+      const f = join(d, "settings.json");
+      writeFileSync(f, '{"env":{"KEY":"secret"}}', { mode: 0o600 });
+      await w.apply(await w.planJson(f, set("a", 1)), "x");
+      const mode = (p: string) => statSync(p).mode & 0o777;
+      expect(mode(backups)).toBe(0o700);
+      for (const b of bakFiles(backups)) expect(mode(join(backups, b))).toBe(0o600);
+      expect(mode(join(backups, "undo.json"))).toBe(0o600);
+    },
+  );
+});
 
 describe("SafeWriter.apply", () => {
   it("writes the new text and returns an undo entry", async () => {

@@ -43,6 +43,9 @@ const tap = {
   logLevel: "info",
 };
 
+// Restores the person's statusline when Orbit is uninstalled.
+const uninstall = { ...tap, entryPoints: ["src/uninstall/main.ts"], outfile: "dist/uninstall.js" };
+
 function copyCss() {
   mkdirSync("dist/webview", { recursive: true });
   // Stylesheets are concatenated into one file the webview loads.
@@ -65,6 +68,11 @@ if (watch) {
   await Promise.all([a.watch(), b.watch(), c.watch()]);
   copyCss();
 } else {
-  await Promise.all([esbuild.build(extension), esbuild.build(webview), esbuild.build(tap)]);
+  await Promise.all([
+    esbuild.build(extension),
+    esbuild.build(webview),
+    esbuild.build(tap),
+    esbuild.build(uninstall),
+  ]);
   copyCss();
 }

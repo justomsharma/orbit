@@ -528,3 +528,17 @@
 .chart .chart-plot {
   margin-top: 14px;
 }
+
+.meter-reset-note {
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.meter-reset-note .codicon {
+  vertical-align: -2px;
+}
+
+.tiles-note {
+  margin-top: 6px;
+}

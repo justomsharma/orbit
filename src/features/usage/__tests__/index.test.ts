@@ -117,6 +117,59 @@ describe("UsageIndex", () => {
     expect(recs[0]!.t).toBe(Date.parse(at(1)));
   });
 
+  it("takes the final output count of a message written over several lines", async () => {
+    const home = tmp();
+    writeSession(home, CWD, (c) => [
+      L.assistant(c, "claude-opus-5-5", at(1), { id: "msg_A", output: 1 }),
+      L.assistant(c, "claude-opus-5-5", at(2), { id: "msg_A", output: 120 }),
+      L.assistant(c, "claude-opus-5-5", at(3), { id: "msg_A", output: 500 }),
+    ]);
+    const [r] = (await indexed(home)).records();
+    expect(r!.output).toBe(500);
+    expect(r!.t).toBe(Date.parse(at(1)));
+  });
+
+  it("keeps the fuller copy when the same message appears in two chats", async () => {
+    const home = tmp();
+    writeSession(home, CWD, (c) => [
+      L.assistant(c, "claude-opus-5-5", at(2), { id: "msg_A", output: 40 }),
+    ]);
+    writeSession(home, "C:\\work\\blog", (c) => [
+      L.assistant(c, "claude-opus-5-5", at(5), { id: "msg_A", output: 400 }),
+    ]);
+    const [r] = (await indexed(home)).records();
+    expect(r!.output).toBe(400);
+  });
+
+  it("updates a message whose final line arrives in a later pass", async () => {
+    const home = tmp();
+    const s = writeSession(home, CWD, (c) => [
+      L.assistant(c, "claude-opus-5-5", at(1), { id: "msg_A", output: 3 }),
+    ]);
+    const idx = await indexed(home);
+    const { appendFileSync } = await import("node:fs");
+    appendFileSync(
+      s.file,
+      `${JSON.stringify(L.assistant(s.ctx, "claude-opus-5-5", at(2), { id: "msg_A", output: 300 }))}\n`,
+    );
+    expect((await idx.update()).changed).toBe(true);
+    expect(idx.records()[0]!.output).toBe(300);
+  });
+
+  it("re-reads a transcript that was replaced by a different file of the same or larger size", async () => {
+    const home = tmp();
+    const s = writeSession(home, CWD, (c) => [
+      L.assistant(c, "claude-opus-5-5", at(1), { id: "msg_OLD" }),
+    ]);
+    const idx = await indexed(home);
+    const { renameSync, writeFileSync } = await import("node:fs");
+    const replacement = `${JSON.stringify(L.assistant(s.ctx, "claude-opus-5-5", at(2), { id: "msg_NEW", text: "a much longer reply than before" }))}\n`;
+    writeFileSync(`${s.file}.new`, replacement);
+    renameSync(`${s.file}.new`, s.file);
+    await idx.update();
+    expect(idx.records().map((r) => r.id)).toEqual(["msg_NEW"]);
+  });
+
   it("counts a message copied into another chat (resume/fork) once, earliest wins", async () => {
     const home = tmp();
     const a = writeSession(home, CWD, (c) => [

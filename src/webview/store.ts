@@ -23,6 +23,9 @@ export const filter = signal<Filter | null>(saved.filter);
 export const query = signal("");
 export const range = signal<Range>(saved.range);
 export const usage = signal<UsageSnapshot | null>(null);
+/** Ticks every minute so "Updated 2m ago" and "Resets in 1h" stay true while idle. */
+export const now = signal(Date.now());
+if (typeof window !== "undefined") setInterval(() => (now.value = Date.now()), 60_000);
 
 export const loaded = signal(false);
 export const error = signal<string | null>(null);

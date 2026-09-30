@@ -58,6 +58,15 @@ export function Heatmap({ title, cells }: Props) {
           </div>
         ) : null}
       </div>
+      <ul class="sr-only" aria-label={`${title}: active days`}>
+        {cells
+          .filter((c) => c.value > 0)
+          .map((c) => (
+            <li key={c.day}>
+              {c.label}: {c.display}
+            </li>
+          ))}
+      </ul>
       <div class="heat-legend" aria-hidden="true">
         <span>Less</span>
         {[0, 1, 2, 3, 4].map((s) => (

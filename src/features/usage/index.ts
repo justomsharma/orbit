@@ -11,6 +11,8 @@ const PARALLEL = 16;
 interface FileEntry {
   size: number;
   mtimeMs: number;
+  /** File identity; a different one means the transcript was replaced, not appended to. */
+  ino?: number;
   /** Byte just after the last complete line read. */
   offset: number;
   records: UsageRecord[];
@@ -32,7 +34,8 @@ function validEntry(v: unknown): FileEntry | null {
   const records = (e.records as unknown[]).filter(
     (r): r is UsageRecord => typeof obj(r)?.id === "string" && typeof obj(r)?.t === "number",
   );
-  return { size, mtimeMs, offset, records };
+  const ino = typeof e.ino === "number" ? e.ino : undefined;
+  return { size, mtimeMs, offset, records, ...(ino === undefined ? {} : { ino }) };
 }
 
 /**
@@ -42,7 +45,8 @@ function validEntry(v: unknown): FileEntry | null {
  */
 export class UsageIndex {
   private files: Record<string, FileEntry> = {};
-  private readonly ids = new Map<string, Set<string>>();
+  /** Per file: message id → its record, so a later line of the same message can update it. */
+  private readonly ids = new Map<string, Map<string, UsageRecord>>();
   private memo: UsageRecord[] | null = null;
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -64,19 +68,26 @@ export class UsageIndex {
     return run;
   }
 
-  /** Deduped by message id (earliest wins), oldest first. Same array until something changes. */
+  /**
+   * Deduped by message id, oldest first. A message copied into several chats
+   * (resume/fork) is counted once: the earliest copy's time and chat, with the
+   * fullest output count seen. Same array until something changes.
+   */
   records(): UsageRecord[] {
     if (this.memo) return this.memo;
     const all = Object.keys(this.files)
       .sort()
       .flatMap((k) => this.files[k]!.records);
     all.sort((a, b) => a.t - b.t);
-    const seen = new Set<string>();
-    this.memo = all.filter((r) => {
-      if (seen.has(r.id)) return false;
-      seen.add(r.id);
-      return true;
-    });
+    const best = new Map<string, UsageRecord>();
+    for (const r of all) {
+      const first = best.get(r.id);
+      if (!first) best.set(r.id, r);
+      else if (r.output > first.output) {
+        best.set(r.id, { ...r, t: first.t, session: first.session, cwd: first.cwd });
+      }
+    }
+    this.memo = [...best.values()];
     return this.memo;
   }
 
@@ -114,7 +125,8 @@ export class UsageIndex {
     if (e && e.size === st.size && e.mtimeMs === st.mtimeMs) return false;
 
     let removed = false;
-    if (!e || st.size < e.offset) {
+    const replaced = e?.ino !== undefined && st.ino !== 0 && e.ino !== st.ino;
+    if (!e || st.size < e.offset || replaced) {
       removed = e ? this.drop(file) : false;
       e = { size: -1, mtimeMs: -1, offset: 0, records: [] };
       this.files[file] = e;
@@ -124,10 +136,17 @@ export class UsageIndex {
     let added = false;
     const read = await readAppended(file, entry.offset, st.size, (text) =>
       forEachUsage(text, session, (r) => {
-        if (ids.has(r.id)) return;
-        ids.add(r.id);
-        entry.records.push(r);
-        added = true;
+        const seen = ids.get(r.id);
+        if (!seen) {
+          ids.set(r.id, r);
+          entry.records.push(r);
+          added = true;
+        } else if (r.output > seen.output) {
+          // A message is written as several lines; the last carries the final counts.
+          // Keep the first line's time, take the fuller usage.
+          Object.assign(seen, { ...r, t: seen.t });
+          added = true;
+        }
       }),
     );
     entry.offset += read.bytes;
@@ -135,14 +154,15 @@ export class UsageIndex {
     if (read.ok) {
       entry.size = st.size;
       entry.mtimeMs = st.mtimeMs;
+      entry.ino = st.ino;
     }
     return removed || added;
   }
 
-  private idsOf(file: string, e: FileEntry): Set<string> {
+  private idsOf(file: string, e: FileEntry): Map<string, UsageRecord> {
     let s = this.ids.get(file);
     if (!s) {
-      s = new Set(e.records.map((r) => r.id));
+      s = new Map(e.records.map((r) => [r.id, r]));
       this.ids.set(file, s);
     }
     return s;

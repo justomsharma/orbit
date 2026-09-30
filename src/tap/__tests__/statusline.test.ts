@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../test/helpers/tmp";
@@ -80,17 +80,28 @@ describe("defaultLine", () => {
 });
 
 describe("innerShell", () => {
+  const none = () => false;
+
   it("uses sh on macOS and Linux", () => {
-    expect(innerShell("darwin", {})).toEqual({ file: "/bin/sh", args: ["-c"] });
+    expect(innerShell("darwin", {}, none)).toEqual({ file: "/bin/sh", args: ["-c"] });
   });
 
-  it("uses Git Bash on Windows when Claude launched us from it", () => {
-    expect(innerShell("win32", { MSYSTEM: "MINGW64" })).toEqual({ file: "bash", args: ["-c"] });
-    expect(innerShell("win32", { SHELL: "/usr/bin/bash" })).toEqual({ file: "bash", args: ["-c"] });
+  it("uses Git Bash on Windows, like Claude does, by its real path (never WSL's bash)", () => {
+    const env = { LOCALAPPDATA: "C:\\Users\\a\\AppData\\Local" };
+    const gitBash = "C:\\Users\\a\\AppData\\Local\\Programs\\Git\\bin\\bash.exe";
+    expect(innerShell("win32", env, (p) => p === gitBash)).toEqual({ file: gitBash, args: ["-c"] });
   });
 
-  it("uses PowerShell on Windows otherwise", () => {
-    expect(innerShell("win32", {})).toEqual({
+  it("honours CLAUDE_CODE_GIT_BASH_PATH", () => {
+    const env = { CLAUDE_CODE_GIT_BASH_PATH: "D:\\tools\\git\\bin\\bash.exe" };
+    expect(innerShell("win32", env, (p) => p === env.CLAUDE_CODE_GIT_BASH_PATH)).toEqual({
+      file: "D:\\tools\\git\\bin\\bash.exe",
+      args: ["-c"],
+    });
+  });
+
+  it("uses PowerShell on Windows when Git Bash isn't installed", () => {
+    expect(innerShell("win32", {}, none)).toEqual({
       file: "powershell.exe",
       args: ["-NoProfile", "-NonInteractive", "-Command"],
     });
@@ -133,5 +144,27 @@ describe("runTap", () => {
       },
     });
     expect(out).toBe("Opus 5.5 · 42% context");
+  });
+});
+
+describe("runTap robustness", () => {
+  it("shows the person's statusline output even when their command exits non-zero", () => {
+    const dir = tmp();
+    writeFileSync(join(dir, "statusline-inner.json"), JSON.stringify({ command: "x" }));
+    const out = runTap("{}", dir, {
+      now: () => 1,
+      runInner: () => {
+        throw Object.assign(new Error("exit 1"), { stdout: "partial line" });
+      },
+    });
+    expect(out).toBe("partial line");
+  });
+
+  it("leaves no temp files behind when recording fails", () => {
+    const dir = tmp();
+    // quota.json is a directory, so the final rename must fail.
+    mkdirSync(join(dir, "quota.json"));
+    runTap(JSON.stringify(INPUT), dir, { now: () => 1, runInner: () => "" });
+    expect(readdirSync(dir).filter((n) => n.endsWith(".tmp"))).toEqual([]);
   });
 });

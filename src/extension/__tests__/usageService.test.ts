@@ -82,6 +82,25 @@ describe("UsageService", () => {
     expect(typeof snap.recapMarkdown).toBe("string");
   });
 
+  it("reuses the last snapshot when nothing changed (no work on idle refreshes)", async () => {
+    const { home } = fixture();
+    const svc = new UsageService(home, new OrbitStore(join(tmp(), "s")), noQuota);
+    const now = Date.now();
+    const a = await svc.snapshot([], now);
+    const b = await svc.snapshot([], now + 1000);
+    expect(b).toBe(a);
+  });
+
+  it("passes on whether a project statusline hides Orbit's", async () => {
+    const { home } = fixture();
+    const quota = {
+      status: async () => ({ enabled: true, shadowed: true }),
+      readQuota: async () => null,
+    };
+    const svc = new UsageService(home, new OrbitStore(join(tmp(), "s")), quota);
+    expect((await svc.snapshot([], Date.now())).quota.shadowed).toBe(true);
+  });
+
   it("returns an empty but valid snapshot when Claude has no data", async () => {
     const svc = new UsageService(tmp(), new OrbitStore(join(tmp(), "s")), noQuota);
     const snap = await svc.snapshot([], Date.now());

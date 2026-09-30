@@ -162,6 +162,7 @@ const usageMsg = {
   data: sampleUsage({
     quota: {
       enabled: true,
+      shadowed: false,
       data: {
         v: 1,
         updatedAt: now - 120_000,

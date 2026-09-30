@@ -21,14 +21,9 @@ export interface HandlerDeps {
   warn(message: string): void;
 }
 
-const QUOTA_PROBLEM: Record<Exclude<QuotaResult, { ok: true }>["reason"], string> = {
-  "no-node":
-    "Plan limits needs Node.js on your PATH to run its small statusline helper. Install Node.js, then try again.",
-  unparseable:
-    "Claude's settings.json isn't plain JSON (comments or a typo?), so Orbit didn't touch it. Fix the file, then try again.",
-  conflict:
-    "Claude's settings.json changed while Orbit was saving. Nothing was written. Try again.",
-};
+// "not-applied" needs no message: the person cancelled, or the reason was already shown.
+const NO_NODE =
+  "Plan limits needs Node.js on your PATH to run its small statusline helper. Install Node.js, then try again.";
 
 /** Validates every message from the webview, then performs exactly one action for it. */
 export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
@@ -64,8 +59,14 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         if (!d.isKnownLink(m.url)) return;
         return d.openLink(m.url);
       case "quota": {
-        const r = await (m.on ? d.quota.enable() : d.quota.disable());
-        if (!r.ok) d.warn(QUOTA_PROBLEM[r.reason]);
+        try {
+          const r = await (m.on ? d.quota.enable() : d.quota.disable());
+          if (!r.ok && r.reason === "no-node") d.warn(NO_NODE);
+        } catch (e) {
+          d.warn(
+            `Orbit couldn't change plan limits: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
         return d.refresh();
       }
       case "copyRecap": {

@@ -11,6 +11,7 @@ import { Opener } from "./opener";
 import { OrbitState } from "./state";
 import { UsageService, type UsageSnapshot } from "./usageService";
 import { OrbitViewProvider, VIEW_ID } from "./view";
+import { vscodeConfirmHost } from "./vscodeConfirm";
 import { vscodeOpenerHost } from "./vscodeHost";
 
 /** What `activate` returns — used by the integration tests. */
@@ -44,6 +45,8 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     writer,
     findNode: () => findNode(),
     platform: process.platform,
+    confirm: vscodeConfirmHost(context),
+    workspace: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
   });
   const usage = new UsageService(home, store, quota);
   void quota.syncTap().catch((e) => log.warn("Could not refresh the statusline tap", String(e)));

@@ -94,14 +94,45 @@ describe("createHandler", () => {
     expect(log).toEqual(["quota on", "refresh", "quota off", "refresh"]);
   });
 
-  it.each([
-    ["no-node", /needs Node\.js/],
-    ["unparseable", /settings\.json.*isn't plain JSON/],
-    ["conflict", /changed while Orbit was saving/],
-  ] as const)("explains why plan limits could not turn on (%s)", async (reason, text) => {
-    const { handle, log } = setup({ quota: { ok: false, reason } });
+  it("explains when plan limits need Node.js", async () => {
+    const { handle, log } = setup({ quota: { ok: false, reason: "no-node" } });
     await handle({ type: "quota", on: true });
-    expect(log[1]).toMatch(text);
+    expect(log[1]).toMatch(/needs Node\.js/);
+  });
+
+  it("stays quiet when the person cancelled (or the reason was already shown)", async () => {
+    const { handle, log } = setup({ quota: { ok: false, reason: "not-applied" } });
+    await handle({ type: "quota", on: true });
+    expect(log).toEqual(["quota on", "refresh"]);
+  });
+
+  it("reports an unexpected failure instead of doing nothing", async () => {
+    const { handle, log } = setup();
+    const h = createHandler({
+      getSession: () => undefined,
+      opener: {} as never,
+      state: {} as never,
+      quota: {
+        enable: async () => {
+          throw new Error("EPERM: settings.json is read-only");
+        },
+        disable: async () => ({ ok: true }),
+      },
+      recapMarkdown: () => null,
+      copy: async () => {},
+      saveImage: async () => {},
+      refresh: async () => void log.push("refresh"),
+      isKnownLink: () => false,
+      openLink: async () => {},
+      info: () => {},
+      warn: (m) => void log.push(`warn ${m}`),
+    });
+    void handle;
+    await h({ type: "quota", on: true });
+    expect(log).toEqual([
+      "warn Orbit couldn't change plan limits: EPERM: settings.json is read-only",
+      "refresh",
+    ]);
   });
 
   it("copies the weekly recap as Markdown", async () => {

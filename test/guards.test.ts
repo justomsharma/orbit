@@ -52,6 +52,12 @@ const WRITES = [
   /\b(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)\b/,
   /\b(rename|renameSync|rm|rmSync|rmdir|rmdirSync|unlink|unlinkSync|copyFile|copyFileSync|mkdir|mkdirSync|truncate|truncateSync|symlink|symlinkSync|chmod|chmodSync)\s*\(/,
   /workspace\.fs\.(writeFile|delete|rename|copy|createDirectory)/,
+  // Opening a file for writing, low-level writes, copies and editor edits.
+  /\bopen(Sync)?\([^)]*["'](w|wx|w\+|a|ax|a\+|r\+)["']/,
+  /\bfs\.(write|writev|ftruncate)\b/,
+  /\bcp(Sync)?\s*\(/,
+  /\bWorkspaceEdit\b/,
+  /\bworkspace\.applyEdit\b/,
 ];
 
 describe("safety guards", () => {

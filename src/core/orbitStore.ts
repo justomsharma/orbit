@@ -28,14 +28,14 @@ export class OrbitStore {
   /** Replaces the file atomically (temp file + rename), creating the folder if needed. */
   async write(name: string, value: unknown): Promise<void> {
     checkName(name);
-    await mkdir(this.dir, { recursive: true });
-    await writeFileAtomic(join(this.dir, name), JSON.stringify(value));
+    await mkdir(this.dir, { recursive: true, mode: 0o700 });
+    await writeFileAtomic(join(this.dir, name), JSON.stringify(value), { mode: 0o600 });
   }
 
   /** Writes a small text file (e.g. Orbit's statusline tap script) into Orbit's folder. */
   async writeText(name: string, text: string): Promise<void> {
     if (!TEXT_NAME.test(name)) throw new Error(`Invalid Orbit store name: ${JSON.stringify(name)}`);
-    await mkdir(this.dir, { recursive: true });
+    await mkdir(this.dir, { recursive: true, mode: 0o700 });
     await writeFileAtomic(join(this.dir, name), text);
   }
 
