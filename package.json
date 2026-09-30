@@ -1,0 +1,94 @@
+{
+  "name": "orbit",
+  "displayName": "Orbit",
+  "description": "Your home for Claude Code: every chat, usage & cost, and your whole setup in one calm sidebar. 100% local.",
+  "version": "0.1.0",
+  "publisher": "orbit-dev",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.94.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "sessions",
+    "usage",
+    "mcp",
+    "skills",
+    "hooks",
+    "anthropic"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "orbit",
+          "title": "Orbit",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "orbit": [
+        {
+          "type": "webview",
+          "id": "orbit.main",
+          "name": "Orbit"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "orbit.open",
+        "title": "Orbit: Open"
+      },
+      {
+        "command": "orbit.refresh",
+        "title": "Orbit: Refresh"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "orbit.open",
+        "key": "ctrl+alt+o",
+        "mac": "cmd+alt+o"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "package": "npm run build && vsce package --no-dependencies -o dist/"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@testing-library/preact": "3.2.4",
+    "@types/node": "22.20.4",
+    "@types/vscode": "1.94.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2",
+    "happy-dom": "20.14.5",
+    "typescript": "6.0.3",
+    "vitest": "5.0.2"
+  },
+  "dependencies": {
+    "@preact/signals": "2.11.3",
+    "preact": "10.29.8",
+    "valibot": "1.5.0"
+  }
+}
