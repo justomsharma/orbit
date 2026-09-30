@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../test/helpers/tmp";
 import { setSetting } from "../../features/setup/edits";
-import { applyJsonEdit, type ConfirmHost } from "../applyEdit";
+import { applyJsonEdit, applyTextEdit, type ConfirmHost } from "../applyEdit";
 import { SafeWriter } from "../safeWriter";
 
 const tmp = useTmpDir();
@@ -185,6 +185,56 @@ describe("applyJsonEdit", () => {
         label: "Theme",
       });
       expect(ok).toBe(true);
+    });
+  });
+
+  describe("whole-file edits when the file changes while the question is open", () => {
+    const race = (answers: ("apply" | "cancel")[], d: string, f: string) => {
+      const asked: string[] = [];
+      let first = true;
+      const h: ConfirmHost = {
+        confirm: async (s) => {
+          asked.push(s);
+          if (first) {
+            first = false;
+            writeFileSync(f, "Claude's newer edit\n"); // Claude writes while the dialog is open
+          }
+          return answers.shift() ?? "cancel";
+        },
+        showDiff: async () => {},
+        done: async () => {},
+        warn: (m) => asked.push(`warn ${m}`),
+      };
+      return {
+        asked,
+        run: () =>
+          applyTextEdit(new SafeWriter(join(d, "b")), h, {
+            file: f,
+            transform: () => "restored\n",
+            summary: "Restore a.ts?",
+            label: "Restored a.ts",
+          }),
+      };
+    };
+
+    it("asks again instead of overwriting the newer version", async () => {
+      const d = tmp();
+      const f = join(d, "a.ts");
+      writeFileSync(f, "before\n");
+      const { asked, run } = race(["apply", "cancel"], d, f);
+      expect(await run()).toBe(false);
+      expect(readFileSync(f, "utf8")).toBe("Claude's newer edit\n");
+      expect(asked).toHaveLength(2);
+      expect(asked[1]).toMatch(/changed while you were deciding/);
+    });
+
+    it("writes only after the second yes", async () => {
+      const d = tmp();
+      const f = join(d, "a.ts");
+      writeFileSync(f, "before\n");
+      const { run } = race(["apply", "apply"], d, f);
+      expect(await run()).toBe(true);
+      expect(readFileSync(f, "utf8")).toBe("restored\n");
     });
   });
 

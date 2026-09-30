@@ -40,18 +40,14 @@ export function applyJsonEdit(
   host: ConfirmHost,
   edit: JsonEdit,
 ): Promise<boolean> {
-  return applyPlanned(
-    writer,
-    host,
-    () => writer.planJson(edit.file, edit.mutate),
-    edit,
-    (plan) => {
+  return applyPlanned(writer, host, () => writer.planJson(edit.file, edit.mutate), edit, {
+    reverseOf: (plan) => {
       const before =
         plan.before === null || plan.before.trim() === "" ? {} : parseJsonObject(plan.before);
       const after = parseJsonObject(plan.after);
       return before && after ? reverseJsonEdit(before, after) : null;
     },
-  );
+  });
 }
 
 export interface TextEdit {
@@ -68,7 +64,10 @@ export function applyTextEdit(
   host: ConfirmHost,
   edit: TextEdit,
 ): Promise<boolean> {
-  return applyPlanned(writer, host, () => writer.plan(edit.file, edit.transform), edit);
+  // A whole-file edit can't merge with a change made meanwhile, so it asks again.
+  return applyPlanned(writer, host, () => writer.plan(edit.file, edit.transform), edit, {
+    askAgain: true,
+  });
 }
 
 async function applyPlanned(
@@ -76,9 +75,14 @@ async function applyPlanned(
   host: ConfirmHost,
   makePlan: () => Promise<EditPlan>,
   edit: { summary: string; label: string; warning?: string },
-  /** For JSON files: the inverse change, used when the file changed after Orbit's edit. */
-  reverseOf?: (plan: EditPlan) => Mutate | null,
+  opts: {
+    /** For JSON files: the inverse change, used when the file changed after Orbit's edit. */
+    reverseOf?: (plan: EditPlan) => Mutate | null;
+    /** The file changed after the question: ask again instead of re-applying silently. */
+    askAgain?: boolean;
+  } = {},
 ): Promise<boolean> {
+  const { reverseOf } = opts;
   let plan: EditPlan;
   try {
     plan = await makePlan();
@@ -88,15 +92,14 @@ async function applyPlanned(
   }
   if (plan.after === plan.before) return true;
 
-  for (;;) {
-    const answer = await host.confirm(edit.summary, edit.warning);
-    if (answer === "diff") {
+  const ask = async (summary: string): Promise<boolean> => {
+    for (;;) {
+      const answer = await host.confirm(summary, edit.warning);
+      if (answer !== "diff") return answer === "apply";
       await host.showDiff(plan);
-      continue;
     }
-    if (answer !== "apply") return false;
-    break;
-  }
+  };
+  if (!(await ask(edit.summary))) return false;
 
   for (let attempt = 1; ; attempt++) {
     try {
@@ -129,6 +132,12 @@ async function applyPlanned(
         host.warn(message(e2));
         return false;
       }
+      if (plan.after === plan.before) return true;
+      if (
+        opts.askAgain &&
+        !(await ask(`The file changed while you were deciding. ${edit.summary}`))
+      )
+        return false;
     }
   }
 }

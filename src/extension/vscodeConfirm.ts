@@ -24,8 +24,11 @@ export function vscodeConfirmHost(previews: ReadOnlyDocs): ConfirmHost {
     },
     showDiff: async (plan: EditPlan) => {
       const name = path.basename(plan.file);
+      // The exact text Orbit planned from (the file on disk could differ by now).
       const before =
-        plan.before === null ? previews.add("", `${name} (new)`) : vscode.Uri.file(plan.file);
+        plan.before === null
+          ? previews.add("", `${name} (new)`)
+          : previews.add(plan.before, `${name} (now)`);
       const after = previews.add(plan.after, name);
       await vscode.commands.executeCommand(
         "vscode.diff",
