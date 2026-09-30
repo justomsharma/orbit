@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentInfo } from "../agents";
 import { checkHealth, closestKey, type HealthInput, hookScriptPath } from "../health";
 import type { HookEntry } from "../hooks";
+import type { JsonFile } from "../jsonFile";
 import type { McpServer } from "../mcp";
 import type { MemoryInfo } from "../memory";
 import type { InstalledPlugin } from "../plugins";
@@ -47,12 +48,23 @@ const settings = (
   scope: SettingsFile["scope"],
   data: Record<string, unknown> | null,
   error: string | null = null,
+  skipped: SettingsFile["skipped"] = null,
 ): SettingsFile => ({
   scope,
   path: `/${scope}/settings.json`,
   exists: true,
   data,
   error,
+  skipped,
+});
+
+const jsonFile = (over: Partial<JsonFile>): JsonFile => ({
+  path: "/h/.claude.json",
+  exists: true,
+  data: null,
+  error: null,
+  skipped: null,
+  ...over,
 });
 
 const server = (over: Partial<McpServer>): McpServer => ({
@@ -87,6 +99,39 @@ describe("checkHealth", () => {
     expect(i).toMatchObject({ severity: "error", area: "settings", file: "/user/settings.json" });
     expect(i!.title).toMatch(/can't read your user settings/i);
     expect(i!.claudePrompt).toMatch(/trailing commas/);
+  });
+
+  it("says Orbit skipped a settings file too large to show, with nothing to fix", () => {
+    const [i] = checkHealth(input({ settings: [settings("user", null, null, "too-large")] }));
+    expect(i).toMatchObject({ severity: "info", area: "settings", claudePrompt: null, fix: null });
+    expect(i!.title).toBe("Orbit skipped your user settings");
+    expect(i!.detail).toMatch(/larger than 4 MB/);
+    expect(i!.detail).not.toMatch(/ignores/);
+  });
+
+  it("warns when a settings file can't be opened, without asking Claude to fix JSON", () => {
+    const [i] = checkHealth(input({ settings: [settings("local", null, null, "unreadable")] }));
+    expect(i).toMatchObject({ severity: "warning", area: "settings", claudePrompt: null });
+    expect(i!.title).toMatch(/couldn't open your local project settings/);
+  });
+
+  it("says Orbit skipped a huge ~/.claude.json instead of calling its servers broken", () => {
+    const [i] = checkHealth(input({ claudeJson: jsonFile({ skipped: "too-large" }) }));
+    expect(i).toMatchObject({ severity: "info", area: "mcp", claudePrompt: null, fix: null });
+    expect(i!.title).toBe("Orbit skipped ~/.claude.json");
+    expect(i!.detail).toBe(
+      "It is larger than 32 MB, so MCP servers listed there aren't shown here. Claude Code isn't affected.",
+    );
+  });
+
+  it("keeps the error and Fix with Claude for a ~/.claude.json that doesn't parse", () => {
+    const [i] = checkHealth(
+      input({
+        claudeJson: jsonFile({ error: "Not valid JSON: syntax error at line 3, column 1" }),
+      }),
+    );
+    expect(i).toMatchObject({ severity: "error", area: "mcp" });
+    expect(i!.claudePrompt).toMatch(/fix the JSON/);
   });
 
   it("suggests the right name for a mistyped setting", () => {

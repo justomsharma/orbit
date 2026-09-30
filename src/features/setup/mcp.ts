@@ -1,8 +1,8 @@
 import { join } from "node:path";
-import { MiB } from "../../core/fsSafe";
+import { realpathSafe, statSafe } from "../../core/fsSafe";
 import { obj, str } from "../../core/jsonl";
 import { normPath } from "../../core/paths";
-import { readJsonFile } from "./jsonFile";
+import { CLAUDE_JSON_MAX, type JsonFile, readJsonFile } from "./jsonFile";
 import { readPluginMcp } from "./pluginFiles";
 import type { InstalledPlugin } from "./plugins";
 import type { SettingsFile } from "./settings";
@@ -36,10 +36,31 @@ export interface ReadMcpOptions {
   settings: SettingsFile[];
   plugins: InstalledPlugin[];
   platform?: NodeJS.Platform;
+  /** `~/.claude.json` already read by the caller (see `readClaudeJson`), to parse it once. */
+  claudeJsonFile?: JsonFile;
 }
 
 const TRANSPORTS = new Set(["stdio", "http", "sse", "ws"]);
-const CLAUDE_JSON_MAX = 4 * MiB;
+
+let lastClaudeJson: { key: string; file: JsonFile } | null = null;
+
+/**
+ * `~/.claude.json`, links followed. It can be tens of MB and Claude rewrites
+ * it often, so an unchanged file is not parsed again: treat the result as read-only.
+ */
+export async function readClaudeJson(path: string): Promise<JsonFile> {
+  const real = (await realpathSafe(path)) ?? path;
+  const st = await statSafe(real);
+  const key = st?.isFile() ? `${path}|${real}|${st.size}|${st.mtimeMs}` : "";
+  if (key && lastClaudeJson?.key === key) return lastClaudeJson.file;
+  const file = await readJsonFile(path, { maxBytes: CLAUDE_JSON_MAX, followLinks: true });
+  lastClaudeJson = key && file.data ? { key, file } : null;
+  return file;
+}
+
+/** The open folder's `.mcp.json`, links followed like Claude Code does. */
+export const readMcpJson = (workspace: string): Promise<JsonFile> =>
+  readJsonFile(join(workspace, ".mcp.json"), { followLinks: true });
 
 const keys = (v: unknown) => Object.keys(obj(v) ?? {}).sort();
 
@@ -120,12 +141,12 @@ export async function readMcpServers(opts: ReadMcpOptions): Promise<McpServer[]>
       out.push(toServer(name, def, { ...base, approval: approve(name) }));
   };
 
-  const cj = (await readJsonFile(claudeJson, CLAUDE_JSON_MAX)).data;
+  const cj = (opts.claudeJsonFile ?? (await readClaudeJson(claudeJson))).data;
   addAll(cj?.mcpServers, { scope: "user", source: claudeJson, plugin: null });
   if (workspace) {
     const entry = projectEntry(obj(cj?.projects), workspace, platform);
     addAll(entry?.mcpServers, { scope: "local", source: claudeJson, plugin: null });
-    const mcpJson = await readJsonFile(join(workspace, ".mcp.json"));
+    const mcpJson = await readMcpJson(workspace);
     addAll(
       mcpJson.data?.mcpServers,
       { scope: "project", source: mcpJson.path, plugin: null },

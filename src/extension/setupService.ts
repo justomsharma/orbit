@@ -6,11 +6,11 @@ import { effectiveSetting } from "../features/setup/catalog";
 import { type CommandInfo, readCommands } from "../features/setup/commands";
 import { checkHealth, hookScriptPath, type Issue } from "../features/setup/health";
 import { type HookEntry, readHooks, readPluginHooks } from "../features/setup/hooks";
-import { readJsonFile } from "../features/setup/jsonFile";
-import { type McpServer, readMcpServers } from "../features/setup/mcp";
+import { type McpServer, readClaudeJson, readMcpJson, readMcpServers } from "../features/setup/mcp";
 import { type MemoryInfo, readMemory } from "../features/setup/memory";
 import { type Permissions, readPermissions } from "../features/setup/permissions";
 import { type InstalledPlugin, readPlugins } from "../features/setup/plugins";
+import { redactArgs, redactText, redactUrl } from "../features/setup/redact";
 import {
   readSettingsFiles,
   type SettingsFile,
@@ -85,6 +85,38 @@ function toView(f: SettingsFile): SettingsView {
   return { scope: f.scope, path: f.path, exists: f.exists, error: f.error, values };
 }
 
+const maybe = <T>(v: T | null, f: (v: T) => T): T | null => (v === null ? null : f(v));
+
+/**
+ * The snapshot as the webview may see it: tokens in MCP args, URLs and commands,
+ * hook commands and URLs, and the issue text quoting them become "•••". Ids,
+ * paths and names are unchanged, so actions from the view still match the host
+ * snapshot, which keeps the real values (removing a hook compares against them).
+ * Everything posted to the view goes through here.
+ */
+export function viewSnapshot(s: SetupSnapshot): SetupSnapshot {
+  return {
+    ...s,
+    mcp: s.mcp.map((m) => ({
+      ...m,
+      command: maybe(m.command, redactText),
+      args: redactArgs(m.args),
+      url: maybe(m.url, redactUrl),
+    })),
+    hooks: s.hooks.map((h) => ({
+      ...h,
+      command: maybe(h.command, redactText),
+      url: maybe(h.url, redactUrl),
+    })),
+    issues: s.issues.map((i) => ({
+      ...i,
+      title: redactText(i.title),
+      detail: redactText(i.detail),
+      claudePrompt: maybe(i.claudePrompt, redactText),
+    })),
+  };
+}
+
 export interface SetupDeps {
   /** Claude's data folder (`~/.claude`). */
   home: string;
@@ -143,30 +175,31 @@ export class SetupService {
       autoMemoryEnabled: effectiveSetting(settings, "autoMemoryEnabled")?.value,
       autoMemoryDirectory: effectiveSetting(settings, "autoMemoryDirectory")?.value,
     };
-    const [mcp, pluginHooks, skills, agents, commands, memory, claudeJson, mcpJson] =
-      await Promise.all([
-        readMcpServers({
-          home,
-          claudeJson: this.d.claudeJson,
-          workspace,
-          settings,
-          plugins,
-          platform,
-        }),
-        readPluginHooks(plugins),
-        readSkills(home, workspace, roots),
-        readAgents(home, workspace, roots),
-        readCommands(home, workspace, roots),
-        readMemory({
-          home,
-          workspace,
-          settings: memorySettings,
-          platform,
-          userHome: this.d.userHome,
-        }),
-        readJsonFile(this.d.claudeJson, 4 * 1024 * 1024),
-        workspace ? readJsonFile(path.join(workspace, ".mcp.json")) : Promise.resolve(null),
-      ]);
+    // Read once: it can be large, and both the MCP list and the health check need it.
+    const claudeJson = await readClaudeJson(this.d.claudeJson);
+    const [mcp, pluginHooks, skills, agents, commands, memory, mcpJson] = await Promise.all([
+      readMcpServers({
+        home,
+        claudeJson: this.d.claudeJson,
+        claudeJsonFile: claudeJson,
+        workspace,
+        settings,
+        plugins,
+        platform,
+      }),
+      readPluginHooks(plugins),
+      readSkills(home, workspace, roots),
+      readAgents(home, workspace, roots),
+      readCommands(home, workspace, roots),
+      readMemory({
+        home,
+        workspace,
+        settings: memorySettings,
+        platform,
+        userHome: this.d.userHome,
+      }),
+      workspace ? readMcpJson(workspace) : Promise.resolve(null),
+    ]);
     const hooks = readHooks(settings, pluginHooks);
     const permissions = readPermissions(settings);
 

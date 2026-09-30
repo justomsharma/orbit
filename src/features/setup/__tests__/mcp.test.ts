@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../../test/helpers/tmp";
-import { readMcpServers } from "../mcp";
+import { obj } from "../../../core/jsonl";
+import { readClaudeJson, readMcpServers } from "../mcp";
 import type { InstalledPlugin } from "../plugins";
 import type { SettingsFile } from "../settings";
 import { put, settingsOf } from "./configFixture";
@@ -303,5 +304,22 @@ describe("readMcpServers", () => {
       mcpJson: { mcpServers: null },
     });
     expect(odd.servers).toEqual([]);
+  });
+});
+
+describe("readClaudeJson", () => {
+  it("parses an unchanged file once and re-reads it when it changes", async () => {
+    const p = put(join(tmp(), ".claude.json"), { mcpServers: { a: { command: "x" } } });
+    const first = await readClaudeJson(p);
+    expect(await readClaudeJson(p)).toBe(first);
+    put(p, { mcpServers: { a: { command: "x" }, b: { command: "longer" } } });
+    const next = await readClaudeJson(p);
+    expect(Object.keys(obj(next.data?.mcpServers) ?? {})).toEqual(["a", "b"]);
+  });
+
+  it("reads a large file (long project history) well past the old 4 MB cap", async () => {
+    const history = "x".repeat(6 * 1024 * 1024);
+    const p = put(join(tmp(), ".claude.json"), { projects: { "/w": { history } }, mcpServers: {} });
+    expect(await readClaudeJson(p)).toMatchObject({ error: null, skipped: null });
   });
 });

@@ -1,5 +1,5 @@
 import type { Dirent } from "node:fs";
-import { lstat, open, readdir, readFile } from "node:fs/promises";
+import { lstat, open, readdir, readFile, realpath } from "node:fs/promises";
 
 export const MiB = 1024 * 1024;
 
@@ -91,6 +91,15 @@ export async function listDirSafe(p: string): Promise<Dirent[]> {
 export async function statSafe(p: string) {
   try {
     return await lstat(p);
+  } catch {
+    return null;
+  }
+}
+
+/** Where a path really points, links resolved. `null` if it (or its target) is missing. */
+export async function realpathSafe(p: string): Promise<string | null> {
+  try {
+    return await realpath(p);
   } catch {
     return null;
   }

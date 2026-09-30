@@ -11,7 +11,8 @@ function at(daysAgo: number, hour = 10): string {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
   d.setHours(hour, 0, 0, 0);
-  return d.toISOString();
+  // Never in the future: before 10:00, "today at 10:00" hasn't happened yet.
+  return new Date(Math.min(d.getTime(), Date.now() - 1000)).toISOString();
 }
 
 function fixture() {

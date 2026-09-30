@@ -8,7 +8,7 @@ import { createHandler } from "./handler";
 import { makeNonce, renderHtml } from "./html";
 import type { Opener } from "./opener";
 import { handleSetup, type SetupHandlerDeps } from "./setupHandler";
-import type { SetupService, SetupSnapshot } from "./setupService";
+import { type SetupService, type SetupSnapshot, viewSnapshot } from "./setupService";
 import type { OrbitState } from "./state";
 import type { UsageService, UsageSnapshot } from "./usageService";
 
@@ -38,6 +38,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   private again = false;
   last: ChatsSnapshot | null = null;
   lastUsage: UsageSnapshot | null = null;
+  /** Host copy with real values, for Setup actions. Post only `viewSnapshot(lastSetup)`. */
   lastSetup: SetupSnapshot | null = null;
   /** The tab the person is looking at; only its data is read (chats always, for the status bar). */
   private tab: "home" | "chats" | "usage" | "setup" = "home";
@@ -155,7 +156,8 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
         const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
         this.lastSetup = await this.d.setup.snapshot(ws);
         this.postOnce("catalog", { type: "catalog", data: settingsCatalog() });
-        this.postOnce("setup", { type: "setup", data: this.lastSetup });
+        // The host keeps the real values for actions; the view gets tokens hidden.
+        this.postOnce("setup", { type: "setup", data: viewSnapshot(this.lastSetup) });
       } catch (e) {
         this.d.log.error("Could not read Claude Code setup", errText(e));
       }
