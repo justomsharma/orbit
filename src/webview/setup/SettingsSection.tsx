@@ -195,7 +195,7 @@ export function SettingsSection() {
       hidden={q.trim() !== "" && defs.length === 0}
     >
       <fieldset class="segmented">
-        <legend class="sr-only">Settings file</legend>
+        <legend class="sr-only">Save settings to</legend>
         {(["user", ...(hasWs ? (["project", "local"] as const) : [])] as EditScope[]).map((sc) => (
           <label key={sc} class={scope === sc ? "on" : ""}>
             <input
