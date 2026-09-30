@@ -46,6 +46,15 @@ describe("UsageService", () => {
     expect(snap.pricingAsOf).toBe("2026-09-30");
   });
 
+  it("counts today's messages even when their time is a little ahead of the clock", async () => {
+    const { home } = fixture();
+    const svc = new UsageService(home, new OrbitStore(join(tmp(), "s")), noQuota);
+    // Snapshot at 09:00 while a message says 10:00 today (clock skew, or a test run at 1am).
+    const snap = await svc.snapshot([], new Date(at(0, 9)).getTime());
+    expect(snap.today.messages).toBe(1);
+    expect(snap.all.messages).toBe(3);
+  });
+
   it("persists the index so the next start does not rescan everything", async () => {
     const { home } = fixture();
     const store = new OrbitStore(join(tmp(), "s"));

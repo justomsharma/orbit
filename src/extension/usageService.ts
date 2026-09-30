@@ -78,7 +78,8 @@ export class UsageService {
     if (!changed && this.last?.key === key) return this.last.snap;
 
     const r = index.records();
-    const end = now + 1;
+    // Windows run to the end of today, so a timestamp a little ahead of this clock still counts.
+    const end = startOfDay(now, -1);
     const recap = weeklyRecap(r, sessions, now);
     const snap: UsageSnapshot = {
       ready: true,
