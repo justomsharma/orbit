@@ -104,10 +104,16 @@ class SessionBuilder {
     return this.prompts === 0 && this.assistantTurns === 0;
   }
 
-  build(id: string, file: string, meta: { mtimeMs: number; size: number; estimated: boolean }): Session {
+  build(
+    id: string,
+    file: string,
+    meta: { mtimeMs: number; size: number; estimated: boolean },
+  ): Session {
     const where = this.cwd ?? "";
     const title = clip(
-      (this.customTitle ?? this.agentName ?? this.aiTitle ?? this.firstPrompt ?? "").replace(/\s+/g, " ").trim(),
+      (this.customTitle ?? this.agentName ?? this.aiTitle ?? this.firstPrompt ?? "")
+        .replace(/\s+/g, " ")
+        .trim(),
       MAX_TITLE,
     );
     return {
@@ -152,11 +158,14 @@ async function scanSession(id: string, file: string, ht: HeadTail): Promise<Sess
   return b.build(id, file, { mtimeMs: ht.mtimeMs, size: ht.size, estimated: false });
 }
 
-async function readSession(id: string, file: string): Promise<{ ht: HeadTail; s: Session | null } | null> {
+async function readSession(
+  id: string,
+  file: string,
+): Promise<{ ht: HeadTail; s: Session | null } | null> {
   const ht = await readHeadTail(file);
   if (!ht) return null;
   let s = parseSession(id, file, ht);
-  if (!ht.whole && (!s || !s.cwd)) s = (await scanSession(id, file, ht)) ?? s;
+  if (!ht.whole && !s?.cwd) s = (await scanSession(id, file, ht)) ?? s;
   return { ht, s };
 }
 

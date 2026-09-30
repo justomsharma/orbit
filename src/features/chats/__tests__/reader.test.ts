@@ -164,12 +164,23 @@ describe("listSessions", () => {
         ...L.toolResult(c),
         message: {
           role: "user",
-          content: [{ type: "tool_result", tool_use_id: "t", content: [{ type: "image", source: { data: img } }] }],
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "t",
+              content: [{ type: "image", source: { data: img } }],
+            },
+          ],
         },
       },
     ]);
     const [r] = await listSessions(home);
-    expect(r).toMatchObject({ title: "Fix the login page", cwd: CWD, prompts: 1, estimated: false });
+    expect(r).toMatchObject({
+      title: "Fix the login page",
+      cwd: CWD,
+      prompts: 1,
+      estimated: false,
+    });
   });
 
   it("caps very long titles", async () => {

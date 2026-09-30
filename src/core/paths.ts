@@ -58,7 +58,11 @@ export function projectName(cwd: string): string {
 }
 
 /** Is `cwd` the folder itself or somewhere inside it? */
-export function isInside(folder: string, cwd: string, platform: NodeJS.Platform = process.platform) {
+export function isInside(
+  folder: string,
+  cwd: string,
+  platform: NodeJS.Platform = process.platform,
+) {
   if (!cwd) return false;
   const f = normPath(folder, platform);
   const c = normPath(cwd, platform);

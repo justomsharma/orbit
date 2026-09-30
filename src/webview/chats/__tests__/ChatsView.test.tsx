@@ -70,7 +70,9 @@ describe("ChatsView", () => {
   it("filters as you type", () => {
     load([mk(1, { title: "Fix checkout bug" }), mk(2, { title: "Write docs" })]);
     render(<ChatsView />);
-    fireEvent.input(screen.getByRole("combobox", { name: "Search chats" }), { target: { value: "checkout" } });
+    fireEvent.input(screen.getByRole("combobox", { name: "Search chats" }), {
+      target: { value: "checkout" },
+    });
     expect(screen.queryByText("Write docs")).toBeNull();
     expect(screen.getByText("Fix checkout bug")).toBeTruthy();
   });
@@ -171,7 +173,9 @@ describe("ChatsView", () => {
   it("shows a clear message when nothing matches the search", () => {
     load([mk(1)]);
     render(<ChatsView />);
-    fireEvent.input(screen.getByRole("combobox", { name: "Search chats" }), { target: { value: "zzzz" } });
+    fireEvent.input(screen.getByRole("combobox", { name: "Search chats" }), {
+      target: { value: "zzzz" },
+    });
     expect(screen.getByText(/No chats match/i)).toBeTruthy();
   });
 });

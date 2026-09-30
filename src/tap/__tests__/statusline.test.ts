@@ -32,7 +32,9 @@ describe("parseStatusInput", () => {
   });
 
   it("tolerates missing windows, nulls and junk", () => {
-    const r = parseStatusInput(JSON.stringify({ model: {}, context_window: { used_percentage: null } }));
+    const r = parseStatusInput(
+      JSON.stringify({ model: {}, context_window: { used_percentage: null } }),
+    );
     expect(r).toMatchObject({ model: null, contextPct: null, fiveHour: null, sevenDay: null });
     expect(parseStatusInput("not json")).toBeNull();
   });
@@ -40,8 +42,30 @@ describe("parseStatusInput", () => {
 
 describe("mergeQuota", () => {
   it("keeps the last known windows when a render has none (e.g. right after /clear)", () => {
-    const prev = { v: 1 as const, updatedAt: 1, fiveHour: { pct: 10, resetsAt: 5 }, sevenDay: { pct: 20, resetsAt: 6 }, spendLimit: null, model: "Opus 5.5", contextPct: 3, costUsd: 0, sessionId: null };
-    const next = mergeQuota(prev, { sessionId: null, model: "Opus 5.5", contextPct: 9, costUsd: 0.1, fiveHour: null, sevenDay: { pct: 21, resetsAt: 6 }, spendLimit: null }, 100);
+    const prev = {
+      v: 1 as const,
+      updatedAt: 1,
+      fiveHour: { pct: 10, resetsAt: 5 },
+      sevenDay: { pct: 20, resetsAt: 6 },
+      spendLimit: null,
+      model: "Opus 5.5",
+      contextPct: 3,
+      costUsd: 0,
+      sessionId: null,
+    };
+    const next = mergeQuota(
+      prev,
+      {
+        sessionId: null,
+        model: "Opus 5.5",
+        contextPct: 9,
+        costUsd: 0.1,
+        fiveHour: null,
+        sevenDay: { pct: 21, resetsAt: 6 },
+        spendLimit: null,
+      },
+      100,
+    );
     expect(next.fiveHour).toEqual({ pct: 10, resetsAt: 5 });
     expect(next.sevenDay).toEqual({ pct: 21, resetsAt: 6 });
     expect(next.updatedAt).toBe(100);
@@ -97,7 +121,9 @@ describe("runTap", () => {
   });
 
   it("never throws: bad input, unwritable folder, failing inner command", () => {
-    expect(runTap("{", join(tmp(), "missing", "deeper"), { now: () => 1, runInner: () => "" })).toBe("");
+    expect(
+      runTap("{", join(tmp(), "missing", "deeper"), { now: () => 1, runInner: () => "" }),
+    ).toBe("");
     const dir = tmp();
     writeFileSync(join(dir, "statusline-inner.json"), JSON.stringify({ command: "boom" }));
     const out = runTap(JSON.stringify(INPUT), dir, {

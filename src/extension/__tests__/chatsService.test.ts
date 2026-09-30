@@ -15,8 +15,10 @@ describe("ChatsService", () => {
     const away = writeSession(home, "/code/api", (c) => [L.user(c, "d")]);
     writeFileSync(
       join(home, "history.jsonl"),
-      Array.from({ length: 9 }, (_, i) =>
-        `${JSON.stringify({ display: "x", timestamp: i, project: "/code/shop", sessionId: here.id })}\n`,
+      Array.from(
+        { length: 9 },
+        (_, i) =>
+          `${JSON.stringify({ display: "x", timestamp: i, project: "/code/shop", sessionId: here.id })}\n`,
       ).join(""),
     );
     mkdirSync(join(home, "sessions"));

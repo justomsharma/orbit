@@ -1,6 +1,8 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
-  "files": { "includes": ["src/**", "test/**", "scripts/**", "*.json", "*.ts", "*.mts"] },
+  "files": {
+    "includes": ["src/**", "test/**", "scripts/**", "*.json", "*.ts", "*.mts", "!!.claude"]
+  },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "linter": {
     "rules": {

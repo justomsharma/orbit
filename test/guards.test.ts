@@ -89,14 +89,16 @@ describe("safety guards on the built bundles", () => {
 
   for (const p of bundles)
     it(`${p} loads no network module`, (ctx) => {
-    let text: string;
-    try {
-      text = readFileSync(p, "utf8");
-    } catch {
-      ctx.skip(); // not built yet; `npm run build` first
-      return;
-    }
-    expect(text).not.toMatch(/require\(["'](node:)?(http|https|http2|net|tls|dgram|dns)["']\)/);
-    expect(text).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|new WebSocket|EventSource\(|sendBeacon/);
-  });
+      let text: string;
+      try {
+        text = readFileSync(p, "utf8");
+      } catch {
+        ctx.skip(); // not built yet; `npm run build` first
+        return;
+      }
+      expect(text).not.toMatch(/require\(["'](node:)?(http|https|http2|net|tls|dgram|dns)["']\)/);
+      expect(text).not.toMatch(
+        /\bfetch\s*\(|XMLHttpRequest|new WebSocket|EventSource\(|sendBeacon/,
+      );
+    });
 });

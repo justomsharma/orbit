@@ -60,7 +60,10 @@ export async function readPromptCounts(home: string): Promise<Map<string, Prompt
  * History records prompts typed in the terminal CLI; chats started elsewhere
  * keep their "at least" estimate.
  */
-export function applyPromptCounts(sessions: Session[], counts: Map<string, PromptCount>): Session[] {
+export function applyPromptCounts(
+  sessions: Session[],
+  counts: Map<string, PromptCount>,
+): Session[] {
   return sessions.map((s) => {
     const c = counts.get(s.id);
     if (!c) return s;

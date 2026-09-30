@@ -94,9 +94,7 @@ function ChatRow({ vm, active, now, renaming, onRename }: RowProps) {
         </div>
         <div class="chat-meta">
           {vm.live ? (
-            <span class={`live-label ${vm.live.status}`}>
-              {LIVE_LABEL[vm.live.status]} · 
-            </span>
+            <span class={`live-label ${vm.live.status}`}>{LIVE_LABEL[vm.live.status]} ·</span>
           ) : null}
           {meta}
         </div>

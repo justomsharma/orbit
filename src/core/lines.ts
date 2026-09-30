@@ -59,7 +59,9 @@ export async function forEachAppendedLine(
       const { bytesRead } = await fh.read(buf, 0, buf.length, pos);
       if (bytesRead === 0) break;
       pos += bytesRead;
-      const data = carry.length ? Buffer.concat([carry, buf.subarray(0, bytesRead)]) : buf.subarray(0, bytesRead);
+      const data = carry.length
+        ? Buffer.concat([carry, buf.subarray(0, bytesRead)])
+        : buf.subarray(0, bytesRead);
       let from = 0;
       for (let nl = data.indexOf(0x0a); nl !== -1; nl = data.indexOf(0x0a, from)) {
         fn(data.subarray(from, nl).toString("utf8").replace(/\r$/, ""));
