@@ -1,6 +1,14 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { claudeHome, claudeJsonPath, normPath, projectName, samePath } from "../paths";
+import {
+  claudeHome,
+  claudeJsonPath,
+  claudeProjectKey,
+  findProjectKey,
+  normPath,
+  projectName,
+  samePath,
+} from "../paths";
 
 describe("claudeHome", () => {
   it("defaults to ~/.claude", () => {
@@ -64,5 +72,25 @@ describe("projectName", () => {
   it("falls back sensibly for a root or empty path", () => {
     expect(projectName("/")).toBe("/");
     expect(projectName("")).toBe("Unknown project");
+  });
+});
+
+describe("claudeProjectKey / findProjectKey", () => {
+  it("writes Windows folders the way Claude Code keys them in ~/.claude.json", () => {
+    expect(claudeProjectKey(String.raw`c:\Learnings\x\ `.trim(), "win32")).toBe("C:/Learnings/x");
+    expect(claudeProjectKey(String.raw`C:\ `.trim(), "win32")).toBe("C:/");
+    expect(claudeProjectKey("/home/ana/shop/", "linux")).toBe("/home/ana/shop");
+  });
+
+  it("prefers Claude's own key over another spelling of the same folder", () => {
+    const keys = [String.raw`c:\Learnings\x`, "C:/Learnings/x", "C:/Learnings/y"];
+    expect(findProjectKey(keys, String.raw`c:\learnings\X`, "win32")).toBe("C:/Learnings/x");
+  });
+
+  it("falls back to any spelling of the same folder, else null", () => {
+    const vscodeStyle = String.raw`c:\Learnings\x`;
+    expect(findProjectKey([vscodeStyle], String.raw`C:\Learnings\x`, "win32")).toBe(vscodeStyle);
+    expect(findProjectKey(["C:/other"], String.raw`C:\Learnings\x`, "win32")).toBeNull();
+    expect(findProjectKey(["/code/App"], "/code/app", "linux")).toBeNull();
   });
 });

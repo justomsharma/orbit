@@ -6,7 +6,7 @@
  */
 
 import type { Mutate } from "../../core/applyEdit";
-import { samePath } from "../../core/paths";
+import { claudeProjectKey, findProjectKey } from "../../core/paths";
 
 export type { Mutate };
 
@@ -88,8 +88,8 @@ function serversFor(o: Obj, t: McpTarget, create: boolean): Obj | null {
   const projects = create ? child(o, "projects") : isObj(o.projects) ? o.projects : null;
   if (!projects) return null;
   const key =
-    Object.keys(projects).find((k) => samePath(k, t.workspace!, t.platform)) ??
-    (create ? t.workspace : null);
+    findProjectKey(Object.keys(projects), t.workspace, t.platform) ??
+    (create ? claudeProjectKey(t.workspace, t.platform) : null);
   if (!key) return null;
   const entry = create
     ? child(projects, key)

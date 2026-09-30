@@ -191,14 +191,14 @@ describe("readMcpServers", () => {
     expect(servers.map((s) => [s.name, s.scope])).toEqual([["local1", "local"]]);
   });
 
-  it("prefers the exact project key when several match", async () => {
+  it("prefers Claude's own project key when several match", async () => {
     const { servers } = await read({
-      workspace: "C:\\Code\\App",
+      workspace: "c:\\code\\app",
       platform: "win32",
       claude: {
         projects: {
-          "c:/code/app": { mcpServers: { stale: { command: "x" } } },
-          "C:\\Code\\App": { mcpServers: { fresh: { command: "x" } } },
+          "C:\\Code\\App": { mcpServers: { stale: { command: "x" } } },
+          "C:/Code/App": { mcpServers: { fresh: { command: "x" } } },
         },
       },
     });

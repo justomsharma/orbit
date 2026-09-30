@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { MiB } from "../../core/fsSafe";
 import { obj, str } from "../../core/jsonl";
-import { normPath } from "../../core/paths";
+import { findProjectKey } from "../../core/paths";
 import { readJsonFile } from "./jsonFile";
 import { readPluginMcp } from "./pluginFiles";
 import type { InstalledPlugin } from "./plugins";
@@ -76,17 +76,15 @@ function toServer(
   };
 }
 
-/** `projects[<ws>]` of `~/.claude.json`: the exact key if present, else the first samePath match. */
+/** `projects[<ws>]` of `~/.claude.json`, picked by the same rule the editor uses. */
 function projectEntry(
   projects: Record<string, unknown> | null,
   workspace: string,
   platform: NodeJS.Platform,
 ): Record<string, unknown> | null {
   if (!projects) return null;
-  if (obj(projects[workspace])) return obj(projects[workspace]);
-  const want = normPath(workspace, platform);
-  const key = Object.keys(projects).find((k) => normPath(k, platform) === want);
-  return key === undefined ? null : obj(projects[key]);
+  const key = findProjectKey(Object.keys(projects), workspace, platform);
+  return key === null ? null : obj(projects[key]);
 }
 
 /** Approval of a `.mcp.json` server, merged across every settings file. */

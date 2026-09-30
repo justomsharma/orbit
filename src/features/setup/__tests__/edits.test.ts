@@ -113,7 +113,28 @@ describe("MCP servers in ~/.claude.json and .mcp.json", () => {
       }),
       { projects: {} },
     );
-    expect(out).toEqual({ projects: { [ws]: { mcpServers: { db: { command: "x" } } } } });
+    // Claude Code keys Windows folders as C:/… — a key it would never read is useless.
+    expect(out).toEqual({ projects: { "C:/code/shop": { mcpServers: { db: { command: "x" } } } } });
+  });
+
+  it("uses Claude's own project key when the folder is listed under several spellings", () => {
+    const start = { projects: { [ws]: { mcpServers: {} }, "C:/code/shop": { mcpServers: {} } } };
+    const out = run(
+      addMcpServer({
+        scope: "local",
+        name: "db",
+        server: { command: "x" },
+        workspace: ws,
+        platform: "win32",
+      }),
+      start,
+    );
+    expect(out).toEqual({
+      projects: {
+        [ws]: { mcpServers: {} },
+        "C:/code/shop": { mcpServers: { db: { command: "x" } } },
+      },
+    });
   });
 
   it("refuses to add a name that already exists in that scope", () => {

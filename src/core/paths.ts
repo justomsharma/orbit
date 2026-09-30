@@ -48,6 +48,34 @@ export function samePath(a: string, b: string, platform: NodeJS.Platform = proce
   return normPath(a, platform) === normPath(b, platform);
 }
 
+/**
+ * How Claude Code keys a folder in `~/.claude.json` `projects`: on Windows
+ * `C:/Users/x/app` (forward slashes, capital drive letter), elsewhere the path itself.
+ */
+export function claudeProjectKey(folder: string, platform: NodeJS.Platform = process.platform) {
+  const win = platform === "win32";
+  const lib = win ? path.win32 : path.posix;
+  let n = lib.normalize(folder);
+  const root = lib.parse(n).root;
+  while (n.length > root.length && (n.endsWith("/") || n.endsWith("\\"))) n = n.slice(0, -1);
+  if (!win) return n;
+  return n.replace(/\\/g, "/").replace(/^([a-z]):/, (_, d: string) => `${d.toUpperCase()}:`);
+}
+
+/**
+ * The `projects` key for a folder: Claude's own spelling when present, else any
+ * spelling of the same folder, else null. Reader and editor both use this, so
+ * they always act on the same entry.
+ */
+export function findProjectKey(
+  keys: string[],
+  folder: string,
+  platform: NodeJS.Platform = process.platform,
+): string | null {
+  const same = keys.filter((k) => samePath(k, folder, platform));
+  return same.find((k) => k === claudeProjectKey(k, platform)) ?? same[0] ?? null;
+}
+
 /** Folder name shown to people, e.g. `C:\work\shop` → `shop`. */
 export function projectName(cwd: string): string {
   const parts = cwd.split(/[\\/]+/).filter(Boolean);
