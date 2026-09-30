@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../test/helpers/tmp";
-import { streamJsonLines } from "../lines";
+import { streamJsonLines, streamLines } from "../lines";
 
 const tmp = useTmpDir();
 
@@ -38,5 +38,19 @@ describe("streamJsonLines", () => {
     let seen = 0;
     await streamJsonLines(join(d, "s.jsonl"), () => ++seen < 2);
     expect(seen).toBe(2);
+  });
+});
+
+describe("streamLines", () => {
+  it("visits raw lines without parsing and can stop early", async () => {
+    const d = tmp();
+    writeFileSync(join(d, "r.txt"), 'one\r\n{"two":2}\nthree\nfour');
+    const got: string[] = [];
+    await streamLines(join(d, "r.txt"), (l) => {
+      got.push(l);
+      return got.length < 3;
+    });
+    expect(got).toEqual(["one", '{"two":2}', "three"]);
+    await expect(streamLines(join(d, "missing"), () => {})).resolves.toBeUndefined();
   });
 });
