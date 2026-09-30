@@ -31,6 +31,18 @@ const webview = {
   logLevel: "info",
 };
 
+// Standalone statusline tap, run by Claude Code with the person's own Node.
+const tap = {
+  entryPoints: ["src/tap/main.ts"],
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node18",
+  outfile: "dist/statusline-tap.js",
+  minify: prod,
+  logLevel: "info",
+};
+
 function copyCss() {
   mkdirSync("dist/webview", { recursive: true });
   copyFileSync("src/webview/styles.css", "dist/webview/main.css");
@@ -43,9 +55,10 @@ function copyCss() {
 if (watch) {
   const a = await esbuild.context(extension);
   const b = await esbuild.context(webview);
-  await Promise.all([a.watch(), b.watch()]);
+  const c = await esbuild.context(tap);
+  await Promise.all([a.watch(), b.watch(), c.watch()]);
   copyCss();
 } else {
-  await Promise.all([esbuild.build(extension), esbuild.build(webview)]);
+  await Promise.all([esbuild.build(extension), esbuild.build(webview), esbuild.build(tap)]);
   copyCss();
 }

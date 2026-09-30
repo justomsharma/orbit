@@ -11,7 +11,17 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "..", "src");
 /** Files allowed to write. Each one is reviewed and tested for backup/undo behaviour. */
-const WRITERS: string[] = [];
+const WRITERS: string[] = [
+  "core/safeWriter.ts",
+  "core/orbitStore.ts",
+  // The statusline tap writes only quota.json in its own folder (Orbit storage).
+  "tap/statusline.ts",
+];
+/**
+ * Files allowed to start a shell. The tap runs the person's own previous
+ * statusline command, in the same shell Claude Code would have used.
+ */
+const SHELL_ALLOWED = ["tap/statusline.ts"];
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -56,8 +66,9 @@ describe("safety guards", () => {
     expect(files.filter((f) => /\bsendText\b/.test(f.text)).map((f) => f.path)).toEqual([]);
   });
 
-  it("never runs a command through a shell", () => {
+  it("never runs a command through a shell (except the reviewed statusline tap)", () => {
     const hits = files
+      .filter((f) => !SHELL_ALLOWED.includes(f.path))
       .filter((f) => /\b(exec|execSync|spawnSync|spawn)\s*\(|shell:\s*true/.test(f.text))
       .map((f) => f.path);
     expect(hits).toEqual([]);

@@ -1,5 +1,6 @@
 **
 !dist/extension.js
+!dist/statusline-tap.js
 !dist/webview/**
 !media/**
 !package.json
