@@ -59,10 +59,9 @@ export function vscodeConfirmHost(context: vscode.ExtensionContext): ConfirmHost
     },
     done: async (label, undo) => {
       const pick = await vscode.window.showInformationMessage(`Done: ${label}.`, "Undo");
-      if (pick === "Undo") {
-        await undo();
+      // A failed undo has already said why, so "Undone" only shows when it worked.
+      if (pick === "Undo" && (await undo()))
         void vscode.window.showInformationMessage(`Undone: ${label}.`);
-      }
     },
     warn: (m) => void vscode.window.showWarningMessage(m),
   };

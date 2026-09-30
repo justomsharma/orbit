@@ -114,6 +114,80 @@ describe("applyJsonEdit", () => {
     expect(JSON.parse(readFileSync(f, "utf8"))).toEqual({ numStartups: 2, theme: "dark" });
   });
 
+  describe("undo", () => {
+    /** Applies an edit and hands back its Undo action instead of clicking it. */
+    async function applied(f: string, d: string, mutate = setSetting("theme", "dark")) {
+      let undo: (() => Promise<boolean>) | null = null;
+      const log: string[] = [];
+      const h: ConfirmHost = {
+        confirm: async () => "apply",
+        showDiff: async () => {},
+        done: async (_l, u) => {
+          undo = u;
+        },
+        warn: (m) => log.push(m),
+      };
+      const ok = await applyJsonEdit(new SafeWriter(join(d, "b")), h, {
+        file: f,
+        mutate,
+        summary: "Change?",
+        label: "Theme",
+      });
+      expect(ok).toBe(true);
+      return { undo: undo as unknown as () => Promise<boolean>, log };
+    }
+
+    it("restores the file exactly when nothing changed since", async () => {
+      const d = tmp();
+      const f = join(d, "settings.json");
+      writeFileSync(f, '{\n    "model": "opus"\n}');
+      const { undo } = await applied(f, d);
+      expect(await undo()).toBe(true);
+      expect(readFileSync(f, "utf8")).toBe('{\n    "model": "opus"\n}');
+    });
+
+    it("reverses only Orbit's change when Claude rewrote the file since", async () => {
+      const d = tmp();
+      const f = join(d, "claude.json");
+      writeFileSync(f, '{"numStartups": 1}\n');
+      const { undo, log } = await applied(f, d);
+      writeFileSync(f, '{"numStartups": 2, "theme": "dark", "tips": 3}\n');
+      expect(await undo()).toBe(true);
+      expect(JSON.parse(readFileSync(f, "utf8"))).toEqual({ numStartups: 2, tips: 3 });
+      expect(log).toEqual([]);
+    });
+
+    it("says it couldn't undo, and changes nothing, when the same value changed again", async () => {
+      const d = tmp();
+      const f = join(d, "claude.json");
+      writeFileSync(f, "{}\n");
+      const { undo, log } = await applied(f, d);
+      writeFileSync(f, '{"theme": "light"}\n');
+      expect(await undo()).toBe(false);
+      expect(readFileSync(f, "utf8")).toBe('{"theme": "light"}\n');
+      expect(log[0]).toMatch(/Couldn't undo Theme: "theme" changed again/);
+    });
+
+    it("doesn't wait for the Undo notice to be dismissed", async () => {
+      const d = tmp();
+      const f = join(d, "settings.json");
+      writeFileSync(f, "{}\n");
+      const h: ConfirmHost = {
+        confirm: async () => "apply",
+        showDiff: async () => {},
+        done: () => new Promise(() => {}), // the notice stays open
+        warn: () => {},
+      };
+      const ok = await applyJsonEdit(new SafeWriter(join(d, "b")), h, {
+        file: f,
+        mutate: setSetting("theme", "dark"),
+        summary: "Change?",
+        label: "Theme",
+      });
+      expect(ok).toBe(true);
+    });
+  });
+
   it("reports an edit that refuses (e.g. the item changed) without writing", async () => {
     const d = tmp();
     const f = join(d, "s.json");

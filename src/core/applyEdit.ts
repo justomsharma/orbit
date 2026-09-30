@@ -1,3 +1,5 @@
+import { parseJsonObject } from "./json";
+import { ReverseConflict, reverseJsonEdit } from "./jsonReverse";
 import { ConflictError, type EditPlan, type SafeWriter } from "./safeWriter";
 
 /** Edits a parsed JSON object in place (see features/setup/edits.ts). */
@@ -8,8 +10,8 @@ export interface ConfirmHost {
   /** Modal question; "diff" means the person wants to see the exact change first. */
   confirm(summary: string): Promise<"apply" | "diff" | "cancel">;
   showDiff(plan: EditPlan): Promise<void>;
-  /** Success notice with an Undo action. */
-  done(label: string, undo: () => Promise<void>): Promise<void>;
+  /** Success notice with an Undo action; `undo` resolves to whether it worked. Not awaited. */
+  done(label: string, undo: () => Promise<boolean>): Promise<void>;
   warn(message: string): void;
 }
 
@@ -34,7 +36,18 @@ export function applyJsonEdit(
   host: ConfirmHost,
   edit: JsonEdit,
 ): Promise<boolean> {
-  return applyPlanned(writer, host, () => writer.planJson(edit.file, edit.mutate), edit);
+  return applyPlanned(
+    writer,
+    host,
+    () => writer.planJson(edit.file, edit.mutate),
+    edit,
+    (plan) => {
+      const before =
+        plan.before === null || plan.before.trim() === "" ? {} : parseJsonObject(plan.before);
+      const after = parseJsonObject(plan.after);
+      return before && after ? reverseJsonEdit(before, after) : null;
+    },
+  );
 }
 
 export interface TextEdit {
@@ -59,6 +72,8 @@ async function applyPlanned(
   host: ConfirmHost,
   makePlan: () => Promise<EditPlan>,
   edit: { summary: string; label: string },
+  /** For JSON files: the inverse change, used when the file changed after Orbit's edit. */
+  reverseOf?: (plan: EditPlan) => Mutate | null,
 ): Promise<boolean> {
   let plan: EditPlan;
   try {
@@ -82,13 +97,22 @@ async function applyPlanned(
   for (let attempt = 1; ; attempt++) {
     try {
       const entry = await writer.apply(plan, edit.label);
-      await host.done(edit.label, async () => {
+      const applied = plan;
+      const undo = async (): Promise<boolean> => {
         try {
           await writer.undo(entry.id);
+          return true;
         } catch (e) {
-          host.warn(message(e));
+          const reverse = e instanceof ConflictError ? reverseOf?.(applied) : null;
+          if (!reverse) {
+            host.warn(`Couldn't undo ${edit.label}: ${message(e)}`);
+            return false;
+          }
+          return undoByReversing(writer, host, applied.file, reverse, edit.label);
         }
-      });
+      };
+      // The notice stays until dismissed; the edit is done, so don't wait for it.
+      void host.done(edit.label, undo).catch(() => {});
       return true;
     } catch (e) {
       if (!(e instanceof ConflictError) || attempt > 1) {
@@ -101,6 +125,28 @@ async function applyPlanned(
         host.warn(message(e2));
         return false;
       }
+    }
+  }
+}
+
+/** Undo for a JSON file Claude rewrote after Orbit's edit: put back only Orbit's values. */
+async function undoByReversing(
+  writer: SafeWriter,
+  host: ConfirmHost,
+  file: string,
+  reverse: Mutate,
+  label: string,
+): Promise<boolean> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const plan = await writer.planJson(file, reverse);
+      if (plan.after !== plan.before) await writer.apply(plan, `Undo: ${label}`);
+      return true;
+    } catch (e) {
+      if (e instanceof ConflictError && attempt === 1) continue;
+      const why = e instanceof ReverseConflict ? `${e.message} Nothing was changed.` : message(e);
+      host.warn(`Couldn't undo ${label}: ${why}`);
+      return false;
     }
   }
 }
