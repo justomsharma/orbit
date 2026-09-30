@@ -3,6 +3,7 @@ import type { SetupSnapshot } from "../extension/setupService";
 import type { UsageSnapshot } from "../extension/usageService";
 import type { LiveStatus, Session } from "../features/chats/types";
 import type { SettingDef } from "../features/setup/catalog";
+import { ITEM_NAME, isServerUrl, MCP_NAME } from "./validate";
 
 const SessionId = v.pipe(
   v.string(),
@@ -57,25 +58,16 @@ function setupMessages() {
   const EditScope = v.picklist(["user", "project", "local"]);
   // "auto": the file that decides the value now (see toggleScope).
   const ToggleScope = v.picklist(["user", "project", "local", "auto"]);
-  const McpName = v.pipe(v.string(), v.regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/));
-  const ItemName = v.pipe(v.string(), v.regex(/^[a-z0-9][a-z0-9-]{0,63}$/));
+  const McpName = v.pipe(v.string(), v.regex(MCP_NAME));
+  const ItemName = v.pipe(v.string(), v.regex(ITEM_NAME));
+  // A form's request id; the host replies with setup:result so the form knows to close.
+  const Req = v.optional(v.pipe(v.string(), v.maxLength(40)));
   const Key = v.pipe(
     v.string(),
     v.regex(/^[A-Za-z][A-Za-z0-9]{0,79}(\.[A-Za-z][A-Za-z0-9]{0,79})?$/),
   );
   const FilePath = nonEmpty(1024);
-  // MCP servers are often local (http://localhost:3000/mcp): http and https only.
-  const McpUrl = v.pipe(
-    v.string(),
-    v.maxLength(2048),
-    v.check((u) => {
-      try {
-        return ["http:", "https:"].includes(new URL(u).protocol);
-      } catch {
-        return false;
-      }
-    }),
-  );
+  const McpUrl = v.pipe(v.string(), v.check(isServerUrl));
   return [
     v.object({ type: v.literal("setup:refresh") }),
     v.object({
@@ -98,6 +90,7 @@ function setupMessages() {
     v.object({ type: v.literal("setup:mcpRemove"), scope: EditScope, name: McpName }),
     v.object({
       type: v.literal("setup:mcpAdd"),
+      req: Req,
       scope: EditScope,
       name: McpName,
       transport: v.picklist(["stdio", "http", "sse"]),
@@ -109,6 +102,7 @@ function setupMessages() {
     v.object({ type: v.literal("setup:hookRemove"), id: nonEmpty(2000) }),
     v.object({
       type: v.literal("setup:hookAdd"),
+      req: Req,
       scope: EditScope,
       event: v.pipe(v.string(), v.regex(/^[A-Z][A-Za-z]{1,40}$/)),
       matcher: v.nullable(text(200)),
@@ -118,6 +112,7 @@ function setupMessages() {
     v.object({ type: v.literal("setup:hooksPaused"), paused: v.boolean() }),
     v.object({
       type: v.literal("setup:rule"),
+      req: Req,
       op: v.picklist(["add", "remove"]),
       scope: EditScope,
       list: v.picklist(["allow", "ask", "deny"]),
@@ -130,6 +125,7 @@ function setupMessages() {
     }),
     v.object({
       type: v.literal("setup:new"),
+      req: Req,
       kind: v.picklist(["skill", "agent", "command"]),
       scope: v.picklist(["user", "project"]),
       name: ItemName,
@@ -174,5 +170,7 @@ export type HostMsg =
   | { type: "usage"; data: UsageSnapshot }
   | { type: "setup"; data: SetupSnapshot }
   | { type: "catalog"; data: SettingDef[] }
+  /** Whether the change a form asked for (by its request id) was made. */
+  | { type: "setup:result"; req: string; ok: boolean }
   | { type: "loading" }
   | { type: "error"; text: string };

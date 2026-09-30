@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/preact";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sampleSetup } from "../../../../test/helpers/setupFixture";
 import { settingsCatalog } from "../../../features/setup/catalog";
@@ -80,6 +80,7 @@ describe("SetupView", () => {
     });
     fireEvent.click(within(mcp).getByRole("button", { name: /^Add$/ }));
     expect(sent).toContainEqual({
+      req: expect.any(String),
       type: "setup:mcpAdd",
       scope: "local",
       name: "linear",
@@ -191,6 +192,44 @@ describe("SetupView", () => {
     });
   });
 
+  describe("forms keep what you typed until the change is made", () => {
+    const openAdd = () => {
+      render(<SetupView />);
+      const mcp = section(/MCP servers/);
+      fireEvent.click(within(mcp).getByRole("button", { name: /Add server/ }));
+      return mcp;
+    };
+    const lastReq = () => (sent[sent.length - 1] as { req?: string }).req!;
+
+    it("explains a name Claude wouldn't accept and doesn't send it", () => {
+      const mcp = openAdd();
+      fireEvent.input(within(mcp).getByLabelText("Name"), { target: { value: "my server" } });
+      fireEvent.input(within(mcp).getByLabelText("Command"), { target: { value: "npx x" } });
+      expect(within(mcp).getByRole("alert").textContent).toMatch(/letters, numbers/);
+      expect(within(mcp).getByRole("button", { name: /^Add$/ })).toHaveProperty("disabled", true);
+    });
+
+    it("stays open with the input when the change wasn't made, and closes when it was", async () => {
+      const mcp = openAdd();
+      fireEvent.input(within(mcp).getByLabelText("Name"), { target: { value: "fs" } });
+      fireEvent.input(within(mcp).getByLabelText("Command"), {
+        target: { value: String.raw`"C:\Program Files\srv.exe" --root "C:\my files"` },
+      });
+      fireEvent.click(within(mcp).getByRole("button", { name: /^Add$/ }));
+      expect(sent[sent.length - 1]).toMatchObject({
+        command: String.raw`C:\Program Files\srv.exe`,
+        args: ["--root", String.raw`C:\my files`],
+      });
+      expect(within(mcp).getByRole("button", { name: /Adding/ })).toBeTruthy();
+      store.applyHostMessage({ type: "setup:result", req: lastReq(), ok: false });
+      const again = await waitFor(() => within(mcp).getByRole("button", { name: /^Add$/ }));
+      expect((within(mcp).getByLabelText("Name") as HTMLInputElement).value).toBe("fs");
+      fireEvent.click(again);
+      store.applyHostMessage({ type: "setup:result", req: lastReq(), ok: true });
+      await waitFor(() => expect(within(mcp).queryByLabelText("Name")).toBeNull());
+    });
+  });
+
   it("hides a skill from Claude and opens its file", () => {
     render(<SetupView />);
     const skills = section(/Skills/);
@@ -219,6 +258,7 @@ describe("SetupView", () => {
     });
     fireEvent.click(within(skills).getByRole("button", { name: /^Create$/ }));
     expect(sent).toContainEqual({
+      req: expect.any(String),
       type: "setup:new",
       kind: "skill",
       scope: "user",
@@ -244,6 +284,7 @@ describe("SetupView", () => {
     });
     fireEvent.click(within(perms).getByRole("button", { name: /Add rule/ }));
     expect(sent).toContainEqual({
+      req: expect.any(String),
       type: "setup:rule",
       op: "add",
       scope: "user",

@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import type { McpServer } from "../../features/setup/mcp";
+import { mcpFormError, splitCommand } from "../../shared/validate";
 import { post } from "../bus";
 import * as store from "../store";
 import { IconButton } from "../ui/Icon";
@@ -8,11 +9,13 @@ import {
   type EditScope,
   Empty,
   Field,
+  FormError,
   matches,
   Row,
   SCOPE_LABEL,
   ScopeSelect,
   Section,
+  useSubmit,
 } from "./parts";
 
 function McpRow({ m }: { m: McpServer }) {
@@ -83,9 +86,13 @@ function AddServer({ onDone }: { onDone: () => void }) {
   const [transport, setTransport] = useState<"stdio" | "http" | "sse">("stdio");
   const [command, setCommand] = useState("");
   const [url, setUrl] = useState("");
+  const { busy, submit: send } = useSubmit(onDone);
+  const error = mcpFormError({ name, transport, command, url });
+  const touched = name !== "" || command !== "" || url !== "";
   const submit = () => {
-    const words = command.trim().split(/\s+/).filter(Boolean);
-    post(
+    if (error) return;
+    const words = splitCommand(command) ?? [];
+    send(
       transport === "stdio"
         ? {
             type: "setup:mcpAdd",
@@ -97,7 +104,6 @@ function AddServer({ onDone }: { onDone: () => void }) {
           }
         : { type: "setup:mcpAdd", scope, name: name.trim(), transport, url: url.trim() },
     );
-    onDone();
   };
   return (
     <div class="form">
@@ -132,11 +138,13 @@ function AddServer({ onDone }: { onDone: () => void }) {
       )}
       <ScopeSelect value={scope} onChange={setScope} label="Available in" />
       <p class="form-hint">
-        API keys: add them afterwards in the file, or with Log in for remote servers.
+        API keys: add them afterwards in the file, or with Log in for remote servers. Put quotes
+        around paths with spaces.
       </p>
+      <FormError text={touched ? error : null} />
       <div class="form-actions">
-        <button type="button" class="btn" onClick={submit} disabled={!name.trim()}>
-          Add
+        <button type="button" class="btn" onClick={submit} disabled={!!error || busy}>
+          {busy ? "Adding…" : "Add"}
         </button>
         <button type="button" class="btn secondary" onClick={onDone}>
           Cancel

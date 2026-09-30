@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { HOOK_EVENTS, TOOL_EVENTS } from "../../features/setup/hookEvents";
+import { hookFormError } from "../../shared/validate";
 import { post } from "../bus";
 import * as store from "../store";
 import { IconButton } from "../ui/Icon";
@@ -9,12 +10,14 @@ import {
   type EditScope,
   Empty,
   Field,
+  FormError,
   matches,
   Row,
   SCOPE_LABEL,
   ScopeSelect,
   Section,
   Switch,
+  useSubmit,
 } from "./parts";
 
 function AddHook({ onDone }: { onDone: () => void }) {
@@ -22,6 +25,8 @@ function AddHook({ onDone }: { onDone: () => void }) {
   const [matcher, setMatcher] = useState("");
   const [command, setCommand] = useState("");
   const [scope, setScope] = useState<EditScope>("user");
+  const { busy, submit } = useSubmit(onDone);
+  const error = hookFormError({ command, matcher });
   return (
     <div class="form">
       <label class="field">
@@ -44,23 +49,23 @@ function AddHook({ onDone }: { onDone: () => void }) {
       ) : null}
       <Field label="Run" value={command} onInput={setCommand} placeholder="~/bin/notify.sh" mono />
       <ScopeSelect value={scope} onChange={setScope} />
+      <FormError text={command || matcher ? error : null} />
       <div class="form-actions">
         <button
           type="button"
           class="btn"
-          disabled={!command.trim()}
-          onClick={() => {
-            post({
+          disabled={!!error || busy}
+          onClick={() =>
+            submit({
               type: "setup:hookAdd",
               scope,
               event,
               matcher: TOOL_EVENTS.has(event) && matcher.trim() ? matcher.trim() : null,
               command: command.trim(),
-            });
-            onDone();
-          }}
+            })
+          }
         >
-          Add hook
+          {busy ? "Adding…" : "Add hook"}
         </button>
         <button type="button" class="btn secondary" onClick={onDone}>
           Cancel

@@ -295,6 +295,12 @@ fieldset.sec > legend {
   color: var(--muted);
 }
 
+.form-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
 .btn.small {
   padding: 2px 10px;
   font-size: 12px;

@@ -1,4 +1,7 @@
 import type { ComponentChildren } from "preact";
+import { useEffect, useState } from "preact/hooks";
+import type { ViewMsg } from "../../shared/protocol";
+import { post } from "../bus";
 import * as store from "../store";
 import { Icon, IconButton } from "../ui/Icon";
 
@@ -217,4 +220,38 @@ export function Field({
 
 export function Empty({ children }: { children: ComponentChildren }) {
   return <p class="sec-empty">{children}</p>;
+}
+
+let nextReq = 0;
+type FormMsg = Extract<ViewMsg, { req?: string }>;
+
+/**
+ * Sends a form's change and waits for the host's answer: the form closes only
+ * once the change was made, so a cancelled or refused change keeps what was typed.
+ */
+export function useSubmit(onDone: () => void) {
+  const [req, setReq] = useState<string | null>(null);
+  const result = req === null ? undefined : store.results.value[req];
+  useEffect(() => {
+    if (req === null || result === undefined) return;
+    setReq(null);
+    if (result) onDone();
+  }, [req, result]);
+  return {
+    busy: req !== null,
+    submit: (m: FormMsg) => {
+      const id = `form-${++nextReq}`;
+      setReq(id);
+      post({ ...m, req: id } as ViewMsg);
+    },
+  };
+}
+
+/** Why a form can't be sent yet, read out by screen readers as it changes. */
+export function FormError({ text }: { text: string | null }) {
+  return text ? (
+    <p class="form-error" role="alert">
+      {text}
+    </p>
+  ) : null;
 }

@@ -23,6 +23,7 @@ import { MODE_LABELS, riskWarning } from "../features/setup/risk";
 import { decidingScope, readSettingsFiles, toggleScope } from "../features/setup/settings";
 import { newItem } from "../features/setup/templates";
 import { parseViewMsg, type ViewMsg } from "../shared/protocol";
+import { windowsLaunch } from "../shared/validate";
 import type { SetupSnapshot } from "./setupService";
 
 export interface SetupHandlerDeps {
@@ -40,6 +41,8 @@ export interface SetupHandlerDeps {
   runClaude(args: string[], cwd?: string): Promise<void>;
   /** Opens Claude's chat with a prompt typed in (not sent). */
   newChat(prompt: string): Promise<void>;
+  /** Tells a form (by its request id) whether its change was made. */
+  reply?(req: string, ok: boolean): void;
 }
 
 type EditScope = "user" | "project" | "local";
@@ -61,11 +64,35 @@ conventions Claude should follow.
 
 type SetupMsg = Extract<ViewMsg, { type: `setup:${string}` }>;
 
-/** Handles one Setup message. Returns false for messages that belong elsewhere. */
+/** A form's request id, so its reply reaches the form that sent it. */
+function reqOf(raw: unknown): string | null {
+  const r = (raw as { req?: unknown } | null)?.req;
+  return typeof r === "string" && r.length <= 40 ? r : null;
+}
+
+/**
+ * Handles one Setup message. Returns false for messages that belong elsewhere.
+ * A form that sent a `req` id is told whether its change was made, so it can
+ * stay open (keeping what was typed) when it wasn't.
+ */
 export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<boolean> {
   const m = parseViewMsg(raw);
-  if (!m?.type.startsWith("setup:")) return false;
-  const msg = m as SetupMsg;
+  const req = reqOf(raw);
+  if (!m) {
+    const type = (raw as { type?: unknown } | null)?.type;
+    if (typeof type !== "string" || !type.startsWith("setup:")) return false;
+    d.confirm.warn("Orbit couldn't use that input. Check the fields and try again.");
+    if (req) d.reply?.(req, false);
+    return true;
+  }
+  if (!m.type.startsWith("setup:")) return false;
+  const state = { changed: false };
+  await run(m as SetupMsg, d, state);
+  if (req) d.reply?.(req, state.changed);
+  return true;
+}
+
+async function run(msg: SetupMsg, d: SetupHandlerDeps, state: { changed: boolean }) {
   const warn = (text: string) => d.confirm.warn(text);
   const ws = d.workspace();
 
@@ -87,6 +114,7 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
       return;
     }
     const ok = await applyJsonEdit(d.writer, d.confirm, { file, mutate, summary, label, warning });
+    state.changed = ok;
     if (ok) await d.refresh();
     return ok;
   };
@@ -261,9 +289,24 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
     }
 
     case "setup:mcpAdd": {
+      // Native Windows starts npx and other script shims only through cmd /c. A shared
+      // .mcp.json stays plain so teammates on Mac and Linux can still start it.
+      const wrap = d.platform === "win32" && msg.scope !== "project" && msg.command;
+      const launch = wrap
+        ? windowsLaunch(msg.command!, msg.args ?? [])
+        : { command: msg.command, args: msg.args ?? [] };
+      const needsCmd =
+        d.platform === "win32" &&
+        msg.scope === "project" &&
+        !!msg.command &&
+        windowsLaunch(msg.command, []).command === "cmd";
       const server: Record<string, unknown> =
         msg.transport === "stdio"
-          ? { type: "stdio", command: msg.command, ...(msg.args?.length ? { args: msg.args } : {}) }
+          ? {
+              type: "stdio",
+              command: launch.command,
+              ...(launch.args.length ? { args: launch.args } : {}),
+            }
           : { type: msg.transport, url: msg.url };
       if ((msg.transport === "stdio" && !msg.command) || (msg.transport !== "stdio" && !msg.url)) {
         warn(
@@ -290,7 +333,11 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
           workspace: ws ?? undefined,
           platform: d.platform,
         }),
-        `Add the MCP server "${msg.name}" for ${where}?`,
+        `Add the MCP server "${msg.name}" for ${where}?${
+          needsCmd
+            ? ` The shared file keeps plain "${msg.command}" for teammates on Mac and Linux; on this Windows machine Claude may need "cmd /c ${msg.command} …" to start it.`
+            : ""
+        }`,
         `Added MCP ${msg.name}`,
       );
       return true;
@@ -414,6 +461,7 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
         summary: `Create the ${msg.kind} "${msg.name}" ${msg.scope === "user" ? "for all your projects" : "in this project"}?`,
         label: `New ${msg.kind} ${msg.name}`,
       });
+      state.changed = created;
       if (created) {
         await d.openFile(item.file);
         await d.refresh();
@@ -449,7 +497,7 @@ export async function handleSetup(raw: unknown, d: SetupHandlerDeps): Promise<bo
     }
 
     case "setup:open": {
-      if (!knownFiles(d.snapshot()).has(norm(msg.file, d.platform))) return true;
+      if (!knownFiles(d.snapshot(), d.platform).has(norm(msg.file, d.platform))) return true;
       await d.openFile(msg.file);
       return true;
     }
@@ -470,10 +518,9 @@ const norm = (p: string, platform: NodeJS.Platform) =>
   platform === "win32" ? path.win32.normalize(p).toLowerCase() : path.posix.normalize(p);
 
 /** Files the Setup tab showed; only these can be opened from the view. */
-function knownFiles(s: SetupSnapshot | null): Set<string> {
+function knownFiles(s: SetupSnapshot | null, platform: NodeJS.Platform): Set<string> {
   const out = new Set<string>();
   if (!s) return out;
-  const platform = process.platform;
   const add = (p: string | null | undefined) => {
     if (p) out.add(norm(p, platform));
   };

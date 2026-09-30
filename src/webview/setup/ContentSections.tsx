@@ -1,7 +1,20 @@
 import { useState } from "preact/hooks";
+import { itemFormError } from "../../shared/validate";
 import { post } from "../bus";
 import * as store from "../store";
-import { Badge, decided, Empty, Field, LOCKED, matches, Row, SCOPE_LABEL, Section } from "./parts";
+import {
+  Badge,
+  decided,
+  Empty,
+  Field,
+  FormError,
+  LOCKED,
+  matches,
+  Row,
+  SCOPE_LABEL,
+  Section,
+  useSubmit,
+} from "./parts";
 
 type Kind = "skill" | "agent" | "command";
 
@@ -15,6 +28,8 @@ function NewItem({ kind, onDone }: { kind: Kind; onDone: () => void }) {
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "");
+  const { busy, submit } = useSubmit(onDone);
+  const error = itemFormError({ name: slug, description });
   return (
     <div class="form">
       <Field
@@ -45,17 +60,17 @@ function NewItem({ kind, onDone }: { kind: Kind; onDone: () => void }) {
           </select>
         </label>
       ) : null}
+      <FormError text={name || description ? error : null} />
       <div class="form-actions">
         <button
           type="button"
           class="btn"
-          disabled={!slug || !description.trim()}
-          onClick={() => {
-            post({ type: "setup:new", kind, scope, name: slug, description: description.trim() });
-            onDone();
-          }}
+          disabled={!!error || busy}
+          onClick={() =>
+            submit({ type: "setup:new", kind, scope, name: slug, description: description.trim() })
+          }
         >
-          Create
+          {busy ? "Creating…" : "Create"}
         </button>
         <button type="button" class="btn secondary" onClick={onDone}>
           Cancel

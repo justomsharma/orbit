@@ -10,7 +10,9 @@ import { SetupService } from "../setupService";
 
 const tmp = useTmpDir();
 
-async function setup(opts: { workspace?: boolean; settings?: object } = {}) {
+async function setup(
+  opts: { workspace?: boolean; settings?: object; platform?: NodeJS.Platform } = {},
+) {
   const root = tmp();
   const home = join(root, ".claude");
   const ws = join(root, "shop");
@@ -36,6 +38,7 @@ async function setup(opts: { workspace?: boolean; settings?: object } = {}) {
     }),
   );
   const log: string[] = [];
+  const replies: [string, boolean][] = [];
   const confirm: ConfirmHost = {
     confirm: async (s, warning) => {
       log.push(`confirm ${s}${warning ? ` ⚠ ${warning}` : ""}`);
@@ -60,7 +63,7 @@ async function setup(opts: { workspace?: boolean; settings?: object } = {}) {
     home,
     claudeJson,
     workspace: () => workspace,
-    platform: process.platform,
+    platform: opts.platform ?? "linux",
     writer: new SafeWriter(join(root, "backups")),
     confirm,
     snapshot: () => snap,
@@ -76,6 +79,9 @@ async function setup(opts: { workspace?: boolean; settings?: object } = {}) {
     newChat: async (prompt) => {
       log.push(`chat ${prompt}`);
     },
+    reply: (req, ok) => {
+      replies.push([req, ok]);
+    },
   };
   const json = (p: string) => JSON.parse(readFileSync(p, "utf8"));
   return {
@@ -85,6 +91,7 @@ async function setup(opts: { workspace?: boolean; settings?: object } = {}) {
     claudeJson,
     deps,
     log,
+    replies,
     json,
     handle: (m: object) => handleSetup(m, deps),
   };
@@ -230,6 +237,74 @@ describe("handleSetup: plugins, MCP, hooks, permissions, skills", () => {
     const { handle, home, json } = await setup();
     await handle({ type: "setup:skillVisibility", name: "deploy", visibility: "off" });
     expect(json(join(home, "settings.json")).skillOverrides).toEqual({ deploy: "off" });
+  });
+});
+
+describe("handleSetup: forms", () => {
+  it("tells the form whether its change was made", async () => {
+    const { handle, deps, replies } = await setup();
+    const msg = {
+      type: "setup:mcpAdd",
+      scope: "user",
+      name: "gh",
+      transport: "http",
+      url: "https://x/mcp",
+    };
+    await handle({ ...msg, req: "r1" });
+    await handle({ ...msg, req: "r2" }); // same name again: refused
+    deps.confirm.confirm = async () => "cancel";
+    await handle({ ...msg, name: "gh2", req: "r3" });
+    expect(replies).toEqual([
+      ["r1", true],
+      ["r2", false],
+      ["r3", false],
+    ]);
+  });
+
+  it("says so instead of silently dropping input it can't use", async () => {
+    const { handle, log, replies } = await setup();
+    const handled = await handle({
+      type: "setup:mcpAdd",
+      scope: "user",
+      name: "my server",
+      transport: "http",
+      url: "https://x",
+      req: "r9",
+    });
+    expect(handled).toBe(true);
+    expect(log[0]).toMatch(/^warn .*check/i);
+    expect(replies).toEqual([["r9", false]]);
+  });
+
+  it("starts npx through cmd /c on Windows for servers only you use", async () => {
+    const { handle, claudeJson, json } = await setup({ platform: "win32" });
+    await handle({
+      type: "setup:mcpAdd",
+      scope: "user",
+      name: "fs",
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "srv"],
+    });
+    expect(json(claudeJson).mcpServers.fs).toEqual({
+      type: "stdio",
+      command: "cmd",
+      args: ["/c", "npx", "-y", "srv"],
+    });
+  });
+
+  it("keeps the shared .mcp.json portable and explains why", async () => {
+    const { handle, ws, json, log } = await setup({ platform: "win32" });
+    await handle({
+      type: "setup:mcpAdd",
+      scope: "project",
+      name: "fs",
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "srv"],
+    });
+    expect(json(join(ws, ".mcp.json")).mcpServers.fs.command).toBe("npx");
+    expect(log[0]).toMatch(/cmd \/c/);
   });
 });
 

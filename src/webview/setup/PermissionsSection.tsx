@@ -12,6 +12,7 @@ import {
   SCOPE_LABEL,
   ScopeSelect,
   Section,
+  useSubmit,
 } from "./parts";
 
 const MODES: [string, string][] = [
@@ -35,6 +36,8 @@ export function PermissionsSection() {
   const [rule, setRule] = useState("");
   const [list, setList] = useState<"allow" | "ask" | "deny">("allow");
   const [scope, setScope] = useState<EditScope>("user");
+  // The typed rule is cleared only once it was really added.
+  const adding = useSubmit(() => setRule(""));
   const rules = s.permissions.rules.filter((r) => matches(q, r.rule, r.list));
   const byScope = (sc: string) => s.permissions.defaultMode.find((m) => m.scope === sc);
   const modeFrom = PRECEDENCE.map(byScope).find(Boolean);
@@ -133,13 +136,12 @@ export function PermissionsSection() {
           <button
             type="button"
             class="btn small"
-            disabled={!rule.trim()}
-            onClick={() => {
-              post({ type: "setup:rule", op: "add", scope, list, rule: rule.trim() });
-              setRule("");
-            }}
+            disabled={!rule.trim() || rule.trim().length > 500 || adding.busy}
+            onClick={() =>
+              adding.submit({ type: "setup:rule", op: "add", scope, list, rule: rule.trim() })
+            }
           >
-            Add rule
+            {adding.busy ? "Adding…" : "Add rule"}
           </button>
         </div>
       </div>

@@ -85,6 +85,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       ...this.d.setupDeps,
       snapshot: () => this.lastSetup,
       refresh: () => this.refresh(),
+      reply: (req, ok) => this.post({ type: "setup:result", req, ok }),
     };
     w.onDidReceiveMessage(async (m) => {
       try {
