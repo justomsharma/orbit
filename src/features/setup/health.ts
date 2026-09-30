@@ -8,7 +8,7 @@ import type { AgentInfo } from "./agents";
 import { settingsCatalog, unknownKeys } from "./catalog";
 import type { CommandInfo } from "./commands";
 import type { HookEntry } from "./hooks";
-import type { JsonFile } from "./jsonFile";
+import { CLAUDE_JSON_MAX, JSON_MAX, type JsonFile, SETTINGS_MAX } from "./jsonFile";
 import type { McpServer } from "./mcp";
 import type { MemoryInfo } from "./memory";
 import type { Permissions } from "./permissions";
@@ -156,15 +156,41 @@ export function hookScriptPath(
 
 const RANK: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
 
+const mb = (bytes: number) => `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
+const CANT_OPEN =
+  "It isn't a file Orbit can read: it may be a folder, a broken link, or not readable by you.";
+
 export function checkHealth(h: HealthInput): Issue[] {
   const out: Issue[] = [];
   const add = (
     i: Omit<Issue, "fix" | "claudePrompt"> & Partial<Pick<Issue, "fix" | "claudePrompt">>,
   ) => out.push({ fix: null, claudePrompt: null, ...i });
 
-  // Settings files
+  // Settings files. A file Orbit skipped is Orbit's limit, not a broken file: no "fix the JSON".
   for (const s of h.settings) {
     const where = SCOPE_WORD[s.scope];
+    if (s.exists && s.skipped === "unreadable") {
+      add({
+        id: `settings-unreadable:${s.scope}`,
+        severity: "warning",
+        area: "settings",
+        title: `Orbit couldn't open your ${where} settings`,
+        detail: `${CANT_OPEN} Claude Code may not be able to read it either.`,
+        file: s.path,
+      });
+    } else if (s.exists && s.skipped) {
+      add({
+        id: `settings-skipped:${s.scope}`,
+        severity: "info",
+        area: "settings",
+        title: `Orbit skipped your ${where} settings`,
+        detail:
+          s.skipped === "too-large"
+            ? `It is larger than ${mb(SETTINGS_MAX)}, so its settings, plugins and hooks aren't shown here. Claude Code isn't affected.`
+            : "It is a link Orbit doesn't follow, so its settings aren't shown here.",
+        file: s.path,
+      });
+    }
     if (s.exists && s.error) {
       add({
         id: `settings-error:${s.scope}`,
@@ -196,10 +222,32 @@ export function checkHealth(h: HealthInput): Issue[] {
       }
     }
   }
-  for (const [f, label] of [
-    [h.claudeJson, "Claude's global config (~/.claude.json)"],
-    [h.mcpJson, "this project's .mcp.json"],
+  for (const [f, label, name, max] of [
+    [h.claudeJson, "Claude's global config (~/.claude.json)", "~/.claude.json", CLAUDE_JSON_MAX],
+    [h.mcpJson, "this project's .mcp.json", "this project's .mcp.json", JSON_MAX],
   ] as const) {
+    if (f?.exists && f.skipped === "unreadable") {
+      add({
+        id: `json-unreadable:${f.path}`,
+        severity: "warning",
+        area: "mcp",
+        title: `Orbit couldn't open ${name}`,
+        detail: `${CANT_OPEN} MCP servers listed there aren't shown here.`,
+        file: f.path,
+      });
+    } else if (f?.exists && f.skipped) {
+      add({
+        id: `json-skipped:${f.path}`,
+        severity: "info",
+        area: "mcp",
+        title: `Orbit skipped ${name}`,
+        detail:
+          f.skipped === "too-large"
+            ? `It is larger than ${mb(max)}, so MCP servers listed there aren't shown here. Claude Code isn't affected.`
+            : "It is a link Orbit doesn't follow, so MCP servers listed there aren't shown here.",
+        file: f.path,
+      });
+    }
     if (f?.exists && f.error) {
       add({
         id: `json-error:${f.path}`,

@@ -46,6 +46,7 @@ describe("readJsonFile", () => {
       exists: false,
       data: null,
       error: null,
+      skipped: null,
     });
   });
 
@@ -54,29 +55,50 @@ describe("readJsonFile", () => {
     expect(await readJsonFile(p)).toMatchObject({ exists: true, data: { a: 1 }, error: null });
   });
 
-  it("reports files over the size cap", async () => {
+  it("skips files over the size cap without calling them broken", async () => {
     const p = put(join(tmp(), "big.json"), `{"a":"${"x".repeat(2000)}"}`);
-    const r = await readJsonFile(p, 1000);
-    expect(r).toMatchObject({ exists: true, data: null });
-    expect(r.error).toMatch(/too large/i);
+    expect(await readJsonFile(p, { maxBytes: 1000 })).toMatchObject({
+      exists: true,
+      data: null,
+      error: null,
+      skipped: "too-large",
+    });
   });
 
-  it("reports a folder where a file should be", async () => {
+  it("keeps the error for JSON that doesn't parse", async () => {
+    const p = put(join(tmp(), "bad.json"), '{ "a": 1, }');
+    expect(await readJsonFile(p)).toMatchObject({
+      data: null,
+      error: expect.stringMatching(/trailing commas/),
+      skipped: null,
+    });
+  });
+
+  it("skips a folder where a file should be", async () => {
     const d = join(tmp(), "dir.json");
     mkdirSync(d);
-    expect((await readJsonFile(d)).error).toMatch(/not a file/i);
+    expect(await readJsonFile(d)).toMatchObject({ data: null, error: null, skipped: "unreadable" });
   });
 
-  it("refuses to follow a symbolic link", async (ctx) => {
+  it("skips a symbolic link unless asked to follow it", async (ctx) => {
     const d = tmp();
-    writeFileSync(join(d, "target.json"), "{}");
+    writeFileSync(join(d, "target.json"), '{ "a": 1 }');
     try {
       symlinkSync(join(d, "target.json"), join(d, "link.json"));
     } catch {
       ctx.skip();
     }
-    const r = await readJsonFile(join(d, "link.json"));
-    expect(r).toMatchObject({ exists: true, data: null });
-    expect(r.error).toMatch(/link/i);
+    expect(await readJsonFile(join(d, "link.json"))).toMatchObject({
+      exists: true,
+      data: null,
+      error: null,
+      skipped: "link",
+    });
+    expect(await readJsonFile(join(d, "link.json"), { followLinks: true })).toMatchObject({
+      exists: true,
+      data: { a: 1 },
+      error: null,
+      skipped: null,
+    });
   });
 });

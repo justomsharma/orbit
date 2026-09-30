@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { settingsFile } from "../../core/paths";
-import { readJsonFile } from "./jsonFile";
+import { readJsonFile, SETTINGS_MAX, type Skipped } from "./jsonFile";
 
 export type SettingsScope = "user" | "project" | "local" | "managed";
 
@@ -10,7 +10,10 @@ export interface SettingsFile {
   path: string;
   exists: boolean;
   data: Record<string, unknown> | null;
+  /** The JSON is broken (see `JsonFile`). */
   error: string | null;
+  /** Orbit left it unread; Claude Code may still use it. */
+  skipped: Skipped | null;
 }
 
 /** Highest precedence first: managed > local > project > user. */
@@ -23,9 +26,10 @@ export function managedSettingsPath(platform: NodeJS.Platform): string {
   return "/etc/claude-code/managed-settings.json";
 }
 
+/** Follows links: Claude Code does, and dotfile managers link settings files. */
 export async function readSettingsFile(scope: SettingsScope, path: string): Promise<SettingsFile> {
-  const f = await readJsonFile(path);
-  return { scope, path, exists: f.exists, data: f.data, error: f.error };
+  const f = await readJsonFile(path, { maxBytes: SETTINGS_MAX, followLinks: true });
+  return { scope, path, exists: f.exists, data: f.data, error: f.error, skipped: f.skipped };
 }
 
 /**

@@ -15,7 +15,7 @@ export function settingsOf(
   data: Record<string, unknown> | null,
   path = join("/cfg", `${scope}.json`),
 ): SettingsFile {
-  return { scope, path, exists: data !== null, data, error: null };
+  return { scope, path, exists: data !== null, data, error: null, skipped: null };
 }
 
 /** A plugin folder shaped like one in `~/.claude/plugins/cache/<mkt>/<name>/<version>`. */

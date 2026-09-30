@@ -36,6 +36,7 @@ describe("readSettingsFiles", () => {
       exists: false,
       data: null,
       error: null,
+      skipped: null,
     });
     expect(files[1]!.path).toBe("/etc/claude-code/managed-settings.json");
   });
@@ -65,9 +66,30 @@ describe("readSettingsFiles", () => {
     const ws = tmp();
     const files = await readSettingsFiles(tmp(), ws, "linux");
     expect(files.filter((f) => f.scope !== "managed")).toEqual([
-      { scope: "user", path: expect.any(String), exists: false, data: null, error: null },
-      { scope: "project", path: expect.any(String), exists: false, data: null, error: null },
-      { scope: "local", path: expect.any(String), exists: false, data: null, error: null },
+      {
+        scope: "user",
+        path: expect.any(String),
+        exists: false,
+        data: null,
+        error: null,
+        skipped: null,
+      },
+      {
+        scope: "project",
+        path: expect.any(String),
+        exists: false,
+        data: null,
+        error: null,
+        skipped: null,
+      },
+      {
+        scope: "local",
+        path: expect.any(String),
+        exists: false,
+        data: null,
+        error: null,
+        skipped: null,
+      },
     ]);
   });
 
@@ -96,12 +118,19 @@ describe("readSettingsFiles", () => {
     expect(project!.error).toMatch(/found a string/);
   });
 
-  it("does not read settings over 1 MB", async () => {
+  it("reads large settings (many permission rules) and skips, not fails, past 4 MB", async () => {
     const home = tmp();
-    put(join(home, "settings.json"), `{"x":"${"a".repeat(1024 * 1024)}"}`);
-    const [user] = await readSettingsFiles(home, null, "linux");
-    expect(user).toMatchObject({ exists: true, data: null });
-    expect(user!.error).toMatch(/too large/i);
+    const ws = tmp();
+    const rules = Array.from(
+      { length: 40_000 },
+      (_, i) => `Bash(npm run build:package-${i} --watch)`,
+    );
+    put(join(ws, ".claude", "settings.local.json"), { permissions: { allow: rules } });
+    put(join(home, "settings.json"), `{"x":"${"a".repeat(4 * 1024 * 1024)}"}`);
+    const [user, , local] = await readSettingsFiles(home, ws, "linux");
+    expect(user).toMatchObject({ exists: true, data: null, error: null, skipped: "too-large" });
+    expect(local).toMatchObject({ error: null, skipped: null });
+    expect(local!.data).toMatchObject({ permissions: { allow: rules } });
   });
 });
 
@@ -114,6 +143,7 @@ describe("readSettingsFile", () => {
       exists: true,
       data: { disableAllHooks: true },
       error: null,
+      skipped: null,
     });
   });
 });
@@ -125,6 +155,7 @@ describe("decidingScope / toggleScope", () => {
     exists: data !== null,
     data,
     error: null,
+    skipped: null,
   });
   const files = [
     f("user", { disableAllHooks: true, enabledPlugins: { "a@m": true, "b@m": true } }),

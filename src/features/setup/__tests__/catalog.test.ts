@@ -11,6 +11,7 @@ const file = (
   exists: data !== null,
   data,
   error: null,
+  skipped: null,
 });
 
 describe("settingsCatalog", () => {
