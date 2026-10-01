@@ -63,6 +63,8 @@
 
 /* ---------- Chat details ---------- */
 .details {
+  position: relative;
+  overflow-anchor: none;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -156,6 +158,8 @@
 
 /* ---------- Search inside messages ---------- */
 .hits {
+  position: relative;
+  overflow-anchor: none;
   flex: 1;
   min-height: 0;
   overflow-y: auto;

@@ -112,7 +112,12 @@ function WeekTeaser() {
         class="link-btn"
         onClick={() => {
           store.tab.value = "usage";
-          requestAnimationFrame(() => document.getElementById("recap")?.scrollIntoView());
+          // Scroll only the Usage tab's own area (never the page) so the recap comes into view.
+          requestAnimationFrame(() => {
+            const recap = document.getElementById("recap");
+            const area = recap?.closest(".scroll");
+            if (recap && area) area.scrollTo({ top: recap.offsetTop - 12 });
+          });
         }}
       >
         See your week

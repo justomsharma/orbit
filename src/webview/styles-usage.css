@@ -1,7 +1,14 @@
 /* Home, Usage and chart styles. Built on VS Code theme tokens (see styles.css). */
 
 /* ---------- Scrolling tab bodies ---------- */
+/*
+ * Each tab scrolls inside itself. position: relative keeps absolutely positioned bits
+ * (screen-reader text under the charts) inside it; without it they stretched the whole
+ * page, which then scrolled and slid the tab bar out of view.
+ */
 .scroll {
+  position: relative;
+  overflow-anchor: none;
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;

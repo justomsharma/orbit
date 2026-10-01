@@ -21,12 +21,14 @@
   box-sizing: border-box;
 }
 
+/* The page itself never scrolls (not even by scrollIntoView): only each tab's own area does. */
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  overflow: clip;
 }
 
 body {
@@ -35,7 +37,6 @@ body {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size, 13px);
   line-height: 1.4;
-  overflow: hidden;
 }
 
 button {
@@ -214,6 +215,8 @@ button {
 
 /* ---------- List ---------- */
 .vlist {
+  position: relative;
+  overflow-anchor: none;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
