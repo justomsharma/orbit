@@ -30,7 +30,8 @@
     "cleanupPeriodDays": {
       "kind": "number",
       "description": "Number of days to retain sessions, orphaned subagent worktrees, tasks, shell snapshots, and backups. Minimum is 1; setting 0 is rejected with a validation error. See https://code.claude.com/docs/en/settings#available-settings",
-      "minimum": 1
+      "minimum": 1,
+      "integer": true
     },
     "env": {
       "kind": "json",
@@ -93,7 +94,8 @@
     "feedbackSurveyRate": {
       "kind": "number",
       "description": "Probability (0–1) that the session quality survey appears when eligible. A value of 0.05 means 5% of eligible sessions. See https://code.claude.com/docs/en/settings#available-settings",
-      "minimum": 0
+      "minimum": 0,
+      "maximum": 1
     },
     "enableAllProjectMcpServers": {
       "kind": "boolean",
@@ -385,7 +387,9 @@
     },
     "skillListingMaxDescChars": {
       "kind": "number",
-      "description": "Per-skill character cap on the combined description and when_to_use text in the skill listing Claude sees each turn. Text longer than this is truncated. See https://code.claude.com/docs/en/skills#skill-descriptions-are-cut-short"
+      "description": "Per-skill character cap on the combined description and when_to_use text in the skill listing Claude sees each turn. Text longer than this is truncated. See https://code.claude.com/docs/en/skills#skill-descriptions-are-cut-short",
+      "integer": true,
+      "exclusiveMinimum": 0
     },
     "preferredNotifChannel": {
       "kind": "enum",
@@ -418,7 +422,9 @@
     },
     "skillListingBudgetFraction": {
       "kind": "number",
-      "description": "Fraction of the model context window reserved for the skill listing sent to Claude (default 0.01 = 1%). When the listing exceeds this, descriptions are shortened to fit. Also configurable via the SLASH_COMMAND_TOOL_CHAR_BUDGET environment variable (fixed character count). See https://code.claude.com/docs/en/skills#skill-descriptions-are-cut-short"
+      "description": "Fraction of the model context window reserved for the skill listing sent to Claude (default 0.01 = 1%). When the listing exceeds this, descriptions are shortened to fit. Also configurable via the SLASH_COMMAND_TOOL_CHAR_BUDGET environment variable (fixed character count). See https://code.claude.com/docs/en/skills#skill-descriptions-are-cut-short",
+      "maximum": 1,
+      "exclusiveMinimum": 0
     },
     "sshConfigs": {
       "kind": "json",

@@ -11,6 +11,11 @@ export interface SettingDef {
   /** Common values for an open text setting (e.g. theme names; custom values allowed). */
   suggestions?: string[];
   minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  /** A whole number. */
+  integer?: boolean;
   deprecated: boolean;
   group: string;
   /** Only meaningful in organisation-managed settings; not offered for personal editing. */
@@ -108,6 +113,10 @@ interface RawDef {
   enum?: string[];
   suggestions?: string[];
   minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  integer?: boolean;
   deprecated?: boolean;
 }
 
@@ -133,6 +142,10 @@ export function settingsCatalog(): SettingDef[] {
       ...(d.enum ? { enum: d.enum } : {}),
       ...(d.suggestions ? { suggestions: d.suggestions } : {}),
       ...(d.minimum !== undefined ? { minimum: d.minimum } : {}),
+      ...(d.maximum !== undefined ? { maximum: d.maximum } : {}),
+      ...(d.exclusiveMinimum !== undefined ? { exclusiveMinimum: d.exclusiveMinimum } : {}),
+      ...(d.exclusiveMaximum !== undefined ? { exclusiveMaximum: d.exclusiveMaximum } : {}),
+      ...(d.integer ? { integer: true } : {}),
       deprecated: d.deprecated === true,
       group: groupOf.get(key) ?? "More",
       managedOnly: MANAGED_ONLY.test(key),
@@ -177,4 +190,17 @@ export function unknownKeys(data: Record<string, unknown>): string[] {
   return Object.keys(data)
     .filter((k) => k !== "$schema" && !Object.hasOwn(known, k) && !DOCUMENTED_EXTRA.has(k))
     .sort();
+}
+
+/** Why a value breaks a number setting's limits (Claude's own schema), or null when it fits. */
+export function numberProblem(def: SettingDef, v: number): string | null {
+  if (!Number.isFinite(v)) return "needs a number";
+  if (def.integer && !Number.isInteger(v)) return "needs a whole number";
+  if (def.minimum !== undefined && v < def.minimum) return `must be at least ${def.minimum}`;
+  if (def.maximum !== undefined && v > def.maximum) return `must be at most ${def.maximum}`;
+  if (def.exclusiveMinimum !== undefined && v <= def.exclusiveMinimum)
+    return `must be more than ${def.exclusiveMinimum}`;
+  if (def.exclusiveMaximum !== undefined && v >= def.exclusiveMaximum)
+    return `must be less than ${def.exclusiveMaximum}`;
+  return null;
 }

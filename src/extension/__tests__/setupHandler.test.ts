@@ -361,6 +361,36 @@ describe("handleSetup: masked values", () => {
   });
 });
 
+describe("handleSetup: number settings follow Claude's own limits", () => {
+  it.each([
+    ["cleanupPeriodDays", 2.5, /whole number/],
+    ["cleanupPeriodDays", 0, /at least 1/],
+    ["feedbackSurveyRate", 1.5, /at most 1/],
+    ["skillListingBudgetFraction", 0, /more than 0/],
+    ["skillListingMaxDescChars", 0, /more than 0/],
+  ])("refuses %s = %s", async (key, value, why) => {
+    const { handle, home, json, log } = await setup({ settings: {} });
+    await handle({ type: "setup:setSetting", scope: "user", key, value });
+    expect(log[0]).toMatch(why);
+    expect(json(join(home, "settings.json"))[key]).toBeUndefined();
+  });
+
+  it("accepts values inside the limits", async () => {
+    const { handle, home, json } = await setup({ settings: {} });
+    await handle({
+      type: "setup:setSetting",
+      scope: "user",
+      key: "feedbackSurveyRate",
+      value: 0.5,
+    });
+    await handle({ type: "setup:setSetting", scope: "user", key: "cleanupPeriodDays", value: 30 });
+    expect(json(join(home, "settings.json"))).toMatchObject({
+      feedbackSurveyRate: 0.5,
+      cleanupPeriodDays: 30,
+    });
+  });
+});
+
 describe("handleSetup: risky choices", () => {
   it("names the mode plainly and warns before bypassing every check", async () => {
     const { handle, log } = await setup({ settings: {} });

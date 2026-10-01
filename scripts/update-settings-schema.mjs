@@ -35,7 +35,11 @@ for (const [key, p] of Object.entries(schema.properties ?? {})) {
     description,
     ...(Array.isArray(p.enum) ? { enum: p.enum } : {}),
     ...(stringUnion(p)?.length ? { suggestions: stringUnion(p) } : {}),
+    ...(p.type === "integer" ? { integer: true } : {}),
     ...(typeof p.minimum === "number" ? { minimum: p.minimum } : {}),
+    ...(typeof p.maximum === "number" ? { maximum: p.maximum } : {}),
+    ...(typeof p.exclusiveMinimum === "number" ? { exclusiveMinimum: p.exclusiveMinimum } : {}),
+    ...(typeof p.exclusiveMaximum === "number" ? { exclusiveMaximum: p.exclusiveMaximum } : {}),
     ...(/^DEPRECATED/i.test(description) ? { deprecated: true } : {}),
   };
 }

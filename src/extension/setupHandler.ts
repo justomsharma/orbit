@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { applyJsonEdit, applyTextEdit, type ConfirmHost } from "../core/applyEdit";
 import type { SafeWriter } from "../core/safeWriter";
-import { settingsCatalog } from "../features/setup/catalog";
+import { numberProblem, settingsCatalog } from "../features/setup/catalog";
 import {
   addHook,
   addMcpServer,
@@ -166,6 +166,13 @@ async function run(msg: SetupMsg, d: SetupHandlerDeps, state: { changed: boolean
         if (def.managedOnly) {
           warn(`"${label}" only works in your organisation's managed settings.`);
           return true;
+        }
+        if (msg.value !== null && def.kind === "number" && typeof msg.value === "number") {
+          const why = numberProblem(def, msg.value);
+          if (why) {
+            warn(`"${label}" ${why}.`);
+            return true;
+          }
         }
         if (msg.value !== null) {
           const v = msg.value;

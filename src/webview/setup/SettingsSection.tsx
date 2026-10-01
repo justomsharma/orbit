@@ -111,6 +111,8 @@ function Control({
           placeholder="Claude's default"
           list={listId}
           min={def.minimum}
+          max={def.maximum}
+          step={def.kind === "number" ? (def.integer ? 1 : "any") : undefined}
           onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
           onBlur={commit}
           onKeyDown={(e) => {
