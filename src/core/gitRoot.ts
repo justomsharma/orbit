@@ -8,6 +8,9 @@ import { readTextSafe, statSafe } from "./fsSafe";
  * Read-only; never runs git.
  */
 export async function gitRoot(dir: string): Promise<string | null> {
+  // Folders come from VS Code as absolute paths; anything else would be resolved
+  // against wherever Orbit happens to run, and could find an unrelated repository.
+  if (!isAbsolute(dir)) return null;
   let d = resolve(dir);
   for (let i = 0; i < 64; i++) {
     const dotGit = join(d, ".git");
