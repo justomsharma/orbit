@@ -96,11 +96,22 @@ describe("readSkills", () => {
     expect(s!.problems).toEqual(["Could not read this file"]);
   });
 
-  it("skips a symlinked skill folder", async (ctx) => {
+  it("lists a skill in a linked folder (Claude uses it), marked as linked", async (ctx) => {
     const { home } = setup();
     const outside = join(tmp(), "outside");
     put(outside, "SKILL.md", "---\nname: linked\ndescription: d\n---\n");
     if (!linkDir(outside, join(home, "skills", "linked"))) ctx.skip();
+    put(home, "skills/real/SKILL.md", "---\nname: real\ndescription: d\n---\n");
+    const skills = await readSkills(home, null, []);
+    expect(skills.map((s) => [s.name, s.linked])).toEqual([
+      ["linked", true],
+      ["real", false],
+    ]);
+  });
+
+  it("ignores a link that points at nothing or at a file", async (ctx) => {
+    const { home } = setup();
+    if (!linkDir(join(tmp(), "gone"), join(home, "skills", "dangling"))) ctx.skip();
     put(home, "skills/real/SKILL.md", "---\nname: real\ndescription: d\n---\n");
     expect((await readSkills(home, null, [])).map((s) => s.name)).toEqual(["real"]);
   });

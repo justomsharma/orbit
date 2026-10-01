@@ -77,6 +77,26 @@ describe("parseFrontmatter", () => {
     });
   });
 
+  it("reads a one-line description with ': ' in it as text, as Claude does", () => {
+    const r = parseFrontmatter(
+      '---\nname: x\ndescription: Become "a guy" — persona: ideas, rules, naming.\nuser-invocable: false\n---\n',
+    );
+    expect(r).toMatchObject({
+      data: {
+        name: "x",
+        description: 'Become "a guy" — persona: ideas, rules, naming.',
+        "user-invocable": false,
+      },
+      error: null,
+    });
+  });
+
+  it("still reports frontmatter that is really broken", () => {
+    expect(parseFrontmatter("---\nname: [unclosed\n  - x: : :\n---\n").error).toMatch(
+      /not valid YAML/,
+    );
+  });
+
   it("tolerates duplicate keys (last one wins)", () => {
     const r = parseFrontmatter("---\nname: a\nname: b\n---\n");
     expect(r.error).toBeNull();

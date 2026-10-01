@@ -153,6 +153,7 @@ export function sampleSetup(over: Partial<SetupSnapshot> = {}): SetupSnapshot {
         allowedTools: ["Bash(git log *)"],
         userInvocable: true,
         modelInvocable: true,
+        linked: false,
         problems: [],
       },
       {
@@ -166,6 +167,7 @@ export function sampleSetup(over: Partial<SetupSnapshot> = {}): SetupSnapshot {
         allowedTools: [],
         userInvocable: true,
         modelInvocable: true,
+        linked: false,
         problems: ["No description — Claude won't know when to use it"],
       },
     ],

@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { mapLimit } from "../../core/concurrency";
 import { listDirSafe, statSafe } from "../../core/fsSafe";
@@ -27,18 +28,36 @@ export interface SkillInfo {
   userInvocable: boolean;
   modelInvocable: boolean;
   problems: string[];
+  /** The skill's folder is a link (symlink or junction) to somewhere else; Claude follows it. */
+  linked: boolean;
 }
 
 interface Found extends ContentRoot {
   folder: string;
+  linked: boolean;
 }
 
-/** `<root>/<folder>/SKILL.md`, one level deep. Linked folders are not followed. */
+/** Is this link a folder? (Read-only; a dangling link or a link to a file is not.) */
+async function linksToFolder(p: string): Promise<boolean> {
+  try {
+    return (await stat(p)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `<root>/<folder>/SKILL.md`, one level deep. Linked folders count too, as they
+ * do for Claude; Orbit only reads through them.
+ */
 async function findSkills(roots: ContentRoot[]): Promise<Found[]> {
   const out: Found[] = [];
   for (const root of roots)
-    for (const e of await listDirSafe(root.dir))
-      if (e.isDirectory()) out.push({ ...root, folder: e.name });
+    for (const e of await listDirSafe(root.dir)) {
+      if (e.isDirectory()) out.push({ ...root, folder: e.name, linked: false });
+      else if (e.isSymbolicLink() && (await linksToFolder(join(root.dir, e.name))))
+        out.push({ ...root, folder: e.name, linked: true });
+    }
   return out;
 }
 
@@ -46,7 +65,7 @@ async function readSkill(f: Found): Promise<SkillInfo | null> {
   const dir = join(f.dir, f.folder);
   const file = join(dir, "SKILL.md");
   if (!(await statSafe(file))?.isFile()) return null;
-  const base = { scope: f.scope, plugin: f.plugin, dir, file };
+  const base = { scope: f.scope, plugin: f.plugin, dir, file, linked: f.linked };
   const md = await readMarkdown(file);
   if (!md)
     return {

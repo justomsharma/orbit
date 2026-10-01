@@ -42,9 +42,12 @@ function parseYaml(src: string): { data: Record<string, unknown>; error: string 
 function parseLenient(src: string) {
   const first = parseYaml(src);
   if (!first.error) return first;
+  // Also one-line values with ": " inside (a sentence like "persona: ideas, rules"),
+  // which Claude reads as plain text too. Other values (true, 3, lists) stay as they are.
   const quoted = src.replace(
-    /^([\w-]+):[ \t]+(\[[^\r\n]*?)[ \t]*$/gm,
-    (_, k: string, v: string) => `${k}: ${JSON.stringify(v)}`,
+    /^([\w-]+):[ \t]+([^\s"'|>&*!#][^\r\n]*?)[ \t]*$/gm,
+    (line: string, k: string, v: string) =>
+      v.startsWith("[") || v.includes(": ") ? `${k}: ${JSON.stringify(v)}` : line,
   );
   if (quoted === src) return first;
   const retry = parseYaml(quoted);

@@ -153,6 +153,11 @@ export function SkillsSection() {
               badges={
                 <>
                   <Badge>{k.plugin ? k.plugin.split("@")[0] : SCOPE_LABEL[k.scope]}</Badge>
+                  {k.linked ? (
+                    <Badge title="This skill's folder is a link to another place on disk">
+                      Linked
+                    </Badge>
+                  ) : null}
                   {k.problems.length ? <Badge tone="warn">Check</Badge> : null}
                 </>
               }
