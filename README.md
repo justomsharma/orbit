@@ -2,7 +2,7 @@
   <img src="docs/images/hero.jpg" alt="Orbit: everything around Claude Code, in one sidebar" width="100%">
 </p>
 
-# Orbit
+# Orbit HQ
 
 **Your home for Claude Code.** Every chat, your usage and your whole setup, in one calm sidebar.
 100% local: no account, no network, no telemetry.
