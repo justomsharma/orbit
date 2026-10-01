@@ -60,7 +60,7 @@ export function HealthSection() {
       title="Health"
       icon="pulse"
       count={s.issues.length}
-      note={serious ? `${serious} need attention` : undefined}
+      note={serious ? `${serious} ${serious === 1 ? "needs" : "need"} attention` : undefined}
       hidden={q.trim() !== "" && issues.length === 0}
     >
       {s.issues.length === 0 ? (

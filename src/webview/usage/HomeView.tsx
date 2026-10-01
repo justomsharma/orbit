@@ -115,7 +115,7 @@ function WeekTeaser() {
           requestAnimationFrame(() => document.getElementById("recap")?.scrollIntoView());
         }}
       >
-        See your week →
+        See your week
       </button>
     </section>
   );

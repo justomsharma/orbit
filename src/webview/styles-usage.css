@@ -11,21 +11,28 @@
   gap: 12px;
 }
 
+/* Sentence-case headings, like VS Code's own panes: no shouted eyebrows. */
 .section-title {
   margin: 0 0 8px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
+  color: var(--fg);
 }
 
 /* ---------- Cards ---------- */
+/* Sections are flat panes divided by a hairline; only the one that matters most gets a surface. */
 .card {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--vscode-editorWidget-background, transparent);
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+/* The one emphasised thing on Home: where you left off. */
+.card.continue-card {
+  padding: 12px 12px 12px 14px;
+  border-top: none;
+  border-left: 3px solid var(--vscode-button-background, var(--accent));
+  border-radius: 0 6px 6px 0;
+  background: var(--vscode-editorWidget-background, var(--hover));
 }
 
 .card-head {
@@ -152,20 +159,25 @@
 }
 
 /* ---------- Stat tiles & hero ---------- */
+/* Figures sit in an open row, divided by rules, not boxed one by one. */
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-  gap: 8px;
+  row-gap: 10px;
 }
 
 .stat {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 2px 10px;
+  border-left: 1px solid var(--border);
   min-width: 0;
+}
+
+.stat:first-child {
+  padding-left: 0;
+  border-left: none;
 }
 
 .stat-label {
