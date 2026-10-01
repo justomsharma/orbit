@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/hero.png" alt="Orbit: everything around Claude Code, in one sidebar" width="100%">
+  <img src="docs/images/hero.jpg" alt="Orbit: everything around Claude Code, in one sidebar" width="100%">
 </p>
 
 # Orbit
