@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<!-- Source of docs/images/hero.png: render at 1280x720 @2x (see docs/images/README.md). -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --night: #0f1538;
+    --sky: #1f2a66;
+    --ink: #f3f5ff;
+    --ink-2: #b9c1e8;
+    --moon: #ffd36b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; }
+  body {
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 700px at 78% 30%, #2b3a8c 0%, transparent 60%),
+      linear-gradient(160deg, var(--sky) 0%, var(--night) 70%);
+    position: relative;
+  }
+  /* A faint orbit behind everything: the one decorative line, in the moon's gold. */
+  .orbit {
+    position: absolute;
+    left: 520px; top: -120px;
+    width: 980px; height: 520px;
+    border: 1.5px solid color-mix(in srgb, var(--moon) 45%, transparent);
+    border-radius: 50%;
+    transform: rotate(-14deg);
+  }
+  .stars i {
+    position: absolute; width: 2px; height: 2px; border-radius: 50%;
+    background: #fff; opacity: .5;
+  }
+  .copy {
+    position: absolute; left: 72px; top: 178px; width: 520px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 22px; font-weight: 600; letter-spacing: .01em; color: var(--ink);
+  }
+  .brand img { width: 40px; height: 40px; border-radius: 9px; }
+  h1 {
+    margin: 34px 0 20px;
+    font-size: 52px; line-height: 1.06; font-weight: 650; letter-spacing: -0.025em;
+  }
+  p {
+    margin: 0; max-width: 430px;
+    font-size: 21px; line-height: 1.45; color: var(--ink-2);
+  }
+  .panels { position: absolute; left: 628px; top: 64px; width: 600px; height: 640px; }
+  .panel {
+    position: absolute; width: 286px; height: 600px;
+    border-radius: 12px; overflow: hidden;
+    background: #181818;
+    border: 1px solid rgba(255,255,255,.14);
+    box-shadow: 0 30px 60px -20px rgba(4, 7, 30, .75);
+  }
+  .panel .bar {
+    height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 10px;
+    background: #1f1f1f; border-bottom: 1px solid rgba(255,255,255,.08);
+    font-size: 11px; color: #9d9d9d; letter-spacing: .02em;
+  }
+  .panel .bar span { width: 8px; height: 8px; border-radius: 50%; background: #3a3a3a; }
+  .panel img { display: block; width: 100%; }
+  .p1 { left: 0; top: 40px; }
+  .p2 { left: 306px; top: 0; }
+</style>
+</head>
+<body>
+  <div class="orbit"></div>
+  <div class="stars">
+    <i style="left:120px;top:60px"></i><i style="left:430px;top:96px;opacity:.35"></i>
+    <i style="left:560px;top:640px;opacity:.3"></i><i style="left:84px;top:610px"></i>
+    <i style="left:1210px;top:56px;opacity:.4"></i><i style="left:300px;top:540px;opacity:.25"></i>
+  </div>
+
+  <section class="copy">
+    <div class="brand"><img src="../../media/icon.png" alt="">Orbit</div>
+    <h1>Everything around Claude Code, in one sidebar.</h1>
+    <p>Find any chat and every file it changed, see what you use, and keep your setup healthy. All on your own machine.</p>
+  </section>
+
+  <div class="panels">
+    <div class="panel p1"><div class="bar"><span></span><span></span><span></span>Orbit</div><img src="home.png" alt=""></div>
+    <div class="panel p2"><div class="bar"><span></span><span></span><span></span>Orbit</div><img src="chat-details.png" alt=""></div>
+  </div>
+</body>
+</html>

@@ -5,6 +5,14 @@
   "version": "0.1.0",
   "publisher": "orbit-dev",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justomsharma/orbit"
+  },
+  "homepage": "https://github.com/justomsharma/orbit#readme",
+  "bugs": {
+    "url": "https://github.com/justomsharma/orbit/issues"
+  },
   "icon": "media/icon.png",
   "galleryBanner": {
     "color": "#1f2a66",
@@ -80,7 +88,7 @@
     "test:perf": "vitest run --config vitest.perf.mts",
     "test:local": "vitest run --config vitest.local.mts",
     "test:integration": "npm run build && node test/integration/runTest.cjs",
-    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository -o dist/",
+    "package": "npm run build && vsce package --no-dependencies -o dist/",
     "vscode:uninstall": "node ./dist/uninstall.js"
   },
   "devDependencies": {

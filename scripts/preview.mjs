@@ -173,17 +173,17 @@ const setupMsgs = [
 const promptsMsg = {
   type: "prompts",
   items: [
-    ["tell in short and simple", 60, 0.3, 0],
-    ["commit, push, and raise MR", 14, 2, 0],
+    ["Review this diff for bugs and missing tests. Point to exact lines.", 23, 0.3, 0],
+    ["Run the tests, fix whatever fails, and explain each fix in one line", 17, 2, 0],
     [
-      "[Pasted text #1 +290 lines] this is the technical plan, run everything locally and test it end to end",
+      "[Pasted text #1 +290 lines] Here's the spec. Plan it first, then build it step by step",
       1,
       5,
       1,
     ],
-    ["Review this diff for bugs and missing tests. Be specific and point to lines.", 7, 26, 0],
-    ["continue from where you left off", 9, 30, 0],
-    ["write the release notes for 2.4 from merged PRs", 1, 60, 0],
+    ["Commit, push and open a pull request with a short summary", 31, 26, 0],
+    ["Explain this error and the smallest safe fix", 12, 30, 0],
+    ["Write the release notes for 2.4 from the merged pull requests", 1, 60, 0],
   ].map(([text, count, hoursAgo, pastes], i) => ({
     id: String(i).padStart(12, "a"),
     text,

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/hero.png" alt="Orbit: everything around Claude Code, in one sidebar" width="100%">
+</p>
+
 # Orbit
 
 **Your home for Claude Code.** Every chat, your usage and your whole setup, in one calm sidebar.
@@ -5,6 +9,14 @@
 
 Orbit is a companion. You still talk to Claude in Claude Code's own chat or terminal; Orbit finds,
 explains and tidies everything around it, then hands you back to Claude.
+
+<p align="center">
+  <img src="docs/images/chats.png" alt="Chats: every chat, searchable, with what's running now" width="24%">
+  <img src="docs/images/prompts.png" alt="Prompts: every prompt you've typed, ready to use again" width="24%">
+  <img src="docs/images/usage.png" alt="Usage: cost per day, plan limits and a 6-month activity map" width="24%">
+  <img src="docs/images/setup.png" alt="Setup: a health check first, then MCP servers, plugins, skills, hooks and more" width="24%">
+</p>
+<p align="center"><sub>Chats, Prompts, Usage and Setup. Orbit follows your VS Code theme, light or dark.</sub></p>
 
 ## What you get
 
