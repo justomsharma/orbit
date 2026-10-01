@@ -4,6 +4,14 @@
 
 # Orbit HQ
 
+[![Version](https://img.shields.io/visual-studio-marketplace/v/OmSharma.orbit-hq?label=Marketplace&color=1f2a66)](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/OmSharma.orbit-hq?color=1f2a66)](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq)
+[![Rating](https://img.shields.io/visual-studio-marketplace/r/OmSharma.orbit-hq?color=1f2a66)](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq&ssr=false#review-details)
+[![CI](https://github.com/justomsharma/orbit/actions/workflows/ci.yml/badge.svg)](https://github.com/justomsharma/orbit/actions/workflows/ci.yml)
+
+**[Install from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq)**, or search
+"Orbit HQ" in VS Code's Extensions view.
+
 **Your home for Claude Code.** Every chat, your usage and your whole setup, in one calm sidebar.
 100% local: no account, no network, no telemetry.
 
