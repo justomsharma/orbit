@@ -8,6 +8,7 @@ import { PromptLibrary } from "../../src/features/prompts/library";
 import { readTimeline } from "../../src/features/timeline/reader";
 import { L, writeSession } from "../helpers/fakeHome";
 import { useTmpDir } from "../helpers/tmp";
+import { budget } from "./budget";
 
 const tmp = useTmpDir();
 
@@ -28,10 +29,10 @@ describe("chats tools performance", () => {
     const lib = new PromptLibrary(home);
     let t0 = performance.now();
     expect(await lib.update()).toHaveLength(5000);
-    expect(performance.now() - t0).toBeLessThan(1500);
+    expect(performance.now() - t0).toBeLessThan(budget(1500));
     t0 = performance.now();
     await lib.update();
-    expect(performance.now() - t0).toBeLessThan(200);
+    expect(performance.now() - t0).toBeLessThan(budget(200));
   });
 
   it("reads a chat with 5 000 checkpoints quickly", async () => {
@@ -50,7 +51,7 @@ describe("chats tools performance", () => {
     const files = await readTimeline({ home, sessionId: s.id, transcript: s.file, cwd });
     expect(files).toHaveLength(250);
     expect(files[0]!.versions).toHaveLength(20);
-    expect(performance.now() - t0).toBeLessThan(1500);
+    expect(performance.now() - t0).toBeLessThan(budget(1500));
   });
 
   it("searches ~60 MB of chats and renders a large transcript within budget", async () => {
@@ -74,11 +75,11 @@ describe("chats tools performance", () => {
     let t0 = performance.now();
     const hits = await searchMessages(files, "golden set");
     expect(hits.map((h) => h.sessionId)).toEqual([sessions[59]!.id]);
-    expect(performance.now() - t0).toBeLessThan(8000);
+    expect(performance.now() - t0).toBeLessThan(budget(8000));
 
     t0 = performance.now();
     const md = await transcriptMarkdown(sessions[0]!.file, { title: "Big chat" });
     expect(md.startsWith("# Big chat")).toBe(true);
-    expect(performance.now() - t0).toBeLessThan(2000);
+    expect(performance.now() - t0).toBeLessThan(budget(2000));
   }, 120_000);
 });

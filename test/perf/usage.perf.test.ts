@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { UsageIndex } from "../../src/features/usage/index";
 import { L, writeSession } from "../helpers/fakeHome";
 import { useTmpDir } from "../helpers/tmp";
+import { budget } from "./budget";
 
 const tmp = useTmpDir();
 
@@ -36,7 +37,7 @@ describe("usage index performance", () => {
     const second = performance.now() - t0;
 
     console.log(`usage index: first ${first.toFixed(0)} ms, unchanged ${second.toFixed(1)} ms`);
-    expect(first).toBeLessThan(4000);
-    expect(second).toBeLessThan(200);
+    expect(first).toBeLessThan(budget(4000));
+    expect(second).toBeLessThan(budget(200));
   });
 });

@@ -59,7 +59,8 @@ function pastedRefs(v: unknown): Record<string, PastedRef> {
   return out;
 }
 
-const pasteCount = (v: unknown) => Object.keys(obj(v) ?? {}).length;
+/** Pasted blocks Orbit can read (the same ones it restores). */
+const pasteCount = (v: unknown) => Object.keys(pastedRefs(v)).length;
 
 /** The text plus what was pasted, so prompts that look alike but pasted different text stay apart. */
 const keyOf = (text: string, pasted: Record<string, PastedRef>) =>

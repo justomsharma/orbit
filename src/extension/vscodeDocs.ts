@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 const SCHEME = "orbit-view";
+const MAX_DOCS = 100;
 
 /**
  * Read-only documents Orbit shows in VS Code's own editors: the "after" side of
@@ -21,8 +22,16 @@ export class ReadOnlyDocs implements vscode.TextDocumentContentProvider {
   add(text: string, name: string): vscode.Uri {
     const id = String(++this.next);
     this.docs.set(id, text);
-    // Keep only a handful around.
-    if (this.docs.size > 20) this.docs.delete(this.docs.keys().next().value!);
+    // Keep a bounded number around, but never one that is still open in an editor.
+    if (this.docs.size > MAX_DOCS) {
+      const open = new Set(
+        vscode.workspace.textDocuments
+          .filter((d) => d.uri.scheme === SCHEME)
+          .map((d) => d.uri.query),
+      );
+      const oldest = [...this.docs.keys()].find((k) => !open.has(k) && k !== id);
+      if (oldest !== undefined) this.docs.delete(oldest);
+    }
     const safe = name.replace(/[\\/:*?"<>|]+/g, " ").trim() || "untitled";
     return vscode.Uri.from({ scheme: SCHEME, path: `/${safe}`, query: id });
   }

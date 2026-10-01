@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { listSessions } from "../../src/features/chats/reader";
 import { L, writeSession } from "../helpers/fakeHome";
 import { useTmpDir } from "../helpers/tmp";
+import { budget } from "./budget";
 
 const tmp = useTmpDir();
 
@@ -21,6 +22,6 @@ describe("performance", () => {
     const all = await listSessions(home);
     const ms = performance.now() - t0;
     expect(all).toHaveLength(2000);
-    expect(ms).toBeLessThan(2500);
+    expect(ms).toBeLessThan(budget(2500));
   });
 });
