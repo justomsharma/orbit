@@ -154,6 +154,27 @@ describe("HomeView", () => {
     expect(sent).toContainEqual({ type: "newChat" });
   });
 
+  it("lets you type what Claude should do, then opens Claude's chat with it", () => {
+    render(<HomeView />);
+    const box = screen.getByRole("textbox", { name: /What should Claude do/ });
+    fireEvent.input(box, { target: { value: "  Fix the login bug  " } });
+    fireEvent.click(screen.getByRole("button", { name: /Ask Claude/ }));
+    expect(sent).toContainEqual({ type: "newChat", prompt: "Fix the login bug" });
+    expect((box as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("sends with Enter, keeps Shift+Enter for a new line, and ignores an empty box", () => {
+    render(<HomeView />);
+    const box = screen.getByRole("textbox", { name: /What should Claude do/ });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(sent.filter((m) => m.type === "newChat")).toHaveLength(0);
+    fireEvent.input(box, { target: { value: "Add tests" } });
+    fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
+    expect(sent.filter((m) => m.type === "newChat")).toHaveLength(0);
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(sent).toContainEqual({ type: "newChat", prompt: "Add tests" });
+  });
+
   it("picks up where you left off", () => {
     render(<HomeView />);
     expect(screen.getByText("Fix checkout race")).toBeTruthy();

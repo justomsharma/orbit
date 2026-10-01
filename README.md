@@ -30,7 +30,7 @@ explains and tidies everything around it, then hands you back to Claude.
 
 | Tab | |
 |---|---|
-| **Home** | Today at a glance: continue your last chat, what's running, today's usage, plan limits, setup warnings. |
+| **Home** | Today at a glance: type what Claude should do, continue your last chat, what's running, today's usage, plan limits, setup warnings. |
 | **Chats** | Every chat from the terminal and the extension. Search titles or **inside messages**, filter by folder, branch and date, pin, rename, tag. Continue in Claude's chat or a terminal, or **fork** into a new chat (needs the `claude` command). Open a chat's **files and transcript**: every file Claude changed, each version, compare with now, safe restore, readable transcript, export to Markdown. **Prompts**: every prompt you've typed (repeats collapsed, pasted text restored), ready to use again. |
 | **Usage** | Tokens and cost by day, week and month, by model and project, a 6-month activity map, and a weekly recap card to share (image or Markdown). Optional 5-hour and 7-day **plan limits**. |
 | **Setup** | MCP servers, plugins, skills, agents, commands, hooks, permissions, memory and CLAUDE.md files, and Claude's settings. See them and change them safely. A **health check** finds broken JSON, missing commands, servers waiting for approval and more, and **Fix with Claude** opens a chat with the fix typed in. |

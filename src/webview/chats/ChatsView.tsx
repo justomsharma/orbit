@@ -453,6 +453,12 @@ function ChatList() {
           {liveCount > 0 ? <Chip value="live" label="Running" count={liveCount} /> : null}
         </fieldset>
         {filtersOpen || narrowed() ? <FilterRow /> : null}
+        {all.length > 0 && !store.onboarding.value.done.includes("continue") ? (
+          <p class="list-hint">
+            <Icon name="info" />
+            Click a chat to open it in Claude and keep typing there.
+          </p>
+        ) : null}
       </div>
       {body}
     </section>

@@ -78,6 +78,16 @@ describe("ChatsView", () => {
     expect(screen.getByText("Fix checkout bug")).toBeTruthy();
   });
 
+  it("tells a newcomer that clicking a chat opens it in Claude, until they've done it", () => {
+    load([mk(1)]);
+    render(<ChatsView />);
+    expect(screen.getByText(/Click a chat to open it in Claude/)).toBeTruthy();
+    cleanup();
+    store.onboarding.value = { done: ["continue"], dismissed: false };
+    render(<ChatsView />);
+    expect(screen.queryByText(/Click a chat to open it in Claude/)).toBeNull();
+  });
+
   it("continues a chat when its row is clicked", () => {
     const s = mk(1);
     load([s]);

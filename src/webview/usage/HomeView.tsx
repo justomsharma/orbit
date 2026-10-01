@@ -1,3 +1,5 @@
+import { useState } from "preact/hooks";
+import { MAX_ASK } from "../../shared/protocol";
 import { post } from "../bus";
 import { relativeTime } from "../chats/model";
 import * as store from "../store";
@@ -152,6 +154,45 @@ function WeekTeaser() {
   );
 }
 
+/** Type what Claude should do; Claude's chat opens with it typed in, ready to send. */
+function Ask() {
+  const [text, setText] = useState("");
+  const ask = () => {
+    const prompt = text.trim();
+    if (!prompt) return;
+    post({ type: "newChat", prompt });
+    setText("");
+  };
+  return (
+    <div class="ask">
+      <textarea
+        class="ask-box"
+        aria-label="What should Claude do?"
+        aria-describedby="ask-hint"
+        placeholder="What should Claude do?"
+        rows={2}
+        maxLength={MAX_ASK}
+        value={text}
+        onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+            e.preventDefault();
+            ask();
+          }
+        }}
+      />
+      <div class="ask-foot">
+        <span id="ask-hint" class="ask-hint">
+          Opens in Claude's chat, typed in. Press Enter there to send.
+        </span>
+        <button type="button" class="btn" disabled={!text.trim()} onClick={ask}>
+          <Icon name="send" /> Ask Claude
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function HomeView() {
   const hour = new Date().getHours();
   const hasChats = store.sessions.value.length > 0;
@@ -163,6 +204,7 @@ export function HomeView() {
           <Icon name="add" /> New chat
         </button>
       </header>
+      <Ask />
       <GettingStarted />
       {!store.loaded.value ? (
         <div class="loading" role="status">

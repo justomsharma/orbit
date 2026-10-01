@@ -33,6 +33,9 @@ const PngDataUrl = v.pipe(
   v.regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/),
 );
 
+/** The longest prompt Home's "What should Claude do?" box takes. */
+export const MAX_ASK = 10_000;
+
 /** Messages the webview may send. Anything else is dropped by the host. */
 export const ViewMsgSchema = v.variant("type", [
   v.object({ type: v.literal("ready") }),
@@ -52,9 +55,12 @@ export const ViewMsgSchema = v.variant("type", [
     id: SessionId,
     tags: v.pipe(v.array(v.pipe(v.string(), v.maxLength(40))), v.maxLength(20)),
   }),
-  v.object({ type: v.literal("onboarding"), action: v.picklist(["find", "dismiss"]) }),
+  v.object({ type: v.literal("onboarding"), action: v.picklist(["find", "dismiss", "tour"]) }),
   v.object({ type: v.literal("openLink"), url: HttpsUrl }),
-  v.object({ type: v.literal("newChat") }),
+  v.object({
+    type: v.literal("newChat"),
+    prompt: v.optional(v.pipe(v.string(), v.maxLength(MAX_ASK))),
+  }),
   v.object({ type: v.literal("quota"), on: v.boolean() }),
   v.object({ type: v.literal("copyRecap") }),
   v.object({

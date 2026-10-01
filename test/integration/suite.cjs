@@ -27,6 +27,7 @@ exports.run = async () => {
     for (const c of [
       "orbit.open",
       "orbit.refresh",
+      "orbit.tour",
       "orbit.showChats",
       "orbit.showPrompts",
       "orbit.showUsage",
@@ -103,7 +104,13 @@ exports.run = async () => {
   await check("ships a Get started walkthrough, and its buttons work", async () => {
     const walk = ext.packageJSON.contributes.walkthroughs?.[0];
     assert.ok(walk && walk.steps.length >= 5, "walkthrough missing");
-    for (const c of ["orbit.showChats", "orbit.showPrompts", "orbit.showUsage", "orbit.showSetup"])
+    for (const c of [
+      "orbit.tour",
+      "orbit.showChats",
+      "orbit.showPrompts",
+      "orbit.showUsage",
+      "orbit.showSetup",
+    ])
       await vscode.commands.executeCommand(c);
   });
 

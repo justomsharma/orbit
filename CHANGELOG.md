@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- **Ask Claude from Home**: type what Claude should do; Claude's chat opens with it typed in.
+- **Fixed**: a chat's hover buttons no longer cover its title.
+- The Get started tour now opens by itself once (VS Code skipped it on some installs), and
+  Home's checklist has a **Take the tour** link. New command: Orbit: Get started.
+- The checklist explains only the next step, so Home stays short.
+- Chats tells newcomers that clicking a chat opens it in Claude.
+
 ## 0.1.1
 
 - **Get started**: a short walkthrough opens after install, and Home shows a checklist that ticks

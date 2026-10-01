@@ -318,25 +318,19 @@ button {
   border-radius: 3px;
 }
 
-/* Row actions appear on hover or keyboard focus, over a fade so titles stay readable. */
+/* Row actions appear on hover or keyboard focus, beside the title (which then shortens),
+   so they never cover it, whatever the theme's hover colour. */
 .chat-actions {
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
   display: none;
+  flex: none;
+  align-items: center;
   gap: 1px;
-  padding-left: 16px;
-  background: linear-gradient(to right, transparent, var(--hover) 14px);
+  margin-left: 4px;
 }
 
 .chat-row:hover .chat-actions,
 .chat-row:focus-within .chat-actions {
   display: flex;
-}
-
-.chats.kbd .chat-row.active .chat-actions {
-  background: linear-gradient(to right, transparent, var(--active) 14px);
 }
 
 .icon-btn {

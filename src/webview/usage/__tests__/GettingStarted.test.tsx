@@ -112,3 +112,18 @@ describe("Running now on Home", () => {
     expect(store.filter.value).toBe("live");
   });
 });
+
+describe("Get started stays short", () => {
+  it("explains only the next step, so Home stays readable", () => {
+    render(<HomeView />);
+    const g = guide();
+    expect(within(g).getByText(/Continue any chat/)).toBeTruthy();
+    expect(within(g).queryByText(/compare or restore/)).toBeNull();
+  });
+
+  it("opens the full tour", () => {
+    render(<HomeView />);
+    fireEvent.click(within(guide()).getByRole("button", { name: /Take the tour/ }));
+    expect(sent).toContainEqual({ type: "onboarding", action: "tour" });
+  });
+});

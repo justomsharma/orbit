@@ -27,6 +27,9 @@ export interface OpenerHost {
 
 const INSTALL_DOCS = "https://code.claude.com/docs/en/setup";
 
+/** Longer prompts (URL-encoded) are copied instead of typed in through the link. */
+export const MAX_PROMPT_IN_LINK = 8000;
+
 export class Opener {
   constructor(private readonly host: OpenerHost) {}
 

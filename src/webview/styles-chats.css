@@ -314,3 +314,17 @@
 .filter-btn:focus-visible {
   outline: 1px solid var(--focus);
 }
+
+.list-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.list-hint .codicon {
+  margin-top: 1px;
+  font-size: 13px;
+}

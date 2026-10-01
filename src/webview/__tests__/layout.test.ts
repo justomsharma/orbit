@@ -27,4 +27,9 @@ describe("layout guards", () => {
   it("the page itself can't be scrolled, even by scrollIntoView", () => {
     expect(rule("html, body, #root")).toMatch(/overflow:\s*clip/);
   });
+
+  it("a chat's hover buttons sit beside its title, never on top of it", () => {
+    expect(rule(".chat-actions")).not.toMatch(/position:\s*absolute/);
+    expect(rule(".chat-actions")).toMatch(/flex:\s*none/);
+  });
 });

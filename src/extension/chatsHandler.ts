@@ -9,6 +9,7 @@ import { expandPrompt, type PromptLibrary } from "../features/prompts/library";
 import { readTimeline, readVersion } from "../features/timeline/reader";
 import type { ChangedFile, FileVersion } from "../features/timeline/types";
 import { type ChangedFileView, type HostMsg, parseViewMsg, type ViewMsg } from "../shared/protocol";
+import { MAX_PROMPT_IN_LINK } from "./opener";
 
 export interface ChatsHandlerDeps {
   home: string;
@@ -37,7 +38,6 @@ type ChatsMsg = Extract<ViewMsg, { type: `chat:${string}` | `prompts:${string}` 
 const MAX_HITS = 200;
 
 /** Links longer than this may not open; the prompt is copied instead. */
-const MAX_PROMPT_IN_LINK = 8000;
 
 const searches = new WeakMap<ChatsHandlerDeps, AbortController>();
 

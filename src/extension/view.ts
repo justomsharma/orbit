@@ -30,6 +30,8 @@ export interface ViewDeps {
   chatsDeps: Omit<ChatsHandlerDeps, "post" | "getSession" | "sessions">;
   log: vscode.LogOutputChannel;
   onSnapshot(s: ChatsSnapshot): void;
+  /** Opens the Get started walkthrough. */
+  openTour(): Promise<void>;
 }
 
 const workspaceFolders = () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
@@ -108,6 +110,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       this.post({ type: "goto", tab: this.pendingGoto });
       this.pendingGoto = null;
     }
+    if (msg?.type === "onboarding" && msg.action === "tour") return this.d.openTour();
     if (msg?.type === "onboarding" && msg.action === "dismiss") {
       await this.d.state.dismissOnboarding();
       return void this.refresh();

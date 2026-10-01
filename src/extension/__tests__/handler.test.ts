@@ -14,7 +14,7 @@ function setup(opts: { known?: boolean; quota?: QuotaResult; recap?: string | nu
       continueChat: async (s) => void log.push(`chat ${s.id}`),
       continueInTerminal: async (s, o) => void log.push(`${o?.fork ? "fork" : "terminal"} ${s.id}`),
       copyResume: async (s) => void log.push(`copy ${s.id}`),
-      newChat: async () => void log.push("new chat"),
+      newChat: async (p) => void log.push(p ? `new chat ${p}` : "new chat"),
     },
     state: {
       setPin: async (id, on) => void log.push(`pin ${id} ${on}`),
@@ -166,5 +166,22 @@ describe("createHandler", () => {
     const { handle, log } = setup();
     await handle({ type: "saveRecapImage", dataUrl: "data:image/png;base64,iVBORw0KGgo=" });
     expect(log).toEqual(["save data:image/png;base64,"]);
+  });
+});
+
+describe("newChat from Home's box", () => {
+  it("opens Claude's chat with the prompt typed in", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "newChat", prompt: "Fix the login bug" });
+    expect(log).toEqual(["new chat Fix the login bug"]);
+  });
+
+  it("copies a prompt too long for a link, and says to paste it", async () => {
+    const { handle, log } = setup();
+    const long = "é".repeat(3000);
+    await handle({ type: "newChat", prompt: long });
+    expect(log[0]).toBe("new chat");
+    expect(log[1]).toBe(`clipboard ${long}`);
+    expect(log[2]).toMatch(/^info .*paste it/);
   });
 });

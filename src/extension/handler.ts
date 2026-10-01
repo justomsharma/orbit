@@ -1,7 +1,7 @@
 import type { Session } from "../features/chats/types";
 import type { QuotaResult } from "../features/usage/quotaInstall";
 import { parseViewMsg } from "../shared/protocol";
-import type { Opener } from "./opener";
+import { MAX_PROMPT_IN_LINK, type Opener } from "./opener";
 import type { OrbitState } from "./state";
 
 export interface HandlerDeps {
@@ -51,8 +51,15 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         return withSession(m.id, (s) => d.opener.continueInTerminal(s, { fork: true }));
       case "copyResume":
         return withSession(m.id, (s) => d.opener.copyResume(s));
-      case "newChat":
-        return d.opener.newChat();
+      case "newChat": {
+        const prompt = m.prompt?.trim();
+        if (!prompt) return d.opener.newChat();
+        if (encodeURIComponent(prompt).length <= MAX_PROMPT_IN_LINK)
+          return d.opener.newChat(prompt);
+        await d.opener.newChat();
+        await d.copy(prompt);
+        return d.info("This is long, so it's copied: paste it into Claude.");
+      }
       case "pin":
         await d.state.setPin(m.id, m.on);
         return d.refresh();

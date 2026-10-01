@@ -29,6 +29,7 @@ export interface OrbitApi {
 }
 
 const POLL_MS = 20_000;
+const TOUR_SHOWN = "orbit.tourShown";
 
 /** Saves the usage index on shutdown; VS Code waits for the promise deactivate() returns. */
 let onExit: (() => Promise<void>) | null = null;
@@ -67,6 +68,11 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   });
   const usage = new UsageService(home, store, quota);
   void quota.syncTap().catch((e) => log.warn("Could not refresh the statusline tap", String(e)));
+
+  const tour = `${context.extension.id}#orbit.getStarted`;
+  async function openTour(): Promise<void> {
+    await vscode.commands.executeCommand("workbench.action.openWalkthrough", tour, false);
+  }
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = "orbit.open";
@@ -115,6 +121,7 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     },
     log,
     onSnapshot: (s) => showStatus(s.live.length),
+    openTour,
   });
 
   // Refresh when Claude writes its files: a burst becomes one refresh, and never
@@ -173,6 +180,7 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
       vscode.commands.executeCommand("workbench.view.extension.orbit"),
     ),
     vscode.commands.registerCommand("orbit.refresh", () => provider.refresh()),
+    vscode.commands.registerCommand("orbit.tour", openTour),
     // Open Orbit on a tab: Command Palette and the Get started walkthrough.
     ...(
       [
@@ -191,6 +199,13 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   );
 
   onExit = () => usage.flush();
+
+  // VS Code only opens a walkthrough on some installs (not from a .vsix, nor on reinstall),
+  // so Orbit opens its own tour once, unless the person already hid Get started.
+  if (!context.globalState.get<boolean>(TOUR_SHOWN) && !state.onboarding().dismissed) {
+    void context.globalState.update(TOUR_SHOWN, true);
+    void openTour().catch((e) => log.warn("Could not open the Get started tour", String(e)));
+  }
 
   return {
     refresh: async () => {

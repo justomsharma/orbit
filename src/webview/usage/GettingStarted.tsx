@@ -51,6 +51,7 @@ export function GettingStarted() {
   if (o.dismissed) return null;
   const done = new Set(o.done);
   const all = STEPS.every((s) => done.has(s));
+  const next = STEPS.find((s) => !done.has(s));
   return (
     <section class="guide" aria-labelledby="guide-title">
       <div class="guide-head">
@@ -66,6 +67,7 @@ export function GettingStarted() {
           Hide
         </button>
       </div>
+      <p class="guide-sub">A few things to try. Each one ticks itself when you do it.</p>
       <div
         class="guide-bar"
         role="progressbar"
@@ -91,7 +93,7 @@ export function GettingStarted() {
                 <Icon name={ok ? "pass-filled" : "circle-large-outline"} />
                 <div class="guide-text">
                   <span class="guide-title">{COPY[s].title}</span>
-                  {ok ? null : <span class="guide-hint">{COPY[s].hint}</span>}
+                  {s === next ? <span class="guide-hint">{COPY[s].hint}</span> : null}
                 </div>
                 {ok ? null : (
                   <button
@@ -108,6 +110,13 @@ export function GettingStarted() {
           })}
         </ul>
       )}
+      <button
+        type="button"
+        class="link-btn guide-tour"
+        onClick={() => post({ type: "onboarding", action: "tour" })}
+      >
+        <Icon name="book" /> Take the tour
+      </button>
     </section>
   );
 }
