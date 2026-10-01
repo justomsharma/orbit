@@ -6,6 +6,7 @@ import type { LiveStatus, Session } from "../features/chats/types";
 import type { PromptEntry } from "../features/prompts/library";
 import type { SettingDef } from "../features/setup/catalog";
 import type { ChangedFile, FileVersion } from "../features/timeline/types";
+import type { Onboarding } from "./onboarding";
 import { ITEM_NAME, isServerUrl, MCP_NAME } from "./validate";
 
 const SessionId = v.pipe(
@@ -51,6 +52,7 @@ export const ViewMsgSchema = v.variant("type", [
     id: SessionId,
     tags: v.pipe(v.array(v.pipe(v.string(), v.maxLength(40))), v.maxLength(20)),
   }),
+  v.object({ type: v.literal("onboarding"), action: v.picklist(["find", "dismiss"]) }),
   v.object({ type: v.literal("openLink"), url: HttpsUrl }),
   v.object({ type: v.literal("newChat") }),
   v.object({ type: v.literal("quota"), on: v.boolean() }),
@@ -207,11 +209,15 @@ export type HostMsg =
       renames: Record<string, string>;
       /** Orbit-only tags per chat. */
       tags: Record<string, string[]>;
+      /** Getting-started checklist progress. */
+      onboarding?: Onboarding;
       /** Ids of chats that belong to a folder open in this window. */
       here: string[];
       env: Environment;
     }
   | { type: "usage"; data: UsageSnapshot }
+  /** Open a tab (from a command or the Get started walkthrough). */
+  | { type: "goto"; tab: "home" | "chats" | "prompts" | "usage" | "setup" }
   | { type: "setup"; data: SetupSnapshot }
   | { type: "catalog"; data: SettingDef[] }
   | { type: "chat:details"; id: string; files: ChangedFileView[] }

@@ -5,6 +5,7 @@ import { formatCost, formatTokens } from "../ui/charts/format";
 import { StatTile } from "../ui/charts/StatTile";
 import { Empty } from "../ui/Empty";
 import { Icon } from "../ui/Icon";
+import { GettingStarted } from "./GettingStarted";
 import { costDelta, greeting } from "./model";
 import { QuotaCard } from "./QuotaCard";
 
@@ -137,6 +138,7 @@ export function HomeView() {
           <Icon name="add" /> New chat
         </button>
       </header>
+      <GettingStarted />
       {!store.loaded.value ? (
         <div class="loading" role="status">
           Loading…

@@ -1,4 +1,5 @@
 import { isSessionId } from "../core/uuid";
+import { isStep, type Onboarding, type Step } from "../shared/onboarding";
 
 /** The subset of `vscode.Memento` Orbit uses (keeps this file testable without VS Code). */
 export interface Memento {
@@ -11,6 +12,7 @@ const RENAMES = "orbit.renames";
 const MAX_PINS = 500;
 const MAX_RENAMES = 5000;
 const TAGS = "orbit.tags";
+const ONBOARDING = "orbit.onboarding";
 const MAX_TAGGED = 5000;
 const MAX_TAGS = 8;
 
@@ -83,5 +85,26 @@ export class OrbitState {
     delete all[id];
     const next = clean.length ? { [id]: clean, ...all } : all;
     await this.store.update(TAGS, Object.fromEntries(Object.entries(next).slice(0, MAX_TAGGED)));
+  }
+
+  /** Getting-started progress (kept across restarts). */
+  onboarding(): Onboarding {
+    const v = this.store.get<unknown>(ONBOARDING, {});
+    const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+    const done = Array.isArray(o.done) ? [...new Set(o.done.filter(isStep))] : [];
+    return { done, dismissed: o.dismissed === true };
+  }
+
+  /** Marks a step done. True when it was new. */
+  async markStep(step: Step): Promise<boolean> {
+    if (!isStep(step)) return false;
+    const cur = this.onboarding();
+    if (cur.done.includes(step)) return false;
+    await this.store.update(ONBOARDING, { ...cur, done: [...cur.done, step] });
+    return true;
+  }
+
+  async dismissOnboarding(): Promise<void> {
+    await this.store.update(ONBOARDING, { ...this.onboarding(), dismissed: true });
   }
 }

@@ -242,6 +242,13 @@ function ChatList() {
     setActiveHit(0);
   }, [store.query.value, store.filter.value, inMessages]);
 
+  // The first search ticks "Find an old chat" in Get started.
+  const searching = store.query.value.trim() !== "";
+  useEffect(() => {
+    if (searching && !store.onboarding.value.done.includes("find"))
+      post({ type: "onboarding", action: "find" });
+  }, [searching]);
+
   useEffect(() => {
     if (!store.focusSearch.value) return;
     store.focusSearch.value = false;

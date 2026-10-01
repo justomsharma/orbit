@@ -5,6 +5,7 @@ import type { MessageHit } from "../features/chats/search";
 import type { LiveStatus, Session } from "../features/chats/types";
 import type { PromptEntry } from "../features/prompts/library";
 import type { SettingDef } from "../features/setup/catalog";
+import type { Onboarding } from "../shared/onboarding";
 import type { ChangedFileView, Environment, HostMsg } from "../shared/protocol";
 import { loadViewState, saveViewState } from "./bus";
 import type { Filter } from "./chats/model";
@@ -69,6 +70,8 @@ export const live = signal<LiveStatus[]>([]);
 export const pins = signal<string[]>([]);
 export const renames = signal<Record<string, string>>({});
 export const tags = signal<Record<string, string[]>>({});
+/** Get started checklist on Home (hidden when dismissed or until the host says otherwise). */
+export const onboarding = signal<Onboarding>({ done: [], dismissed: true });
 /** The filter menus: a chat folder, a branch in it, and how recent. */
 export const narrow = signal<{
   project: string | null;
@@ -95,6 +98,7 @@ export function applyHostMessage(m: HostMsg): void {
       pins.value = m.pins;
       renames.value = m.renames;
       tags.value = m.tags;
+      onboarding.value = m.onboarding ?? { done: [], dismissed: true };
       here.value = m.here;
       env.value = m.env;
       error.value = null;
@@ -102,6 +106,16 @@ export function applyHostMessage(m: HostMsg): void {
       break;
     case "usage":
       usage.value = m.data;
+      break;
+    case "goto":
+      details.value = null;
+      if (m.tab === "prompts") {
+        tab.value = "chats";
+        chatsMode.value = "prompts";
+      } else {
+        if (m.tab === "chats") chatsMode.value = "chats";
+        tab.value = m.tab;
+      }
       break;
     case "setup":
       setup.value = m.data;

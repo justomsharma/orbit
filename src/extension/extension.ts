@@ -173,6 +173,20 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
       vscode.commands.executeCommand("workbench.view.extension.orbit"),
     ),
     vscode.commands.registerCommand("orbit.refresh", () => provider.refresh()),
+    // Open Orbit on a tab: Command Palette and the Get started walkthrough.
+    ...(
+      [
+        ["orbit.showChats", "chats"],
+        ["orbit.showPrompts", "prompts"],
+        ["orbit.showUsage", "usage"],
+        ["orbit.showSetup", "setup"],
+      ] as const
+    ).map(([id, tab]) =>
+      vscode.commands.registerCommand(id, async () => {
+        await vscode.commands.executeCommand("workbench.view.extension.orbit");
+        provider.goto(tab);
+      }),
+    ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => void provider.refresh()),
   );
 

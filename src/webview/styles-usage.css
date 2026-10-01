@@ -167,9 +167,10 @@
 
 /* ---------- Stat tiles & hero ---------- */
 /* Figures sit in an open row, divided by rules, not boxed one by one. */
+/* Three figures side by side at any sidebar width; long notes wrap inside their column. */
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   row-gap: 10px;
 }
 
@@ -560,4 +561,96 @@
 
 .tiles-note {
   margin-top: 6px;
+}
+
+/* ---------- Get started (Home) ---------- */
+.guide {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.guide-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.guide-head .section-title {
+  margin: 0;
+}
+
+.guide-count {
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.guide-bar {
+  height: 3px;
+  margin: 8px 0 6px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+  overflow: hidden;
+}
+
+.guide-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+  transition: width 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-bar span {
+    transition: none;
+  }
+}
+
+.guide-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.guide-step > .codicon {
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.guide-step.ok > .codicon {
+  color: var(--ok);
+}
+
+.guide-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.guide-step.ok .guide-title {
+  color: var(--muted);
+}
+
+.guide-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.guide-step .link-btn {
+  flex: none;
+  color: var(--vscode-textLink-foreground, var(--accent));
+}
+
+.guide-done {
+  margin: 4px 0 0;
+  color: var(--muted);
 }

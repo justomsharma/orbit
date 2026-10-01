@@ -24,7 +24,15 @@ exports.run = async () => {
 
   await check("commands are registered", async () => {
     const cmds = await vscode.commands.getCommands(true);
-    for (const c of ["orbit.open", "orbit.refresh"]) assert.ok(cmds.includes(c), `${c} missing`);
+    for (const c of [
+      "orbit.open",
+      "orbit.refresh",
+      "orbit.showChats",
+      "orbit.showPrompts",
+      "orbit.showUsage",
+      "orbit.showSetup",
+    ])
+      assert.ok(cmds.includes(c), `${c} missing`);
   });
 
   await check("Orbit opens its sidebar", async () => {
@@ -90,6 +98,13 @@ exports.run = async () => {
     assert.equal(tab.input.modified.fsPath.toLowerCase(), process.env.ORBIT_IT_APP.toLowerCase());
     const before = await vscode.workspace.openTextDocument(tab.input.original);
     assert.equal(before.getText(), "const total = 1;\n");
+  });
+
+  await check("ships a Get started walkthrough, and its buttons work", async () => {
+    const walk = ext.packageJSON.contributes.walkthroughs?.[0];
+    assert.ok(walk && walk.steps.length >= 5, "walkthrough missing");
+    for (const c of ["orbit.showChats", "orbit.showPrompts", "orbit.showUsage", "orbit.showSetup"])
+      await vscode.commands.executeCommand(c);
   });
 
   await check("refresh command runs without error", async () => {

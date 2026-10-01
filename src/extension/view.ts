@@ -7,6 +7,7 @@ import type { ChatsService, ChatsSnapshot } from "./chatsService";
 import { saveRecapImage } from "./exportFile";
 import { createHandler } from "./handler";
 import { makeNonce, renderHtml } from "./html";
+import { stepFor } from "./onboarding";
 import type { Opener } from "./opener";
 import { handleSetup, type SetupHandlerDeps } from "./setupHandler";
 import { type SetupService, type SetupSnapshot, viewSnapshot } from "./setupService";
@@ -47,6 +48,8 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   private tab: "home" | "chats" | "prompts" | "usage" | "setup" = "home";
   /** Signatures of the data the view last received; identical refreshes are not re-sent. */
   private sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
+  /** A tab asked for before the view was ready; sent when it says "ready". */
+  private pendingGoto: "home" | "chats" | "prompts" | "usage" | "setup" | null = null;
 
   /**
    * Runs one message from the webview (every message is validated inside the
@@ -91,10 +94,32 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       try {
         if (!(await handleSetup(m, setupDeps)) && !(await handleChats(m, chatsDeps)))
           await handle(m);
+        await this.track(m);
       } catch (e) {
         this.d.log.error("Action failed", errText(e));
       }
     };
+  }
+
+  /** Ticks the Get started checklist when a person does one of its steps. */
+  private async track(m: unknown): Promise<void> {
+    const msg = m as { type?: unknown; action?: unknown };
+    if (msg?.type === "ready" && this.pendingGoto) {
+      this.post({ type: "goto", tab: this.pendingGoto });
+      this.pendingGoto = null;
+    }
+    if (msg?.type === "onboarding" && msg.action === "dismiss") {
+      await this.d.state.dismissOnboarding();
+      return void this.refresh();
+    }
+    const step = stepFor(m);
+    if (step && (await this.d.state.markStep(step))) void this.refresh();
+  }
+
+  /** Opens a tab in the sidebar (Get started walkthrough, commands). */
+  goto(tab: "home" | "chats" | "prompts" | "usage" | "setup"): void {
+    if (this.view) this.post({ type: "goto", tab });
+    else this.pendingGoto = tab;
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -162,6 +187,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
         pins: this.d.state.pins(),
         renames: this.d.state.renames(),
         tags: this.d.state.tags(),
+        onboarding: this.d.state.onboarding(),
         here: snap.here,
         env: {
           claudeExtension: this.d.opener.claudeExtensionInstalled(),
@@ -204,6 +230,9 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
     // Usage (Home and Usage tabs): the first full index of a large history can take a few seconds.
     try {
       this.lastUsage = await this.d.usage.snapshot(snap.items, Date.now());
+      // Plan limits already on counts as that getting-started step.
+      if (this.lastUsage.quota.enabled && (await this.d.state.markStep("limits")))
+        this.again = true;
       if (this.view?.visible) this.postOnce("usage", { type: "usage", data: this.lastUsage });
     } catch (e) {
       this.d.log.error("Could not read Claude Code usage", errText(e));

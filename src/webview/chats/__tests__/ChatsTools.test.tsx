@@ -600,3 +600,25 @@ describe("Last touches", () => {
     expect(sent.filter((m) => m.type === "search")).toHaveLength(1);
   });
 });
+
+describe("Get started: finding a chat", () => {
+  it("ticks the step the first time someone searches", () => {
+    store.onboarding.value = { done: [], dismissed: false };
+    render(<ChatsView />);
+    fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
+      target: { value: "parser" },
+    });
+    expect(sent.filter((m) => m.type === "onboarding")).toEqual([
+      { type: "onboarding", action: "find" },
+    ]);
+  });
+
+  it("doesn't report it again once done", () => {
+    store.onboarding.value = { done: ["find"], dismissed: false };
+    render(<ChatsView />);
+    fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
+      target: { value: "parser" },
+    });
+    expect(sent.filter((m) => m.type === "onboarding")).toEqual([]);
+  });
+});

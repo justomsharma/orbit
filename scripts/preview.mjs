@@ -137,6 +137,7 @@ const chats = [
 const sample = {
   type: "sessions",
   items: chats,
+  onboarding: { done: ["find", "setup"], dismissed: false },
   live: [
     { sessionId: id(1), pid: 1, status: "busy", name: null, updatedAt: now },
     { sessionId: id(3), pid: 2, status: "idle", name: null, updatedAt: now },

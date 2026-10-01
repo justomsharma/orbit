@@ -100,4 +100,22 @@ describe("OrbitState", () => {
     await s.setTags("not-a-uuid", ["x"]);
     expect(Object.keys(s.tags())).toEqual([A]);
   });
+
+  it("remembers getting-started progress, each step once, and hiding it", async () => {
+    const s = new OrbitState(memento());
+    expect(s.onboarding()).toEqual({ done: [], dismissed: false });
+    expect(await s.markStep("details")).toBe(true);
+    expect(await s.markStep("details")).toBe(false);
+    await s.markStep("continue");
+    await s.dismissOnboarding();
+    expect(s.onboarding()).toEqual({ done: ["details", "continue"], dismissed: true });
+  });
+
+  it("ignores unknown steps and damaged storage", async () => {
+    const m = memento();
+    await m.update("orbit.onboarding", { done: ["setup", "nope", 3], dismissed: "yes" });
+    const s = new OrbitState(m);
+    expect(s.onboarding()).toEqual({ done: ["setup"], dismissed: false });
+    expect(await s.markStep("bogus" as never)).toBe(false);
+  });
 });
