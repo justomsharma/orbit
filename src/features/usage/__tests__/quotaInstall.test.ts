@@ -48,7 +48,7 @@ function setup(
         : `${JSON.stringify(opts.settings, null, 4)}\n`,
     );
   }
-  const storage = join(root, opts.storageName ?? "orbit-dev.orbit");
+  const storage = join(root, opts.storageName ?? "omsharma.orbit");
   const tapSource = join(root, "dist-tap.js");
   writeFileSync(tapSource, "// tap");
   const { host, log } = autoHost(opts.answer);
@@ -144,14 +144,14 @@ describe("QuotaInstaller.enable", () => {
 
   it("takes over another editor's Orbit tap without losing the person's statusline", async () => {
     const mine = { type: "command", command: "echo mine" };
-    const a = setup({ settings: { statusLine: mine }, storageName: "orbit-dev.orbit" });
+    const a = setup({ settings: { statusLine: mine }, storageName: "omsharma.orbit" });
     await a.q.enable();
     // A second editor (e.g. Cursor) has its own storage folder but shares ~/.claude.
     const b = new QuotaInstaller({
       settingsPath: a.settings,
-      tapDir: join(a.root, "cursor", "orbit-dev.orbit", "statusline"),
+      tapDir: join(a.root, "cursor", "omsharma.orbit", "statusline"),
       tapSource: join(a.root, "dist-tap.js"),
-      store: new OrbitStore(join(a.root, "cursor", "orbit-dev.orbit")),
+      store: new OrbitStore(join(a.root, "cursor", "omsharma.orbit")),
       writer: new SafeWriter(join(a.root, "cursor", "backups")),
       findNode: async () => "/usr/bin/node",
       platform: "linux",
@@ -161,7 +161,7 @@ describe("QuotaInstaller.enable", () => {
     await b.enable();
     const inner = JSON.parse(
       readFileSync(
-        join(a.root, "cursor", "orbit-dev.orbit", "statusline", "statusline-inner.json"),
+        join(a.root, "cursor", "omsharma.orbit", "statusline", "statusline-inner.json"),
         "utf8",
       ),
     );

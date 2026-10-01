@@ -13,11 +13,11 @@ async function check(name, fn) {
 }
 
 exports.run = async () => {
-  const ext = vscode.extensions.getExtension("orbit-dev.orbit");
+  const ext = vscode.extensions.getExtension("OmSharma.orbit");
   let api;
 
   await check("extension is present and activates", async () => {
-    assert.ok(ext, "orbit-dev.orbit not found");
+    assert.ok(ext, "OmSharma.orbit not found");
     api = await ext.activate();
     assert.equal(typeof api.refresh, "function");
   });

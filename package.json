@@ -1,9 +1,9 @@
 {
   "name": "orbit",
-  "displayName": "Orbit",
+  "displayName": "Orbit Companion",
   "description": "Your home for Claude Code: every chat, usage & cost, and your whole setup in one calm sidebar. 100% local.",
   "version": "0.1.0",
-  "publisher": "orbit-dev",
+  "publisher": "OmSharma",
   "license": "MIT",
   "repository": {
     "type": "git",
