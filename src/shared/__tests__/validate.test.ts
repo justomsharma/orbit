@@ -18,9 +18,12 @@ describe("splitCommand", () => {
   });
 
   it("keeps quoted parts together, including Windows paths with spaces", () => {
-    expect(
-      splitCommand('"C:\\Users\\Ana Maria\\bin\\srv.exe" --root "C:\\my files" x'),
-    ).toEqual(["C:\\Users\\Ana Maria\\bin\\srv.exe", "--root", "C:\\my files", "x"]);
+    expect(splitCommand('"C:\\Users\\Ana Maria\\bin\\srv.exe" --root "C:\\my files" x')).toEqual([
+      "C:\\Users\\Ana Maria\\bin\\srv.exe",
+      "--root",
+      "C:\\my files",
+      "x",
+    ]);
     expect(splitCommand("node 'a b.js' --name=\"x y\"")).toEqual(["node", "a b.js", "--name=x y"]);
   });
 
