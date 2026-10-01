@@ -2,7 +2,9 @@ import { isInside, samePath } from "../core/paths";
 import {
   CLAUDE_EXTENSION_ID,
   chatUri,
+  continueLastTerminal,
   newChatTerminal,
+  promptIsSafeArg,
   type ResumeOptions,
   resumeCommand,
   type TerminalSpec,
@@ -23,6 +25,8 @@ export interface OpenerHost {
   copy(text: string): Promise<void>;
   ask(message: string, ...actions: string[]): Promise<string | undefined>;
   info(message: string): void;
+  /** Where chats open (Orbit's "Open chats in" setting). Claude's panel when not given. */
+  openIn?(): "terminal" | "claudePanel";
 }
 
 const INSTALL_DOCS = "https://code.claude.com/docs/en/setup";
@@ -41,9 +45,14 @@ export class Opener {
     return this.host.workspaceFolders().some((f) => samePath(f, cwd, this.host.platform));
   }
 
-  /** Continue a chat in Claude's own chat panel, or explain the alternative. */
+  private terminalFirst(): boolean {
+    return this.host.openIn?.() === "terminal";
+  }
+
+  /** Continue a chat where Orbit opens chats: a terminal, or Claude's chat panel. */
   async continueChat(s: Session): Promise<void> {
     const h = this.host;
+    if (this.terminalFirst()) return this.continueInTerminal(s);
     if (!h.claudeExtensionInstalled()) {
       const pick = await h.ask(
         "The Claude Code extension isn't installed or enabled, so this chat can't open in its panel.",
@@ -97,22 +106,28 @@ export class Opener {
   }
 
   /**
-   * Starts a new conversation: Claude's panel (with `prompt` typed in, not sent),
-   * else a claude terminal in the open folder with the prompt on the clipboard.
+   * Starts a new conversation. In a terminal, the prompt is sent as Claude's first
+   * message when it can be passed safely, else it goes on the clipboard. In Claude's
+   * panel it's typed in, not sent.
    */
   async newChat(prompt?: string): Promise<void> {
     const h = this.host;
-    if (h.claudeExtensionInstalled()) {
+    if (!this.terminalFirst() && h.claudeExtensionInstalled()) {
       await h.openExternal(chatUri(h.uriScheme, undefined, prompt));
       return;
     }
     const claude = await h.findClaude();
     if (claude) {
-      h.createTerminal(newChatTerminal(h.workspaceFolders()[0], claude));
-      if (prompt) {
+      const asArg = prompt && promptIsSafeArg(prompt, claude, h.platform) ? prompt : undefined;
+      h.createTerminal(newChatTerminal(h.workspaceFolders()[0], claude, asArg, h.platform));
+      if (prompt && !asArg) {
         await h.copy(prompt);
-        h.info("Claude is starting in a terminal. The prompt is copied: paste it in.");
+        h.info("Claude is starting in a terminal. Your prompt is copied: paste it in.");
       }
+      return;
+    }
+    if (h.claudeExtensionInstalled()) {
+      await h.openExternal(chatUri(h.uriScheme, undefined, prompt));
       return;
     }
     const pick = await h.ask(
@@ -123,6 +138,24 @@ export class Opener {
     if (pick === "Install extension")
       await h.openExternal(`${h.uriScheme}:extension/${CLAUDE_EXTENSION_ID}`);
     if (pick === "How to install the CLI") await h.openExternal(INSTALL_DOCS);
+  }
+
+  /** `claude --continue` in the open folder: the most recent chat there. */
+  async continueLast(): Promise<void> {
+    const h = this.host;
+    const folder = h.workspaceFolders()[0];
+    if (!folder) {
+      h.info("Open a folder first: Claude continues the last chat of the open folder.");
+      return;
+    }
+    const claude = await h.findClaude();
+    if (!claude) {
+      h.info(
+        "The claude command was not found. Install Claude Code's CLI to continue in a terminal.",
+      );
+      return;
+    }
+    h.createTerminal(continueLastTerminal(folder, claude));
   }
 
   async copyResume(s: Session, o: ResumeOptions = {}): Promise<void> {

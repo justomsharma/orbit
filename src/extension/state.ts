@@ -92,7 +92,11 @@ export class OrbitState {
     const v = this.store.get<unknown>(ONBOARDING, {});
     const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
     const done = Array.isArray(o.done) ? [...new Set(o.done.filter(isStep))] : [];
-    return { done, dismissed: o.dismissed === true };
+    return { done, dismissed: o.dismissed === true, welcomed: o.welcomed === true };
+  }
+
+  async markWelcomed(): Promise<void> {
+    await this.store.update(ONBOARDING, { ...this.onboarding(), welcomed: true });
   }
 
   /** Marks a step done. True when it was new. */

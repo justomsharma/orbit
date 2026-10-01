@@ -8,10 +8,12 @@ import { checkHealth, hookScriptPath, type Issue } from "../features/setup/healt
 import { type HookEntry, readHooks, readPluginHooks } from "../features/setup/hooks";
 import { type McpServer, readClaudeJson, readMcpJson, readMcpServers } from "../features/setup/mcp";
 import { type MemoryInfo, readMemory } from "../features/setup/memory";
+import { type ModelOption, modelOptions } from "../features/setup/models";
 import { type Permissions, readPermissions } from "../features/setup/permissions";
 import { type InstalledPlugin, readPlugins } from "../features/setup/plugins";
 import { redactArgs, redactText, redactUrl } from "../features/setup/redact";
 import {
+  decidingScope,
   readSettingsFiles,
   type SettingsFile,
   type SettingsScope,
@@ -50,6 +52,33 @@ export interface SetupSnapshot {
   memory: MemoryInfo;
   issues: Issue[];
   claudeJsonPath: string;
+  /** Models Config offers: Claude's aliases plus extras this account has. */
+  modelOptions: ModelOption[];
+  /** Settings inside objects that Config shows (sandbox, bypass block): value and where it's set. */
+  nested: Record<string, { scope: SettingsScope; value: string | number | boolean } | null>;
+}
+
+/** The nested settings Config's quick settings show. */
+export const NESTED_KEYS = [
+  "permissions.defaultMode",
+  "sandbox.enabled",
+  "permissions.disableBypassPermissionsMode",
+] as const;
+
+/** A setting inside an object setting, from the file that decides it. */
+export function nestedSetting(
+  files: SettingsFile[],
+  key: string,
+): { scope: SettingsScope; value: string | number | boolean } | null {
+  const path = key.split(".");
+  const scope = decidingScope(files, path);
+  if (!scope) return null;
+  let v: unknown = files.find((f) => f.scope === scope)?.data;
+  for (const k of path)
+    v = v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined;
+  return typeof v === "string" || typeof v === "number" || typeof v === "boolean"
+    ? { scope, value: v }
+    : null;
 }
 
 /** Settings whose values can be credentials or personal helper scripts: shown as "set" only. */
@@ -257,6 +286,8 @@ export class SetupService {
       memory,
       issues,
       claudeJsonPath: this.d.claudeJson,
+      modelOptions: modelOptions(claudeJson.data),
+      nested: Object.fromEntries(NESTED_KEYS.map((k) => [k, nestedSetting(settings, k)])),
     };
   }
 }

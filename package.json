@@ -2,7 +2,7 @@
   "name": "orbit-hq",
   "displayName": "Orbit HQ",
   "description": "Your home for Claude Code: every chat, usage & cost, and your whole setup in one calm sidebar. 100% local.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "OmSharma",
   "license": "MIT",
   "repository": {
@@ -74,6 +74,18 @@
         "title": "Orbit: Get started"
       },
       {
+        "command": "orbit.switchAccount",
+        "title": "Orbit: Switch Claude account"
+      },
+      {
+        "command": "orbit.showAccount",
+        "title": "Orbit: Show account"
+      },
+      {
+        "command": "orbit.showCheckpoints",
+        "title": "Orbit: Show checkpoints"
+      },
+      {
         "command": "orbit.showChats",
         "title": "Orbit: Show chats"
       },
@@ -87,7 +99,7 @@
       },
       {
         "command": "orbit.showSetup",
-        "title": "Orbit: Show setup"
+        "title": "Orbit: Show config"
       }
     ],
     "keybindings": [
@@ -97,19 +109,50 @@
         "mac": "cmd+alt+o"
       }
     ],
+    "configuration": {
+      "title": "Orbit HQ",
+      "properties": {
+        "orbit.openChatsIn": {
+          "type": "string",
+          "enum": [
+            "terminal",
+            "claudePanel"
+          ],
+          "enumDescriptions": [
+            "Run Claude Code's CLI in a VS Code terminal (works for chats from any folder).",
+            "Open Claude's VS Code chat panel (needs the Claude Code extension)."
+          ],
+          "default": "terminal",
+          "description": "Where Orbit opens and starts Claude chats."
+        },
+        "orbit.terminalLocation": {
+          "type": "string",
+          "enum": [
+            "editor",
+            "panel"
+          ],
+          "enumDescriptions": [
+            "As a tab in the editor area.",
+            "In the bottom panel."
+          ],
+          "default": "editor",
+          "description": "Where Orbit shows Claude terminals."
+        }
+      }
+    },
     "walkthroughs": [
       {
         "id": "orbit.getStarted",
         "title": "Get started with Orbit HQ",
-        "description": "Every chat, your usage and your whole Claude Code setup, in one sidebar. Five minutes to learn, then it just works.",
+        "description": "Every chat, your account, usage and your whole Claude Code setup, in one sidebar. Five minutes to learn, then it just works.",
         "steps": [
           {
             "id": "open",
             "title": "Open Orbit",
-            "description": "Orbit lives in the bar on the far left: look for the planet. You can also press Ctrl+Alt+O (Cmd+Alt+O on Mac) at any time.\n[Open Orbit](command:orbit.open)",
+            "description": "Orbit lives in the bar on the far left: look for the planet. The icons along the top are its tabs; hover near either end to scroll through them. Ask Claude anything from the box on Home.\n[Open Orbit](command:orbit.open)",
             "media": {
               "image": "media/walkthrough/home.png",
-              "altText": "Orbit Home: what is running, where you left off, and today's usage"
+              "altText": "Orbit Home: ask Claude, what is running, where you left off, and today's usage"
             },
             "completionEvents": [
               "onCommand:orbit.open",
@@ -119,7 +162,7 @@
           {
             "id": "chats",
             "title": "Pick up any chat",
-            "description": "Every Claude Code chat, from the terminal and the extension, newest first. Click one to continue right where Claude stopped. Type to search, or tick “In messages” to search everything that was said.\n[Show my chats](command:orbit.showChats)",
+            "description": "Every Claude Code chat, newest first, with what's running live. Click one to continue right where Claude stopped, in a terminal (or Claude's chat panel: your choice in Config). Type to search, or tick “In messages” to search everything that was said.\n[Show my chats](command:orbit.showChats)",
             "media": {
               "image": "media/walkthrough/chats.png",
               "altText": "The Chats list with search and filters"
@@ -130,14 +173,14 @@
           },
           {
             "id": "changes",
-            "title": "See what Claude changed",
-            "description": "Hover a chat and open Files and transcript: every file Claude changed, each version, Compare with now, and Restore with a preview and undo. Orbit never deletes anything.\n[Show my chats](command:orbit.showChats)",
+            "title": "Undo anything Claude changed",
+            "description": "Checkpoints lists every chat where Claude kept copies of the files it edited. Open one to compare any version with now, or restore it with a preview and undo. Orbit never deletes anything.\n[Show checkpoints](command:orbit.showCheckpoints)",
             "media": {
-              "image": "media/walkthrough/chat-details.png",
-              "altText": "A chat's files with Compare and Restore for each version"
+              "image": "media/walkthrough/checkpoints.png",
+              "altText": "Checkpoints: chats with the files and versions Claude kept"
             },
             "completionEvents": [
-              "onCommand:orbit.showChats"
+              "onCommand:orbit.showCheckpoints"
             ]
           },
           {
@@ -153,12 +196,25 @@
             ]
           },
           {
+            "id": "account",
+            "title": "Your account and plan limits",
+            "description": "See who's signed in and your plan. Save each Claude account you use, then switch with one click, no logging in again. Turn on plan limits to watch your 5-hour and weekly limits.\n[Show my account](command:orbit.showAccount)",
+            "media": {
+              "image": "media/walkthrough/account.png",
+              "altText": "Account: profile, saved accounts and plan limits"
+            },
+            "completionEvents": [
+              "onCommand:orbit.showAccount",
+              "onCommand:orbit.switchAccount"
+            ]
+          },
+          {
             "id": "usage",
             "title": "See what you use",
-            "description": "Tokens and cost by day, model and project, plus a weekly recap. Turn on plan limits to watch your 5-hour and weekly limits fill up.\n[Show my usage](command:orbit.showUsage)",
+            "description": "Tokens and cost by day, model and project, your streak, the tools and MCP servers Claude used, and a weekly recap.\n[Show my usage](command:orbit.showUsage)",
             "media": {
               "image": "media/walkthrough/usage.png",
-              "altText": "Usage: cost per day, plan limits and activity"
+              "altText": "Usage: cost per day, streaks and activity"
             },
             "completionEvents": [
               "onCommand:orbit.showUsage"
@@ -166,11 +222,11 @@
           },
           {
             "id": "setup",
-            "title": "Keep your setup healthy",
-            "description": "Setup starts with a health check, then shows your MCP servers, plugins, skills, hooks, permissions and settings. Every change shows a preview first and can be undone.\n[Check my setup](command:orbit.showSetup)",
+            "title": "Set Claude up your way",
+            "description": "Config changes the model, reasoning effort and permissions in plain words, with a health check. Skills, MCP, Plugins, Agents, Commands, Hooks and Memory each have a tab of their own. Every change is backed up and can be undone.\n[Open Config](command:orbit.showSetup)",
             "media": {
-              "image": "media/walkthrough/setup.png",
-              "altText": "Setup: health check first, then everything Claude uses"
+              "image": "media/walkthrough/config.png",
+              "altText": "Config: model, effort and permissions in plain words"
             },
             "completionEvents": [
               "onCommand:orbit.showSetup"

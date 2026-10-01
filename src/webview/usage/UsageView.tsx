@@ -11,6 +11,7 @@ import { StatTile } from "../ui/charts/StatTile";
 import { dailyBars, projectLabel } from "./model";
 import { QuotaCard } from "./QuotaCard";
 import { RecapCard } from "./RecapCard";
+import { UsageGlance } from "./UsageGlance";
 
 const RANGES: { id: Range; label: string; title: string }[] = [
   { id: "today", label: "Today", title: "today" },
@@ -110,6 +111,8 @@ export function UsageView() {
         />
       </div>
 
+      <UsageGlance link={false} />
+
       {r.id === "today" ? null : (
         <BarChart
           title={`API value per ${s.daily.length > 90 ? "week" : "day"}`}
@@ -146,6 +149,29 @@ export function UsageView() {
             value: p.cost,
             display: formatCost(p.cost),
             sub: p.cwd,
+          }))}
+        />
+      ) : null}
+      {s.tools.length ? (
+        <RankList
+          title="Tools Claude used"
+          items={s.tools.map((t) => ({
+            key: t.name,
+            label: t.name,
+            value: t.count,
+            display: `${t.count.toLocaleString()}×`,
+          }))}
+        />
+      ) : null}
+      {s.mcp.length ? (
+        <RankList
+          title="MCP servers"
+          items={s.mcp.map((m) => ({
+            key: m.server,
+            label: m.server,
+            value: m.count,
+            display: `${m.count.toLocaleString()}×`,
+            sub: `${m.tools} tool${m.tools === 1 ? "" : "s"}`,
           }))}
         />
       ) : null}

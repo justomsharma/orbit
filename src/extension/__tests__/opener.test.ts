@@ -112,6 +112,32 @@ describe("Opener.continueInTerminal", () => {
   });
 });
 
+describe("Orbit's Open chats in: terminal", () => {
+  it("continues any chat in a terminal, even one from another folder", async () => {
+    const { host, calls } = fakeHost({ openIn: () => "terminal" });
+    await new Opener(host).continueChat(session("/code/elsewhere"));
+    expect(calls).toEqual([`terminal /usr/bin/claude --resume ${ID} @/code/elsewhere`]);
+  });
+
+  it("starts new chats in a terminal with the prompt as the first message", async () => {
+    const { host, calls } = fakeHost({ openIn: () => "terminal" });
+    await new Opener(host).newChat("Add tests");
+    expect(calls).toEqual(["terminal /usr/bin/claude Add tests @/code/shop"]);
+  });
+
+  it("falls back to Claude's panel when the claude command is missing", async () => {
+    const { host, calls } = fakeHost({ openIn: () => "terminal", findClaude: async () => null });
+    await new Opener(host).newChat("Add tests");
+    expect(calls).toEqual(["open vscode://anthropic.claude-code/open?prompt=Add%20tests"]);
+  });
+
+  it("continues the most recent chat in the folder with --continue", async () => {
+    const { host, calls } = fakeHost({ openIn: () => "terminal" });
+    await new Opener(host).continueLast();
+    expect(calls).toEqual(["terminal /usr/bin/claude --continue @/code/shop"]);
+  });
+});
+
 describe("Opener.newChat", () => {
   it("opens a fresh chat in Claude's panel", async () => {
     const { host, calls } = fakeHost();
@@ -133,12 +159,28 @@ describe("Opener.newChat", () => {
     ]);
   });
 
-  it("copies the prompt when only the terminal CLI is available", async () => {
+  it("starts the terminal chat with the prompt as its first message when only the CLI exists", async () => {
     const { host, calls } = fakeHost({ claudeExtensionInstalled: () => false });
     await new Opener(host).newChat("Fix it");
-    expect(calls[0]).toBe("terminal /usr/bin/claude  @/code/shop");
-    expect(calls[1]).toBe("copy Fix it");
-    expect(calls[2]).toMatch(/^info .*paste/i);
+    expect(calls).toEqual(["terminal /usr/bin/claude Fix it @/code/shop"]);
+  });
+
+  it("copies a prompt that can't be passed safely (npm's .cmd shim on Windows, or one that looks like a flag)", async () => {
+    const win = fakeHost({
+      platform: "win32",
+      claudeExtensionInstalled: () => false,
+      findClaude: async () => "C:\\npm\\claude.cmd",
+      workspaceFolders: () => ["C:\\code\\shop"],
+    });
+    await new Opener(win.host).newChat("Fix it & del *");
+    expect(win.calls[0]).toBe("terminal C:\\npm\\claude.cmd  @C:\\code\\shop");
+    expect(win.calls[1]).toBe("copy Fix it & del *");
+    expect(win.calls[2]).toMatch(/^info .*paste/i);
+
+    const flag = fakeHost({ claudeExtensionInstalled: () => false });
+    await new Opener(flag.host).newChat("--dangerously-skip-permissions");
+    expect(flag.calls[0]).toBe("terminal /usr/bin/claude  @/code/shop");
+    expect(flag.calls[1]).toBe("copy --dangerously-skip-permissions");
   });
 
   it("explains when neither Claude's extension nor the claude command is available", async () => {
@@ -159,5 +201,13 @@ describe("Opener.copyResume", () => {
     await new Opener(host).copyResume(session("/code/shop"));
     expect(calls[0]).toBe(`copy cd '/code/shop' && claude --resume ${ID}`);
     expect(calls[1]).toMatch(/^info Copied/);
+  });
+});
+
+describe("Opener.continueLast without a folder", () => {
+  it("asks for a folder instead of continuing a chat from VS Code's own folder", async () => {
+    const { host, calls } = fakeHost({ workspaceFolders: () => [] });
+    await new Opener(host).continueLast();
+    expect(calls[0]).toMatch(/^info Open a folder first/);
   });
 });

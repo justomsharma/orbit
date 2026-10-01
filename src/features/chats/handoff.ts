@@ -92,12 +92,46 @@ export function pickClaudePath(hits: string[], platform: NodeJS.Platform): strin
   return null;
 }
 
-/** A terminal running a fresh `claude` session in `cwd`. */
-export function newChatTerminal(cwd: string | undefined, claudePath: string): TerminalSpec {
+/**
+ * Can `prompt` be given to `claude` as its first-message argument? Only for a real
+ * executable: Windows runs npm's `.cmd`/`.bat` shims through cmd.exe, which would
+ * re-parse free text. Text that looks like an option, or (on Windows) spans lines or
+ * has characters cmd.exe treats specially, goes on the clipboard instead.
+ */
+export function promptIsSafeArg(
+  prompt: string,
+  claudePath: string,
+  platform: NodeJS.Platform,
+): boolean {
+  if (!prompt.trim() || prompt.length > 8000 || /^\s*-/.test(prompt) || prompt.includes("\0"))
+    return false;
+  if (platform !== "win32") return true;
+  // Some `.exe` launchers (scoop shims) hand the line to a `.cmd` file, which cmd.exe
+  // re-parses: text with its special characters goes on the clipboard instead.
+  return /\.(exe|com)$/i.test(claudePath) && !/[\r\n"&|<>^%!`]/.test(prompt);
+}
+
+/** A terminal running a fresh `claude` session in `cwd`, optionally with its first message. */
+export function newChatTerminal(
+  cwd: string | undefined,
+  claudePath: string,
+  prompt?: string,
+  platform: NodeJS.Platform = process.platform,
+): TerminalSpec {
   return {
     name: cwd ? `Claude · ${projectName(cwd)}` : "Claude",
     shellPath: claudePath,
-    shellArgs: [],
+    shellArgs: prompt && promptIsSafeArg(prompt, claudePath, platform) ? [prompt] : [],
+    cwd,
+  };
+}
+
+/** `claude --continue`: the most recent chat in `cwd`. */
+export function continueLastTerminal(cwd: string | undefined, claudePath: string): TerminalSpec {
+  return {
+    name: cwd ? `Claude · ${projectName(cwd)}` : "Claude",
+    shellPath: claudePath,
+    shellArgs: ["--continue"],
     cwd,
   };
 }

@@ -20,6 +20,18 @@ export interface UsageSummary {
   byModel: { model: string; cost: number | null; tokens: number }[];
   byProject: { cwd: string; cost: number; tokens: number }[];
   topSessions: { session: string; cwd: string; cost: number; tokens: number }[];
+  /** Built-in tools by how many replies used them, most first. */
+  tools: { name: string; count: number }[];
+  /** MCP servers (from `mcp__server__tool` names) by calls, most first. */
+  mcp: { server: string; count: number; tools: number }[];
+}
+
+const TOP_TOOLS = 12;
+
+/** `mcp__github__create_issue` → "github" (server names may contain "_"). */
+export function mcpServerOf(tool: string): string | null {
+  const m = tool.match(/^mcp__(.+?)__[^_].*$/);
+  return m ? m[1]! : null;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -68,6 +80,8 @@ export function summarize(records: UsageRecord[], from: number, to: number): Usa
   const models = new Map<string, { model: string; cost: number | null; tokens: number }>();
   const projects = new Map<string, { cwd: string; cost: number; tokens: number }>();
   const perDay = new Map<string, { cost: number; tokens: number }>();
+  const toolCount = new Map<string, number>();
+  const mcpCount = new Map<string, { count: number; tools: Set<string> }>();
 
   for (const r of records) {
     if (r.t < from || r.t >= to) continue;
@@ -107,6 +121,16 @@ export function summarize(records: UsageRecord[], from: number, to: number): Usa
     s.tokens += tk;
     sessions.set(r.session, s);
 
+    for (const name of r.tools ?? []) {
+      const server = mcpServerOf(name);
+      if (server) {
+        const e = mcpCount.get(server) ?? { count: 0, tools: new Set<string>() };
+        e.count++;
+        e.tools.add(name);
+        mcpCount.set(server, e);
+      } else toolCount.set(name, (toolCount.get(name) ?? 0) + 1);
+    }
+
     const dk = dayKey(r.t);
     const d = perDay.get(dk) ?? { cost: 0, tokens: 0 };
     d.cost += known;
@@ -138,6 +162,13 @@ export function summarize(records: UsageRecord[], from: number, to: number): Usa
     byModel: [...models.values()].sort(byCostThenTokens),
     byProject: [...projects.values()].sort(byCostThenTokens),
     topSessions: [...sessions.values()].sort(byCostThenTokens).slice(0, TOP_SESSIONS),
+    tools: [...toolCount]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, TOP_TOOLS),
+    mcp: [...mcpCount]
+      .map(([server, e]) => ({ server, count: e.count, tools: e.tools.size }))
+      .sort((a, b) => b.count - a.count || a.server.localeCompare(b.server)),
   };
 }
 

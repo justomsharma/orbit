@@ -114,7 +114,7 @@ export function ChatDetails() {
           ref={backRef}
           type="button"
           class="icon-btn"
-          aria-label="Back to chats"
+          aria-label={store.tab.value === "checkpoints" ? "Back to checkpoints" : "Back to chats"}
           title="Back"
           onClick={back}
         >

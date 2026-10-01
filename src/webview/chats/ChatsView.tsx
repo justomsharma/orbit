@@ -18,7 +18,6 @@ import {
   projectsOf,
   relativeTime,
 } from "./model";
-import { PromptsView } from "./PromptsView";
 
 const HEADER_H = 30;
 const ROW_H = 54;
@@ -171,44 +170,16 @@ const chatsInput = () => ({
   tags: store.tags.value,
 });
 
-/** Chats, or the prompt library, with one chat's details when opened. */
+/** Every chat, with one chat's details when opened. */
 export function ChatsView() {
-  const mode = store.chatsMode.value;
   // The chats in view (chip + filter menus), which search inside messages covers.
   const inView = useComputed(() =>
     buildItems(chatsInput(), "", effectiveFilter(), store.now.value, store.narrow.value).flatMap(
       (i) => (i.kind === "chat" ? [i.vm.s.id] : []),
     ),
   ).value;
-  useMessageSearch(mode === "chats", inView);
-  return (
-    <div class="chats-tab">
-      <fieldset class="segmented mode-switch">
-        <legend class="sr-only">Show</legend>
-        {(["chats", "prompts"] as const).map((m) => (
-          <label key={m} class={mode === m ? "on" : ""}>
-            <input
-              type="radio"
-              name="chats-mode"
-              class="sr-only"
-              checked={mode === m}
-              onChange={() => (store.chatsMode.value = m)}
-            />
-            {m === "chats" ? "Chats" : "Prompts"}
-          </label>
-        ))}
-      </fieldset>
-      {mode === "prompts" ? (
-        <section class="chats">
-          <PromptsView />
-        </section>
-      ) : store.details.value ? (
-        <ChatDetails />
-      ) : (
-        <ChatList />
-      )}
-    </div>
-  );
+  useMessageSearch(true, inView);
+  return <div class="chats-tab">{store.details.value ? <ChatDetails /> : <ChatList />}</div>;
 }
 
 function ChatList() {

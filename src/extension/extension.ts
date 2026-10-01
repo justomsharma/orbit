@@ -1,11 +1,15 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { MiB } from "../core/fsSafe";
 import { OrbitStore } from "../core/orbitStore";
 import { claudeHome, claudeJsonPath, projectsDir, sessionsDir, settingsFile } from "../core/paths";
 import { SafeWriter } from "../core/safeWriter";
 import { RefreshScheduler } from "../core/scheduler";
+import { Accounts, type SavedAccount } from "../features/account/accounts";
+import { credentialStore } from "../features/account/credentials";
 import { PromptLibrary } from "../features/prompts/library";
+import { readJsonFile } from "../features/setup/jsonFile";
 import { findNode } from "../features/usage/findNode";
 import { QuotaInstaller } from "../features/usage/quotaInstall";
 import { ChatsService, type ChatsSnapshot } from "./chatsService";
@@ -17,7 +21,7 @@ import { UsageService, type UsageSnapshot } from "./usageService";
 import { OrbitViewProvider, VIEW_ID } from "./view";
 import { vscodeConfirmHost } from "./vscodeConfirm";
 import { ReadOnlyDocs } from "./vscodeDocs";
-import { runClaudeInTerminal, vscodeOpenerHost } from "./vscodeHost";
+import { orbitPrefs, runClaudeInTerminal, setTerminalIcon, vscodeOpenerHost } from "./vscodeHost";
 
 /** What `activate` returns — used by the integration tests. */
 export interface OrbitApi {
@@ -29,7 +33,7 @@ export interface OrbitApi {
 }
 
 const POLL_MS = 20_000;
-const TOUR_SHOWN = "orbit.tourShown";
+const SAVED_ACCOUNTS = "orbit.savedAccounts";
 
 /** Saves the usage index on shutdown; VS Code waits for the promise deactivate() returns. */
 let onExit: (() => Promise<void>) | null = null;
@@ -39,6 +43,7 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   const log = vscode.window.createOutputChannel("Orbit", { log: true });
   const state = new OrbitState(context.globalState);
   const chats = new ChatsService(home);
+  setTerminalIcon(vscode.Uri.joinPath(context.extensionUri, "media", "terminal.svg"));
   const opener = new Opener(vscodeOpenerHost());
 
   // Orbit's own files live only in its VS Code storage folder, never in ~/.claude.
@@ -86,8 +91,42 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
   };
   showStatus(0);
 
+  const accounts = new Accounts({
+    claudeJsonPath: claudeJson,
+    readClaudeJson: async () =>
+      (await readJsonFile(claudeJson, { maxBytes: 64 * MiB, followLinks: true })).data,
+    credentials: () => credentialStore(home, process.platform),
+    secrets: context.secrets,
+    list: {
+      get: () => context.globalState.get<SavedAccount[]>(SAVED_ACCOUNTS, []),
+      set: (v) => context.globalState.update(SAVED_ACCOUNTS, v),
+    },
+    writer,
+  });
+
   const provider = new OrbitViewProvider({
     extensionUri: context.extensionUri,
+    accounts,
+    accountDeps: {
+      runClaude: (args) => runClaudeInTerminal(args, workspace() ?? undefined),
+      ask: async (message, detail, ...actions) =>
+        vscode.window.showInformationMessage(message, { modal: true, detail }, ...actions),
+      pick: async (title, items) =>
+        (
+          await vscode.window.showQuickPick(
+            items.map((i) => ({ ...i, label: i.label })),
+            { title, placeHolder: "Pick an account", matchOnDetail: true },
+          )
+        )?.id,
+      info: (m) => void vscode.window.showInformationMessage(m),
+      warn: (m) => void vscode.window.showWarningMessage(m),
+    },
+    prefs: () => orbitPrefs(),
+    setPref: async (key, value) => {
+      await vscode.workspace
+        .getConfiguration("orbit")
+        .update(key, value, vscode.ConfigurationTarget.Global);
+    },
     chats,
     usage,
     quota,
@@ -181,13 +220,18 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
     ),
     vscode.commands.registerCommand("orbit.refresh", () => provider.refresh()),
     vscode.commands.registerCommand("orbit.tour", openTour),
+    vscode.commands.registerCommand("orbit.switchAccount", () =>
+      provider.dispatch({ type: "account:pick" }),
+    ),
     // Open Orbit on a tab: Command Palette and the Get started walkthrough.
     ...(
       [
         ["orbit.showChats", "chats"],
         ["orbit.showPrompts", "prompts"],
         ["orbit.showUsage", "usage"],
-        ["orbit.showSetup", "setup"],
+        ["orbit.showSetup", "config"],
+        ["orbit.showAccount", "account"],
+        ["orbit.showCheckpoints", "checkpoints"],
       ] as const
     ).map(([id, tab]) =>
       vscode.commands.registerCommand(id, async () => {
@@ -196,16 +240,14 @@ export function activate(context: vscode.ExtensionContext): OrbitApi {
       }),
     ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => void provider.refresh()),
+    // Logging in or out happens in a terminal: show the new account when it closes.
+    vscode.window.onDidCloseTerminal(() => void provider.refresh()),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("orbit")) void provider.refresh();
+    }),
   );
 
   onExit = () => usage.flush();
-
-  // VS Code only opens a walkthrough on some installs (not from a .vsix, nor on reinstall),
-  // so Orbit opens its own tour once, unless the person already hid Get started.
-  if (!context.globalState.get<boolean>(TOUR_SHOWN) && !state.onboarding().dismissed) {
-    void context.globalState.update(TOUR_SHOWN, true);
-    void openTour().catch((e) => log.warn("Could not open the Get started tour", String(e)));
-  }
 
   return {
     refresh: async () => {

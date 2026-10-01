@@ -1,4 +1,5 @@
 import type { SetupSnapshot } from "../../src/extension/setupService";
+import { MODEL_ALIASES } from "../../src/features/setup/models";
 
 /** A realistic Setup snapshot for UI tests and the visual preview. */
 export function sampleSetup(over: Partial<SetupSnapshot> = {}): SetupSnapshot {
@@ -7,6 +8,12 @@ export function sampleSetup(over: Partial<SetupSnapshot> = {}): SetupSnapshot {
   return {
     workspace: ws,
     claudeJsonPath: "/Users/ana/.claude.json",
+    modelOptions: MODEL_ALIASES,
+    nested: {
+      "permissions.defaultMode": null,
+      "sandbox.enabled": null,
+      "permissions.disableBypassPermissionsMode": null,
+    },
     settings: [
       {
         scope: "user",

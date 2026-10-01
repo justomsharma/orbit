@@ -26,6 +26,35 @@ import { parseViewMsg, type ViewMsg } from "../shared/protocol";
 import { needsCmd, windowsLaunch } from "../shared/validate";
 import type { SetupSnapshot } from "./setupService";
 
+/** Settings inside an object setting that Config's quick settings change, with their allowed values. */
+const NESTED_SETTINGS: Record<string, (string | boolean)[]> = {
+  "sandbox.enabled": [true, false],
+  "permissions.disableBypassPermissionsMode": ["disable"],
+};
+
+/** The settings Config's quick list changes: only these may skip the question. */
+const QUICK_KEYS = new Set([
+  "model",
+  "effortLevel",
+  "alwaysThinkingEnabled",
+  "permissions.defaultMode",
+  "sandbox.enabled",
+  "permissions.disableBypassPermissionsMode",
+  "autoCompactEnabled",
+  "fileCheckpointingEnabled",
+  "autoMemoryEnabled",
+  "cleanupPeriodDays",
+  "outputStyle",
+  "editorMode",
+  "verbose",
+  "spinnerTipsEnabled",
+]);
+
+const QUICK_LABELS: Record<string, string> = {
+  "sandbox.enabled": "Sandbox Bash commands",
+  "permissions.disableBypassPermissionsMode": "Block bypass-permissions mode",
+};
+
 export interface SetupHandlerDeps {
   home: string;
   claudeJson: string;
@@ -108,12 +137,20 @@ async function run(msg: SetupMsg, d: SetupHandlerDeps, state: { changed: boolean
     summary: string,
     label: string,
     warning?: string,
+    quick?: boolean,
   ) => {
     if (!file) {
       warn("Open a folder first: project settings belong to a folder.");
       return;
     }
-    const ok = await applyJsonEdit(d.writer, d.confirm, { file, mutate, summary, label, warning });
+    const ok = await applyJsonEdit(d.writer, d.confirm, {
+      file,
+      mutate,
+      summary,
+      label,
+      warning,
+      quick,
+    });
     state.changed = ok;
     if (ok) await d.refresh();
     return ok;
@@ -144,17 +181,25 @@ async function run(msg: SetupMsg, d: SetupHandlerDeps, state: { changed: boolean
       return true;
 
     case "setup:setSetting": {
-      const label = humanize(msg.key);
+      const label = QUICK_LABELS[msg.key] ?? humanize(msg.key);
       let scope: EditScope;
+      let elsewhere = false;
       if (msg.scope === "auto") {
         const t = await toggleTarget(msg.key.split("."), label);
         if (!t) return true;
         scope = t.scope;
+        elsewhere = t.elsewhere;
       } else scope = msg.scope;
       const where = SCOPE_WORD[scope];
+      const nested = NESTED_SETTINGS[msg.key];
       if (msg.key === "permissions.defaultMode") {
         if (msg.value !== null && !(String(msg.value) in MODE_LABELS)) {
           warn(`"${msg.value}" isn't one of Claude Code's permission modes.`);
+          return true;
+        }
+      } else if (nested) {
+        if (msg.value !== null && !nested.some((x) => x === msg.value)) {
+          warn(`"${String(msg.value)}" isn't a value Claude Code takes for "${label}".`);
           return true;
         }
       } else {
@@ -212,7 +257,11 @@ async function run(msg: SetupMsg, d: SetupHandlerDeps, state: { changed: boolean
         summary,
         `${label}: ${shownValue ?? "default"}`,
         riskWarning(msg.key, msg.value, scope) ?? undefined,
+        msg.quick === true && msg.scope === "auto" && QUICK_KEYS.has(msg.key),
       );
+      // Removing it here doesn't make it Claude's default when another file also sets it.
+      if (msg.value === null && elsewhere)
+        warn(`"${label}" is also set in another settings file, so that value applies now.`);
       return true;
     }
 

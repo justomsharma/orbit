@@ -5,6 +5,8 @@ export type Step = (typeof STEPS)[number];
 export interface Onboarding {
   done: Step[];
   dismissed: boolean;
+  /** The welcome screen (everything in Orbit) was shown once. Missing means yes. */
+  welcomed?: boolean;
 }
 
 export const isStep = (v: unknown): v is Step => STEPS.includes(v as Step);

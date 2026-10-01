@@ -137,7 +137,7 @@ const chats = [
 const sample = {
   type: "sessions",
   items: chats,
-  onboarding: { done: ["find", "setup"], dismissed: false },
+  onboarding: { done: ["find", "setup"], dismissed: false, welcomed: true },
   live: [
     { sessionId: id(1), pid: 1, status: "busy", name: null, updatedAt: now },
     { sessionId: id(3), pid: 2, status: "idle", name: null, updatedAt: now },
@@ -146,7 +146,54 @@ const sample = {
   renames: {},
   tags: {},
   here: chats.filter((c) => c.project === "shop").map((c) => c.id),
-  env: { claudeExtension: true, hasWorkspace: true, platform: "darwin" },
+  env: {
+    claudeExtension: true,
+    hasWorkspace: true,
+    platform: "darwin",
+    prefs: { openChatsIn: "terminal", terminalLocation: "editor" },
+  },
+};
+const accountMsg = {
+  type: "account",
+  data: {
+    profile: {
+      id: "acc-ana",
+      name: "Ana Ruiz",
+      email: "ana@acme.dev",
+      organization: "Acme",
+      role: "admin",
+      plan: "Max 20x",
+      since: null,
+    },
+    saved: [
+      {
+        id: "acc-ana",
+        name: "Ana Ruiz",
+        email: "ana@acme.dev",
+        plan: "Max 20x",
+        organization: "Acme",
+        savedAt: now,
+      },
+      {
+        id: "acc-side",
+        name: "Ana",
+        email: "ana.side@gmail.com",
+        plan: "Pro",
+        organization: null,
+        savedAt: now,
+      },
+    ],
+    canSwitch: true,
+  },
+};
+const checkpointsMsg = {
+  type: "checkpoints",
+  items: [
+    { id: id(1), files: 6, versions: 14, bytes: 412_000 },
+    { id: id(2), files: 3, versions: 5, bytes: 38_400 },
+    { id: id(4), files: 21, versions: 52, bytes: 1_900_000 },
+    { id: id(6), files: 2, versions: 2, bytes: 9_800 },
+  ],
 };
 
 // Sample usage from the test fixture (bundled on the fly, since it is TypeScript).
@@ -281,8 +328,8 @@ for (const [name, vars] of Object.entries(themes)) {
 <script>
   window.__sent = [];
   window.acquireVsCodeApi = () => ({
-    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { window.postMessage(${JSON.stringify(sample)}, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); if (m.type === "tab" && m.tab === "setup") setTimeout(() => { for (const x of ${JSON.stringify(setupMsgs)}) window.postMessage(x, "*"); }, 0); if (m.type === "tab" && m.tab === "prompts") setTimeout(() => window.postMessage(${JSON.stringify(promptsMsg)}, "*"), 0); if (m.type === "chat:details") { const d = ${JSON.stringify(detailsMsg("ID"))}; d.id = m.id; setTimeout(() => window.postMessage(d, "*"), 0); } if (m.type === "search") { const h = ${JSON.stringify(hitsMsg("REQ"))}; h.req = m.req; setTimeout(() => window.postMessage(h, "*"), 0); } },
-    getState: () => (location.hash === "#prompts" ? { tab: "chats", chatsMode: "prompts" } : location.hash ? { tab: location.hash.slice(1), chatsMode: "chats" } : undefined),
+    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { const s = ${JSON.stringify(sample)}; if ((new URLSearchParams(location.search).get("t") || location.hash.slice(1)) === "welcome") s.onboarding.welcomed = false; window.postMessage(s, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); if (m.type === "tab" && m.tab === "setup") setTimeout(() => { for (const x of ${JSON.stringify(setupMsgs)}) window.postMessage(x, "*"); }, 0); if (m.type === "tab" && m.tab === "prompts") setTimeout(() => window.postMessage(${JSON.stringify(promptsMsg)}, "*"), 0); if (m.type === "tab" && m.tab === "account") setTimeout(() => window.postMessage(${JSON.stringify(accountMsg)}, "*"), 0); if (m.type === "tab" && m.tab === "checkpoints") setTimeout(() => window.postMessage(${JSON.stringify(checkpointsMsg)}, "*"), 0); if (m.type === "chat:details") { const d = ${JSON.stringify(detailsMsg("ID"))}; d.id = m.id; setTimeout(() => window.postMessage(d, "*"), 0); } if (m.type === "search") { const h = ${JSON.stringify(hitsMsg("REQ"))}; h.req = m.req; setTimeout(() => window.postMessage(h, "*"), 0); } },
+    getState: () => { const t = new URLSearchParams(location.search).get("t") || location.hash.slice(1); return t && t !== "welcome" ? { tab: t } : undefined; },
     setState: () => {},
   });
 </script></head><body><div id="root"></div><script src="main.js"></script></body></html>`,

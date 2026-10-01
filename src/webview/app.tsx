@@ -1,77 +1,161 @@
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
+import { TABS, type Tab, tabDef } from "../shared/tabs";
+import { AccountView } from "./account/AccountView";
 import { post } from "./bus";
 import { ChatsView } from "./chats/ChatsView";
-import { SetupView } from "./setup/SetupView";
-import type { Tab } from "./store";
+import { PromptsView } from "./chats/PromptsView";
+import { CheckpointsView } from "./checkpoints/CheckpointsView";
+import { ConfigView } from "./setup/ConfigView";
+import { SetupPage } from "./setup/SetupPage";
 import * as store from "./store";
-import { Empty } from "./ui/Empty";
-import { Icon } from "./ui/Icon";
+import { revealInStrip, useEdgeScroll } from "./ui/edgeScroll";
+import { Icon, IconButton } from "./ui/Icon";
 import { HomeView } from "./usage/HomeView";
 import { UsageView } from "./usage/UsageView";
+import { Welcome } from "./Welcome";
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "home", label: "Home", icon: "home" },
-  { id: "chats", label: "Chats", icon: "comment-discussion" },
-  { id: "usage", label: "Usage", icon: "graph" },
-  { id: "setup", label: "Setup", icon: "settings-gear" },
-];
+/** Opens a tab from anywhere in the view (links, Get started, the welcome screen). */
+export function openTab(t: Tab): void {
+  store.details.value = null;
+  store.tab.value = t;
+}
 
 function TabBar() {
+  const strip = useRef<HTMLDivElement>(null);
+  useEdgeScroll(strip);
+  const current = store.tab.value;
+
+  // Keep the open tab in sight, also when it was opened from elsewhere.
+  useEffect(() => {
+    const reveal = () => {
+      const el = document.getElementById(`tab-${current}`);
+      if (strip.current && el) revealInStrip(strip.current, el);
+    };
+    reveal();
+    // Again once the tab's name has slid open, so it isn't left half outside.
+    const t = setTimeout(reveal, 240);
+    return () => clearTimeout(t);
+  }, [current]);
+
   const onKey = (e: KeyboardEvent) => {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     const i = TABS.findIndex((t) => t.id === store.tab.value);
-    const next = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length]!;
-    store.tab.value = next.id;
-    document.getElementById(`tab-${next.id}`)?.focus();
+    const n = TABS.length;
+    const to =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? (i + 1) % n
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? (i + n - 1) % n
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? n - 1
+              : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    openTab(TABS[to]!.id);
+    document.getElementById(`tab-${TABS[to]!.id}`)?.focus();
   };
+
   return (
-    <div class="tabs" role="tablist" aria-label="Orbit" onKeyDown={onKey}>
-      {TABS.map((t) => {
-        const on = store.tab.value === t.id;
-        return (
-          <button
-            key={t.id}
-            id={`tab-${t.id}`}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            tabIndex={on ? 0 : -1}
-            class={`tab${on ? " on" : ""}`}
-            title={t.label}
-            onClick={() => (store.tab.value = t.id)}
-          >
-            <Icon name={t.icon} />
-            <span>{t.label}</span>
-          </button>
-        );
-      })}
+    <div class="tabbar">
+      <div class="tabs" role="tablist" aria-label="Orbit" ref={strip} onKeyDown={onKey}>
+        {TABS.map((t) => {
+          const on = current === t.id;
+          return (
+            <button
+              key={t.id}
+              id={`tab-${t.id}`}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              aria-controls="panel"
+              tabIndex={on ? 0 : -1}
+              class={`tab${on ? " on" : ""}`}
+              title={t.label}
+              onClick={() => openTab(t.id)}
+            >
+              <Icon name={t.icon} />
+              <span class="tab-label">{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <IconButton
+        icon="refresh"
+        label="Refresh everything"
+        onClick={() => post({ type: "refresh" })}
+      />
     </div>
   );
 }
 
+function Footer() {
+  return (
+    <footer class="footer">
+      <span class="footer-name">Orbit HQ</span>
+      <IconButton
+        icon="question"
+        label="What's in Orbit"
+        onClick={() => (store.welcome.value = true)}
+      />
+      <IconButton
+        icon="github"
+        label="Orbit on GitHub"
+        onClick={() => post({ type: "openOrbitLink", link: "repo" })}
+      />
+      <IconButton
+        icon="comment"
+        label="Report a problem or ask for a feature"
+        onClick={() => post({ type: "openOrbitLink", link: "issue" })}
+      />
+    </footer>
+  );
+}
+
+function Panel({ t }: { t: Tab }) {
+  switch (t) {
+    case "home":
+      return <HomeView />;
+    case "chats":
+      return <ChatsView />;
+    case "prompts":
+      return (
+        <div class="chats-tab">
+          <section class="chats">
+            <PromptsView />
+          </section>
+        </div>
+      );
+    case "checkpoints":
+      return <CheckpointsView />;
+    case "usage":
+      return <UsageView />;
+    case "account":
+      return <AccountView />;
+    case "config":
+      return <ConfigView />;
+    default:
+      return <SetupPage page={t} />;
+  }
+}
+
 export function App() {
   const t = store.tab.value;
-  // Tell the host which tab is open, so it only reads what this tab shows.
-  const reading = t === "chats" && store.chatsMode.value === "prompts" ? "prompts" : t;
+  // Tell the host which data the open tab shows, so it only reads that.
+  const reading = tabDef(t).reads;
   useEffect(() => post({ type: "tab", tab: reading }), [reading]);
+  // Each page starts with an empty search.
+  useEffect(() => {
+    store.setupQuery.value = "";
+  }, [t]);
   return (
     <div class="app">
       <TabBar />
-      <main class="panel" role="tabpanel" aria-labelledby={`tab-${t}`}>
-        {t === "home" ? (
-          <HomeView />
-        ) : t === "chats" ? (
-          <ChatsView />
-        ) : t === "usage" ? (
-          <UsageView />
-        ) : t === "setup" ? (
-          <SetupView />
-        ) : (
-          <Empty icon="tools" title="Coming soon">
-            This tab is being built.
-          </Empty>
-        )}
+      <main id="panel" class="panel" role="tabpanel" aria-labelledby={`tab-${t}`}>
+        <Panel t={t} />
       </main>
+      <Footer />
+      {store.welcome.value ? <Welcome /> : null}
     </div>
   );
 }

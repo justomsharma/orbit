@@ -55,62 +55,7 @@ button {
   height: 100%;
 }
 
-/* ---------- Tabs ---------- */
-.tabs {
-  display: flex;
-  gap: 2px;
-  padding: 6px 8px 0;
-  border-bottom: 1px solid var(--border);
-  flex: none;
-}
-
-.tab {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 6px 4px 7px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.tab span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* A narrow sidebar shows icons only; the names stay for screen readers and tooltips. */
-@media (max-width: 280px) {
-  .tab span:last-child {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-  }
-}
-
-.tab:hover {
-  color: var(--fg);
-}
-
-.tab.on {
-  color: var(--fg);
-  border-bottom-color: var(--focus);
-}
-
-/* Very narrow sidebars: icons only. */
-@media (max-width: 230px) {
-  .tab span:last-child {
-    display: none;
-  }
-}
+/* The tab bar lives in styles-shell.css. */
 
 .panel {
   flex: 1;

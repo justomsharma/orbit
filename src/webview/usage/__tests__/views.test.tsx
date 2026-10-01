@@ -154,6 +154,12 @@ describe("HomeView", () => {
     expect(sent).toContainEqual({ type: "newChat" });
   });
 
+  it("continues the folder's last chat from Home", () => {
+    render(<HomeView />);
+    fireEvent.click(screen.getByRole("button", { name: /Continue the last chat/ }));
+    expect(sent).toContainEqual({ type: "continueLast" });
+  });
+
   it("lets you type what Claude should do, then opens Claude's chat with it", () => {
     render(<HomeView />);
     const box = screen.getByRole("textbox", { name: /What should Claude do/ });

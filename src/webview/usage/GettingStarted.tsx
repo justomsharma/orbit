@@ -36,10 +36,9 @@ function showMe(step: Step): void {
       return;
     }
   }
-  if (step === "setup") store.tab.value = "setup";
-  else if (step === "limits") store.tab.value = "usage";
+  if (step === "setup") store.tab.value = "config";
+  else if (step === "limits") store.tab.value = "account";
   else {
-    store.chatsMode.value = "chats";
     store.focusSearch.value = step === "find";
     store.tab.value = "chats";
   }

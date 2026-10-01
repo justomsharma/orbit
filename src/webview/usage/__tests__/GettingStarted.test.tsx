@@ -32,7 +32,6 @@ beforeEach(() => {
   sent.length = 0;
   setPost((m) => sent.push(m));
   store.tab.value = "home";
-  store.chatsMode.value = "chats";
   store.usage.value = null;
   store.sessions.value = [chat];
   store.here.value = [ID];
@@ -56,10 +55,10 @@ describe("Get started checklist on Home", () => {
   it("takes you to the right place for each step", () => {
     render(<HomeView />);
     fireEvent.click(within(guide()).getByRole("button", { name: /Show me: Check your setup/ }));
-    expect(store.tab.value).toBe("setup");
+    expect(store.tab.value).toBe("config");
     store.tab.value = "home";
     fireEvent.click(within(guide()).getByRole("button", { name: /Show me: Turn on plan limits/ }));
-    expect(store.tab.value).toBe("usage");
+    expect(store.tab.value).toBe("account");
     store.tab.value = "home";
     fireEvent.click(
       within(guide()).getByRole("button", { name: /Show me: See what Claude changed/ }),

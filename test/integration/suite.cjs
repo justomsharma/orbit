@@ -28,6 +28,9 @@ exports.run = async () => {
       "orbit.open",
       "orbit.refresh",
       "orbit.tour",
+      "orbit.switchAccount",
+      "orbit.showAccount",
+      "orbit.showCheckpoints",
       "orbit.showChats",
       "orbit.showPrompts",
       "orbit.showUsage",
@@ -112,6 +115,31 @@ exports.run = async () => {
       "orbit.showSetup",
     ])
       await vscode.commands.executeCommand(c);
+  });
+
+  await check("opens chats in a terminal by default", async () => {
+    assert.equal(vscode.workspace.getConfiguration("orbit").get("openChatsIn"), "terminal");
+    assert.equal(vscode.workspace.getConfiguration("orbit").get("terminalLocation"), "editor");
+  });
+
+  await check("Config's quick settings write Claude's settings without a question", async () => {
+    const file = require("node:path").join(process.env.CLAUDE_CONFIG_DIR, "settings.json");
+    await api.dispatch({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "effortLevel",
+      value: "high",
+      quick: true,
+    });
+    const saved = JSON.parse(require("node:fs").readFileSync(file, "utf8"));
+    assert.equal(saved.effortLevel, "high");
+  });
+
+  await check("every tab's data loads without an error", async () => {
+    for (const tab of ["account", "checkpoints", "setup", "prompts", "usage", "home"]) {
+      await api.dispatch({ type: "tab", tab });
+      await api.refresh();
+    }
   });
 
   await check("refresh command runs without error", async () => {

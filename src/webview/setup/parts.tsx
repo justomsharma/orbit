@@ -1,5 +1,5 @@
-import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { type ComponentChildren, createContext } from "preact";
+import { useContext, useEffect, useState } from "preact/hooks";
 import type { ViewMsg } from "../../shared/protocol";
 import { post } from "../bus";
 import * as store from "../store";
@@ -80,8 +80,29 @@ interface SectionProps {
   hidden?: boolean;
 }
 
+/** True inside a tab of its own (Skills, MCP…): the group is the whole page, always open. */
+export const PageMode = createContext(false);
+
 /** A collapsible group. Searching opens every group that has matches. */
 export function Section({ id, title, icon, count, note, children, hidden }: SectionProps) {
+  const page = useContext(PageMode);
+  if (page) {
+    const q = store.setupQuery.value.trim();
+    return (
+      <section class="page-sec" aria-label={title}>
+        {count !== undefined || note ? (
+          <p class="page-count">
+            {count !== undefined
+              ? `${count} ${title.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())}`
+              : null}
+            {count !== undefined && note ? " · " : null}
+            {note}
+          </p>
+        ) : null}
+        {hidden ? <p class="sec-empty">Nothing here matches "{q}".</p> : children}
+      </section>
+    );
+  }
   if (hidden) return null;
   const searching = store.setupQuery.value.trim() !== "";
   const open = searching || store.openSections.value.includes(id);

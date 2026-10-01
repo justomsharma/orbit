@@ -31,6 +31,13 @@ export function sampleSummary(days: number, costPerDay = 4, now = Date.now()): U
       { model: "claude-opus-5-5", cost: cost * 0.8, tokens: tokens * 0.8 },
       { model: "claude-sonnet-5-5", cost: cost * 0.2, tokens: tokens * 0.2 },
     ],
+    tools: [
+      { name: "Read", count: days * 30 },
+      { name: "Edit", count: days * 18 },
+      { name: "Bash", count: days * 12 },
+      { name: "Grep", count: days * 6 },
+    ],
+    mcp: [{ server: "github", count: days * 3, tools: 4 }],
     byProject: [
       { cwd: "/Users/ana/code/shop", cost: cost * 0.6, tokens: tokens * 0.6 },
       { cwd: "/Users/ana/code/api", cost: cost * 0.4, tokens: tokens * 0.4 },

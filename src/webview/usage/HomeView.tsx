@@ -6,7 +6,7 @@ import * as store from "../store";
 import { formatCost, formatTokens } from "../ui/charts/format";
 import { StatTile } from "../ui/charts/StatTile";
 import { Empty } from "../ui/Empty";
-import { Icon } from "../ui/Icon";
+import { Icon, IconButton } from "../ui/Icon";
 import { GettingStarted } from "./GettingStarted";
 import { costDelta, greeting } from "./model";
 import { QuotaCard } from "./QuotaCard";
@@ -57,7 +57,6 @@ function Running() {
           class="link-btn"
           onClick={() => {
             store.filter.value = "live";
-            store.chatsMode.value = "chats";
             store.tab.value = "chats";
           }}
         >
@@ -87,13 +86,15 @@ function LastChat() {
         <button type="button" class="btn" onClick={() => post({ type: "openChat", id: last.id })}>
           Continue
         </button>
-        <button
-          type="button"
-          class="btn secondary"
-          onClick={() => post({ type: "openTerminal", id: last.id })}
-        >
-          <Icon name="terminal" /> Terminal
-        </button>
+        {store.env.value?.prefs?.openChatsIn === "terminal" ? null : (
+          <button
+            type="button"
+            class="btn secondary"
+            onClick={() => post({ type: "openTerminal", id: last.id })}
+          >
+            <Icon name="terminal" /> Terminal
+          </button>
+        )}
       </div>
     </section>
   );
@@ -183,7 +184,9 @@ function Ask() {
       />
       <div class="ask-foot">
         <span id="ask-hint" class="ask-hint">
-          Opens in Claude's chat, typed in. Press Enter there to send.
+          {store.env.value?.prefs?.openChatsIn === "claudePanel"
+            ? "Opens in Claude's chat, typed in. Press Enter there to send."
+            : "Starts Claude in a terminal with this as your first message."}
         </span>
         <button type="button" class="btn" disabled={!text.trim()} onClick={ask}>
           <Icon name="send" /> Ask Claude
@@ -200,9 +203,16 @@ export function HomeView() {
     <section class="home scroll">
       <header class="home-head">
         <h1 class="home-title">{greeting(hour)}</h1>
-        <button type="button" class="btn" onClick={() => post({ type: "newChat" })}>
-          <Icon name="add" /> New chat
-        </button>
+        <div class="home-actions">
+          <IconButton
+            icon="history"
+            label="Continue the last chat in this folder"
+            onClick={() => post({ type: "continueLast" })}
+          />
+          <button type="button" class="btn" onClick={() => post({ type: "newChat" })}>
+            <Icon name="add" /> New chat
+          </button>
+        </div>
       </header>
       <Ask />
       <GettingStarted />

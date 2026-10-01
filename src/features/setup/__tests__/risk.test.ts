@@ -38,3 +38,29 @@ describe("riskWarning", () => {
     ]);
   });
 });
+
+describe("riskWarning for Config's quick settings", () => {
+  it("warns before Claude deletes chats sooner than its 30-day default", () => {
+    expect(riskWarning("cleanupPeriodDays", 3, "user")).toMatch(
+      /delete.*3 days.*can't bring them back/s,
+    );
+    expect(riskWarning("cleanupPeriodDays", 90, "user")).toBeNull();
+    expect(riskWarning("cleanupPeriodDays", null, "user")).toBeNull();
+  });
+
+  it("warns before turning off the sandbox or the bypass block", () => {
+    expect(riskWarning("sandbox.enabled", null, "user")).toMatch(/files and network/);
+    expect(riskWarning("sandbox.enabled", false, "user")).toMatch(/files and network/);
+    expect(riskWarning("sandbox.enabled", true, "user")).toBeNull();
+    expect(riskWarning("permissions.disableBypassPermissionsMode", null, "user")).toMatch(/bypass/);
+    expect(riskWarning("permissions.disableBypassPermissionsMode", "disable", "user")).toBeNull();
+  });
+
+  it("warns before modes that act without asking", () => {
+    expect(riskWarning("permissions.defaultMode", "acceptEdits", "user")).toMatch(
+      /edit files without asking/,
+    );
+    expect(riskWarning("permissions.defaultMode", "auto", "user")).toMatch(/without asking/);
+    expect(riskWarning("permissions.defaultMode", "dontAsk", "user")).toBeNull();
+  });
+});

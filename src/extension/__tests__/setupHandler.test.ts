@@ -122,6 +122,108 @@ describe("handleSetup: settings", () => {
     expect(log[0]).toMatch(why);
   });
 
+  it("applies Config's quick settings without a question, still backed up and undoable", async () => {
+    const { handle, home, json, log } = await setup();
+    await handle({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "effortLevel",
+      value: "high",
+      quick: true,
+    });
+    expect(json(join(home, "settings.json")).effortLevel).toBe("high");
+    expect(log.some((l) => l.startsWith("confirm"))).toBe(false);
+  });
+
+  it("only skips the question for Config's own settings, written where they take effect", async () => {
+    const { handle, log } = await setup();
+    await handle({
+      type: "setup:setSetting",
+      scope: "user",
+      key: "theme",
+      value: "light",
+      quick: true,
+    });
+    await handle({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "outputStyle",
+      value: "x",
+      quick: true,
+    });
+    await handle({
+      type: "setup:setSetting",
+      scope: "project",
+      key: "effortLevel",
+      value: "low",
+      quick: true,
+    });
+    expect(log.filter((l) => l.startsWith("confirm"))).toHaveLength(2);
+    expect(log.filter((l) => l.startsWith("confirm"))[0]).toMatch(/Theme/);
+    expect(log.filter((l) => l.startsWith("confirm"))[1]).toMatch(/Effort/);
+  });
+
+  it("asks before Claude deletes old chats sooner, even from Config", async () => {
+    const { handle, log } = await setup();
+    await handle({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "cleanupPeriodDays",
+      value: 3,
+      quick: true,
+    });
+    expect(log[0]).toMatch(/^confirm .*⚠.*delete/s);
+  });
+
+  it("still asks first when a quick change turns off a safety check", async () => {
+    const { handle, log } = await setup();
+    await handle({
+      type: "setup:setSetting",
+      scope: "user",
+      key: "permissions.defaultMode",
+      value: "bypassPermissions",
+      quick: true,
+    });
+    expect(log[0]).toMatch(/^confirm .*⚠/);
+  });
+
+  it("writes the nested settings Config offers, and only their real values", async () => {
+    const { handle, home, json, log } = await setup();
+    await handle({
+      type: "setup:setSetting",
+      scope: "user",
+      key: "sandbox.enabled",
+      value: true,
+      quick: true,
+    });
+    await handle({
+      type: "setup:setSetting",
+      scope: "user",
+      key: "permissions.disableBypassPermissionsMode",
+      value: "disable",
+      quick: true,
+    });
+    const s = json(join(home, "settings.json"));
+    expect(s.sandbox).toEqual({ enabled: true });
+    expect(s.permissions.disableBypassPermissionsMode).toBe("disable");
+    await handle({ type: "setup:setSetting", scope: "user", key: "sandbox.enabled", value: "yes" });
+    await handle({ type: "setup:setSetting", scope: "user", key: "sandbox.network", value: true });
+    expect(log.filter((l) => l.startsWith("warn"))).toHaveLength(2);
+  });
+
+  it("says so when resetting leaves another file's value in charge", async () => {
+    const { handle, ws, log } = await setup();
+    writeFileSync(join(ws, ".claude", "settings.json"), JSON.stringify({ verbose: true }));
+    await handle({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "verbose",
+      value: null,
+      quick: true,
+    });
+    expect(log.some((l) => /^warn .*also set in another settings file/.test(l))).toBe(true);
+  });
+
   it("needs an open folder for project settings", async () => {
     const { handle, log } = await setup({ workspace: false });
     await handle({ type: "setup:setSetting", scope: "project", key: "theme", value: "dark" });

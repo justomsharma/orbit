@@ -17,4 +17,6 @@ export interface UsageRecord {
   fast: boolean;
   /** `usage.inference_geo === "us"` (US-only inference). */
   usGeo: boolean;
+  /** Tools this reply called (`mcp__server__tool` for MCP), when it called any. */
+  tools?: string[];
 }

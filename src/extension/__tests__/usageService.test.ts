@@ -63,7 +63,7 @@ describe("UsageService", () => {
     await a.snapshot([], Date.now());
     await a.flush();
     const saved = await store.read<{ v?: number } | null>("usage-index.json", null);
-    expect(saved?.v).toBe(1);
+    expect(saved?.v).toBe(2);
     const b = new UsageService(home, store, noQuota);
     const snap = await b.snapshot([], Date.now());
     expect(snap.all.messages).toBe(3);

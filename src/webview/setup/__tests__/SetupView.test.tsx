@@ -6,7 +6,22 @@ import { settingsCatalog } from "../../../features/setup/catalog";
 import type { ViewMsg } from "../../../shared/protocol";
 import { setPost } from "../../bus";
 import * as store from "../../store";
-import { SetupView } from "../SetupView";
+import { ConfigView } from "../ConfigView";
+import { SetupPage } from "../SetupPage";
+
+const PAGES = ["skills", "mcp", "plugins", "agents", "commands", "hooks", "memory"] as const;
+
+/** Config plus every setup tab, so one test can reach any section. */
+function SetupView() {
+  return (
+    <>
+      <ConfigView />
+      {PAGES.map((p) => (
+        <SetupPage key={p} page={p} />
+      ))}
+    </>
+  );
+}
 
 const sent: ViewMsg[] = [];
 
@@ -31,13 +46,15 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const section = (name: RegExp) => screen.getByRole("group", { name });
+/** A collapsible group on Config, or a whole page of its own (Skills, MCP…). */
+const section = (name: RegExp) =>
+  screen.queryByRole("group", { name }) ?? screen.getByRole("region", { name });
 
 describe("SetupView", () => {
   it("waits politely for the first read", () => {
     store.setup.value = null;
     render(<SetupView />);
-    expect(screen.getByText(/Reading your setup/)).toBeTruthy();
+    expect(screen.getAllByText(/Reading your setup/).length).toBeGreaterThan(0);
   });
 
   it("leads with health: each issue with its own fix", () => {
@@ -330,12 +347,16 @@ describe("SetupView", () => {
     expect(within(row("Effort level")).getByText(/that one wins/)).toBeTruthy();
   });
 
-  it("searches across the whole setup", () => {
-    render(<SetupView />);
-    fireEvent.input(screen.getByRole("searchbox", { name: /Search setup/ }), {
+  it("searches within a page", () => {
+    render(<SetupPage page="mcp" />);
+    fireEvent.input(screen.getByRole("searchbox", { name: /Search MCP servers/ }), {
       target: { value: "postgres" },
     });
     expect(screen.getAllByText("postgres").length).toBeGreaterThan(0);
-    expect(screen.queryByText("reviewer")).toBeNull();
+    expect(screen.queryByText("github")).toBeNull();
+    fireEvent.input(screen.getByRole("searchbox", { name: /Search MCP servers/ }), {
+      target: { value: "nothing-like-this" },
+    });
+    expect(screen.getByText(/Nothing here matches "nothing-like-this"/)).toBeTruthy();
   });
 });

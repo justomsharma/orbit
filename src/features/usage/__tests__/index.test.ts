@@ -385,7 +385,7 @@ describe("UsageIndex", () => {
   it("ignores saved state from another version", async () => {
     const home = tmp();
     writeSession(home, CWD, (c) => [L.assistant(c, "claude-opus-5-5", at(1), { id: "m1" })]);
-    const bogus = { v: 2, files: { x: { size: 1, mtimeMs: 1, offset: 1, records: [] } } };
+    const bogus = { v: 1, files: { x: { size: 1, mtimeMs: 1, offset: 1, records: [] } } };
     const idx = new UsageIndex(home, bogus as never);
     expect(idx.state().files).toEqual({});
     await idx.update();

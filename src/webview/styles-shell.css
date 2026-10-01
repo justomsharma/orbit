@@ -1,0 +1,611 @@
+/* The tab bar, footer, Account, Config, Checkpoints and Welcome. VS Code theme tokens only. */
+
+/* ---------- Tab bar: icons, with the open tab's name ---------- */
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  padding-right: 4px;
+}
+
+.tabbar .tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding: 2px 4px 0;
+  border-bottom: none;
+  gap: 0;
+}
+
+.tabbar .tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabbar .tab {
+  flex: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 30px;
+  height: 32px;
+  padding: 0 7px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px 4px 0 0;
+  color: var(--muted);
+  cursor: pointer;
+  scroll-margin-inline: 24px;
+}
+
+.tabbar .tab:hover {
+  color: var(--fg);
+  background: var(--vscode-toolbar-hoverBackground, var(--hover));
+}
+
+.tabbar .tab.on {
+  color: var(--fg);
+  font-weight: 600;
+  border-bottom-color: var(--vscode-panelTitle-activeBorder, var(--focus));
+}
+
+/* Only the open tab shows its name; it slides open instead of jumping. */
+.tabbar .tab-label {
+  display: inline-block;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    opacity 160ms ease,
+    margin 200ms ease;
+}
+
+.tabbar .tab.on .tab-label {
+  max-width: 110px;
+  opacity: 1;
+  margin-left: 6px;
+}
+
+.tabbar > .icon-btn {
+  align-self: center;
+  flex: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabbar .tab-label {
+    transition: none;
+  }
+}
+
+/* ---------- Footer ---------- */
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  padding: 2px 6px 2px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.footer-name {
+  flex: 1;
+}
+
+.footer .icon-btn {
+  width: 22px;
+  height: 22px;
+  color: var(--muted);
+}
+
+.footer .icon-btn:hover {
+  color: var(--fg);
+}
+
+/* ---------- Page headers for tabs made from Setup sections ---------- */
+.page-count {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.page-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sgroup-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 6px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.sgroup-count {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.seg-count {
+  margin-left: 4px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Config: quick settings ---------- */
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.q-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.q-title {
+  margin: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.config-more {
+  margin-top: 6px;
+}
+
+.q-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.q-label {
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.q-select,
+.q-input {
+  width: 100%;
+  font: inherit;
+  padding: 4px 6px;
+  color: var(--vscode-dropdown-foreground, var(--fg));
+  background: var(--vscode-dropdown-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-dropdown-border, var(--border));
+  border-radius: 4px;
+}
+
+.q-input {
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border-color: var(--vscode-input-border, var(--border));
+}
+
+.q-input[aria-invalid="true"] {
+  border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+}
+
+.q-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.q-check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.q-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.q-check + .q-hint {
+  padding-left: 20px;
+}
+
+.q-where {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 4px;
+  color: var(--warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+}
+
+/* ---------- Account ---------- */
+.card.profile {
+  padding: 14px;
+  border-top: none;
+  border-radius: 8px;
+  background: var(--vscode-editorWidget-background, var(--hover));
+}
+
+.profile-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 25%);
+}
+
+.avatar.small {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+.profile-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.profile-email,
+.profile-org {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.plan-badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-charts-purple, var(--accent));
+  background: color-mix(in srgb, var(--vscode-charts-purple, var(--accent)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-charts-purple, var(--accent)) 40%, transparent);
+}
+
+.profile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.profile-actions .btn {
+  margin-top: 0;
+  justify-content: center;
+}
+
+.btn.danger {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.acct-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acct-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-radius: var(--radius);
+}
+
+.acct-row:hover {
+  background: var(--hover);
+}
+
+.acct-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.acct-name {
+  font-weight: 500;
+}
+
+.acct-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.acct-row .btn {
+  margin-top: 0;
+}
+
+.badge.ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+}
+
+.card-hint .codicon {
+  vertical-align: -2px;
+  margin-right: 2px;
+}
+
+/* ---------- Usage at a glance ---------- */
+.glance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.glance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.glance-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.glance-list li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glance-list b {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.glance-list .codicon-flame {
+  color: var(--vscode-charts-orange, var(--warn));
+}
+
+/* ---------- Checkpoints ---------- */
+.cp-list {
+  list-style: none;
+  margin: 0 -6px;
+  padding: 0;
+}
+
+.cp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 7px 6px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cp-row:hover {
+  background: var(--hover);
+}
+
+.cp-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.cp-time {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cp-meta {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Welcome ---------- */
+.welcome-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px 8px;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.welcome {
+  width: 100%;
+  max-width: 420px;
+  padding: 16px 14px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--vscode-editorWidget-background, var(--bg));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
+  animation: welcome-in 220ms ease-out both;
+}
+
+.welcome-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.welcome-sub {
+  margin: 2px 0 12px;
+  color: var(--muted);
+}
+
+.welcome-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.welcome-grid li {
+  animation: welcome-item 320ms ease-out both;
+  animation-delay: calc(var(--i) * 35ms + 80ms);
+}
+
+.welcome-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  align-content: start;
+  align-items: start;
+  gap: 1px 7px;
+  width: 100%;
+  height: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.welcome-item:hover {
+  background: var(--hover);
+  border-color: var(--focus);
+}
+
+.welcome-item .codicon {
+  grid-row: 1 / span 2;
+  margin-top: 1px;
+  color: var(--vscode-textLink-foreground);
+}
+
+.welcome-label {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.welcome-blurb {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.welcome-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.welcome-note .codicon {
+  vertical-align: -2px;
+}
+
+.welcome-go {
+  width: 100%;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 6px 12px;
+}
+
+@keyframes welcome-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+@keyframes welcome-item {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome,
+  .welcome-grid li {
+    animation: none;
+  }
+}
+
+/* Very narrow sidebars: one column. */
+@media (max-width: 260px) {
+  .welcome-grid,
+  .glance-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Inside a page of its own, "New skill" and friends stay button-sized. */
+.page-sec > .btn {
+  align-self: flex-start;
+}
+
+.page-sec .mini-select {
+  max-width: 108px;
+}
+
+.home-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.home-actions .btn {
+  margin-top: 0;
+}

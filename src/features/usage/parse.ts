@@ -36,7 +36,31 @@ export function usageFromObject(l: JsonObject, fallbackSession: string): UsageRe
     webSearches: n(obj(u.server_tool_use)?.web_search_requests),
     fast: u.speed === "fast",
     usGeo: u.inference_geo === "us",
+    ...toolsOf(m.content),
   };
+}
+
+const MAX_TOOLS = 32;
+const TOOL_NAME = /^[\w.:-]{1,120}$/;
+
+/** Names of the tools a reply called, in order, without repeats. */
+function toolsOf(content: unknown): { tools?: string[] } {
+  if (!Array.isArray(content)) return {};
+  const names = new Set<string>();
+  for (const b of content) {
+    const block = obj(b);
+    const name = block?.type === "tool_use" ? str(block.name) : undefined;
+    if (name && TOOL_NAME.test(name) && names.size < MAX_TOOLS) names.add(name);
+  }
+  return names.size ? { tools: [...names] } : {};
+}
+
+/** Every tool name in either list, first list's order first. */
+export function mergeTools(a?: string[], b?: string[]): string[] | undefined {
+  if (!b?.length) return a;
+  if (!a?.length) return b;
+  const all = [...new Set([...a, ...b])].slice(0, MAX_TOOLS);
+  return all.length === a.length ? a : all;
 }
 
 /**

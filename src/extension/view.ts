@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
+import type { Accounts } from "../features/account/accounts";
 import { settingsCatalog } from "../features/setup/catalog";
+import { checkpointSummaries } from "../features/timeline/summary";
 import type { QuotaInstaller } from "../features/usage/quotaInstall";
-import type { HostMsg } from "../shared/protocol";
+import type { HostMsg, OrbitPrefs } from "../shared/protocol";
+import type { Reading, Tab } from "../shared/tabs";
+import { type AccountHandlerDeps, handleAccount } from "./accountHandler";
 import { type ChatsHandlerDeps, handleChats } from "./chatsHandler";
 import type { ChatsService, ChatsSnapshot } from "./chatsService";
 import { saveRecapImage } from "./exportFile";
@@ -30,6 +34,10 @@ export interface ViewDeps {
   chatsDeps: Omit<ChatsHandlerDeps, "post" | "getSession" | "sessions">;
   log: vscode.LogOutputChannel;
   onSnapshot(s: ChatsSnapshot): void;
+  accounts: Accounts;
+  prefs(): OrbitPrefs;
+  setPref(key: keyof OrbitPrefs, value: string): Promise<void>;
+  accountDeps: Omit<AccountHandlerDeps, "accounts" | "refresh" | "running">;
   /** Opens the Get started walkthrough. */
   openTour(): Promise<void>;
 }
@@ -47,11 +55,19 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   /** Host copy with real values, for Setup actions. Post only `viewSnapshot(lastSetup)`. */
   lastSetup: SetupSnapshot | null = null;
   /** The tab the person is looking at; only its data is read (chats always, for the status bar). */
-  private tab: "home" | "chats" | "prompts" | "usage" | "setup" = "home";
+  private tab: Reading = "home";
   /** Signatures of the data the view last received; identical refreshes are not re-sent. */
-  private sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
+  private sent = {
+    sessions: "",
+    usage: "",
+    setup: "",
+    catalog: "",
+    prompts: "",
+    account: "",
+    checkpoints: "",
+  };
   /** A tab asked for before the view was ready; sent when it says "ready". */
-  private pendingGoto: "home" | "chats" | "prompts" | "usage" | "setup" | null = null;
+  private pendingGoto: Tab | null = null;
 
   /**
    * Runs one message from the webview (every message is validated inside the
@@ -70,6 +86,8 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       copy: async (t) => vscode.env.clipboard.writeText(t),
       saveImage: saveRecapImage,
       refresh: () => this.refresh(),
+      setPref: (k, v) => this.d.setPref(k, v),
+      continueLast: () => this.d.opener.continueLast(),
       setTab: (t) => {
         this.tab = t;
       },
@@ -92,9 +110,19 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       sessions: () => this.d.chats.all(),
       post: (msg) => this.post(msg),
     };
+    const accountDeps: AccountHandlerDeps = {
+      ...this.d.accountDeps,
+      accounts: this.d.accounts,
+      running: () => this.last?.live.length ?? 0,
+      refresh: () => this.refresh(),
+    };
     this.dispatch = async (m) => {
       try {
-        if (!(await handleSetup(m, setupDeps)) && !(await handleChats(m, chatsDeps)))
+        if (
+          !(await handleSetup(m, setupDeps)) &&
+          !(await handleChats(m, chatsDeps)) &&
+          !(await handleAccount(m, accountDeps))
+        )
           await handle(m);
         await this.track(m);
       } catch (e) {
@@ -111,6 +139,10 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       this.pendingGoto = null;
     }
     if (msg?.type === "onboarding" && msg.action === "tour") return this.d.openTour();
+    if (msg?.type === "onboarding" && msg.action === "welcomed") {
+      await this.d.state.markWelcomed();
+      return void this.refresh();
+    }
     if (msg?.type === "onboarding" && msg.action === "dismiss") {
       await this.d.state.dismissOnboarding();
       return void this.refresh();
@@ -120,14 +152,22 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Opens a tab in the sidebar (Get started walkthrough, commands). */
-  goto(tab: "home" | "chats" | "prompts" | "usage" | "setup"): void {
+  goto(tab: Tab): void {
     if (this.view) this.post({ type: "goto", tab });
     else this.pendingGoto = tab;
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    this.sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
+    this.sent = {
+      sessions: "",
+      usage: "",
+      setup: "",
+      catalog: "",
+      prompts: "",
+      account: "",
+      checkpoints: "",
+    };
     const root = vscode.Uri.joinPath(this.d.extensionUri, "dist", "webview");
     const w = view.webview;
     w.options = { enableScripts: true, enableForms: false, localResourceRoots: [root] };
@@ -142,7 +182,15 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
 
     w.onDidReceiveMessage((m) => this.dispatch(m));
     view.onDidChangeVisibility(() => {
-      this.sent = { sessions: "", usage: "", setup: "", catalog: "", prompts: "" };
+      this.sent = {
+        sessions: "",
+        usage: "",
+        setup: "",
+        catalog: "",
+        prompts: "",
+        account: "",
+        checkpoints: "",
+      };
       if (view.visible) void this.refresh();
     });
     view.onDidDispose(() => {
@@ -196,6 +244,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
           claudeExtension: this.d.opener.claudeExtensionInstalled(),
           hasWorkspace: workspaceFolders().length > 0,
           platform: process.platform,
+          prefs: this.d.prefs(),
         },
       });
     }
@@ -230,7 +279,24 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       }
       return;
     }
-    // Usage (Home and Usage tabs): the first full index of a large history can take a few seconds.
+    if (this.tab === "checkpoints") {
+      try {
+        const items = await checkpointSummaries(this.d.chatsDeps.home);
+        this.postOnce("checkpoints", { type: "checkpoints", items });
+      } catch (e) {
+        this.d.log.error("Could not read Claude Code checkpoints", errText(e));
+      }
+      return;
+    }
+    if (this.tab === "account") {
+      try {
+        this.postOnce("account", { type: "account", data: await this.d.accounts.snapshot() });
+      } catch (e) {
+        this.d.log.error("Could not read the Claude Code account", errText(e));
+      }
+      // Plan limits on Account come from the usage snapshot below.
+    }
+    // Usage (Home, Usage and Account tabs): the first full index of a large history can take a few seconds.
     try {
       this.lastUsage = await this.d.usage.snapshot(snap.items, Date.now());
       // Plan limits already on counts as that getting-started step.

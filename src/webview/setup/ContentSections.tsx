@@ -1,7 +1,9 @@
-import { useState } from "preact/hooks";
+import { useContext, useState } from "preact/hooks";
+import type { SkillInfo } from "../../features/setup/skills";
 import { itemFormError } from "../../shared/validate";
 import { post } from "../bus";
 import * as store from "../store";
+import { Segmented } from "../ui/Segmented";
 import {
   Badge,
   decided,
@@ -10,6 +12,7 @@ import {
   FormError,
   LOCKED,
   matches,
+  PageMode,
   Row,
   SCOPE_LABEL,
   Section,
@@ -131,47 +134,103 @@ function SkillVisibility({ name }: { name: string }) {
   );
 }
 
+export type SkillScope = "all" | "project" | "user" | "plugin";
+
+const SKILL_GROUP: Record<"project" | "user", string> = {
+  project: "This project",
+  user: "Yours (every project)",
+};
+
+/** Skills by where they come from: this project, yours, then one group per plugin. */
+function skillGroups(list: SkillInfo[]): { title: string; items: SkillInfo[] }[] {
+  const groups = new Map<string, SkillInfo[]>();
+  for (const k of list) {
+    const title = k.plugin ? `Plugin: ${k.plugin.split("@")[0]}` : SKILL_GROUP[k.scope as "user"];
+    groups.set(title, [...(groups.get(title) ?? []), k]);
+  }
+  const rank = (t: string) => (t === SKILL_GROUP.project ? 0 : t === SKILL_GROUP.user ? 1 : 2);
+  return [...groups]
+    .map(([title, items]) => ({ title, items }))
+    .sort((a, b) => rank(a.title) - rank(b.title) || a.title.localeCompare(b.title));
+}
+
+const inScope = (k: SkillInfo, scope: SkillScope) =>
+  scope === "all" || (scope === "plugin" ? !!k.plugin : !k.plugin && k.scope === scope);
+
 export function SkillsSection() {
   const s = store.setup.value!;
   const q = store.setupQuery.value;
-  const list = s.skills.filter((k) => matches(q, k.name, k.description, k.plugin));
+  const page = useContext(PageMode);
+  const scope = page ? store.skillScope.value : "all";
+  const list = s.skills.filter(
+    (k) => inScope(k, scope) && matches(q, k.name, k.description, k.plugin),
+  );
+  const row = (k: SkillInfo) => (
+    <Row
+      key={k.file}
+      title={k.name}
+      sub={k.problems[0] ?? k.description}
+      badges={
+        <>
+          <Badge>{k.plugin ? k.plugin.split("@")[0] : SCOPE_LABEL[k.scope]}</Badge>
+          {k.linked ? (
+            <Badge title="This skill's folder is a link to another place on disk">Linked</Badge>
+          ) : null}
+          {k.problems.length ? <Badge tone="warn">Check</Badge> : null}
+        </>
+      }
+      actions={
+        // Claude's skillOverrides don't apply to plugin skills; /plugin manages those.
+        k.plugin ? null : <SkillVisibility name={k.name} />
+      }
+      onOpen={() => post({ type: "setup:open", file: k.file })}
+    />
+  );
+  const count = (sc: SkillScope) => s.skills.filter((k) => inScope(k, sc)).length;
   return (
     <Section
       id="skills"
       title="Skills"
-      icon="book"
-      count={s.skills.length}
+      icon="sparkle"
+      count={page ? list.length : s.skills.length}
       hidden={q.trim() !== "" && list.length === 0}
     >
+      {page && s.skills.length ? (
+        <Segmented<SkillScope>
+          legend="Show skills from"
+          value={scope}
+          onChange={(v) => (store.skillScope.value = v)}
+          options={[
+            { value: "all", label: "All", count: s.skills.length },
+            ...(s.workspace
+              ? [{ value: "project" as const, label: "Project", count: count("project") }]
+              : []),
+            { value: "user", label: "Yours", count: count("user") },
+            ...(count("plugin")
+              ? [{ value: "plugin" as const, label: "Plugins", count: count("plugin") }]
+              : []),
+          ]}
+        />
+      ) : null}
       {list.length ? (
-        <ul class="srows">
-          {list.map((k) => (
-            <Row
-              key={k.file}
-              title={k.name}
-              sub={k.problems[0] ?? k.description}
-              badges={
-                <>
-                  <Badge>{k.plugin ? k.plugin.split("@")[0] : SCOPE_LABEL[k.scope]}</Badge>
-                  {k.linked ? (
-                    <Badge title="This skill's folder is a link to another place on disk">
-                      Linked
-                    </Badge>
-                  ) : null}
-                  {k.problems.length ? <Badge tone="warn">Check</Badge> : null}
-                </>
-              }
-              actions={
-                // Claude's skillOverrides don't apply to plugin skills; /plugin manages those.
-                k.plugin ? null : <SkillVisibility name={k.name} />
-              }
-              onOpen={() => post({ type: "setup:open", file: k.file })}
-            />
-          ))}
-        </ul>
+        page ? (
+          skillGroups(list).map((g) => (
+            <div key={g.title} class="sgroup">
+              <h3 class="sgroup-title">
+                {g.title}
+                <span class="sgroup-count">{g.items.length}</span>
+              </h3>
+              <ul class="srows">{g.items.map(row)}</ul>
+            </div>
+          ))
+        ) : (
+          <ul class="srows">{list.map(row)}</ul>
+        )
       ) : (
         <Empty>
-          No skills yet. A skill teaches Claude a repeatable task, like writing release notes.
+          {s.skills.length
+            ? "No skills here. Try another filter."
+            : "No skills yet. A skill teaches Claude a repeatable task, like writing release notes."}
         </Empty>
       )}
       <Adder kind="skill" />

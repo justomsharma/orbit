@@ -2,7 +2,7 @@ import { mapLimit } from "../../core/concurrency";
 import { statSafe } from "../../core/fsSafe";
 import { obj } from "../../core/jsonl";
 import { type UsageFile, usageFiles } from "./files";
-import { forEachUsage } from "./parse";
+import { forEachUsage, mergeTools } from "./parse";
 import { readAppended } from "./readAppended";
 import type { UsageRecord } from "./types";
 
@@ -20,7 +20,8 @@ interface FileEntry {
 
 /** What the caller persists between runs so only new bytes are read next time. */
 export interface IndexState {
-  v: 1;
+  /** 2: records include the tools each reply called (a v1 index is rebuilt once). */
+  v: 2;
   files: Record<string, FileEntry>;
 }
 
@@ -54,7 +55,7 @@ export class UsageIndex {
     private readonly home: string,
     state?: IndexState,
   ) {
-    if (state?.v !== 1) return;
+    if (state?.v !== 2) return;
     for (const [file, v] of Object.entries(obj(state.files) ?? {})) {
       const e = validEntry(v);
       if (e) this.files[file] = e;
@@ -84,7 +85,13 @@ export class UsageIndex {
       const first = best.get(r.id);
       if (!first) best.set(r.id, r);
       else if (r.output > first.output) {
-        best.set(r.id, { ...r, t: first.t, session: first.session, cwd: first.cwd });
+        best.set(r.id, {
+          ...r,
+          t: first.t,
+          session: first.session,
+          cwd: first.cwd,
+          ...(first.tools || r.tools ? { tools: mergeTools(first.tools, r.tools) } : {}),
+        });
       }
     }
     this.memo = [...best.values()];
@@ -94,7 +101,7 @@ export class UsageIndex {
   state(): IndexState {
     const files: Record<string, FileEntry> = {};
     for (const [k, e] of Object.entries(this.files)) files[k] = { ...e, records: [...e.records] };
-    return { v: 1, files };
+    return { v: 2, files };
   }
 
   private async pass(): Promise<{ changed: boolean }> {
@@ -141,10 +148,17 @@ export class UsageIndex {
           ids.set(r.id, r);
           entry.records.push(r);
           added = true;
-        } else if (r.output > seen.output) {
-          // A message is written as several lines; the last carries the final counts.
-          // Keep the first line's time, take the fuller usage.
+          return;
+        }
+        // A message is written as several lines (one per text or tool block): collect
+        // every tool it called, and take the fullest usage with the first line's time.
+        const tools = mergeTools(seen.tools, r.tools);
+        if (r.output > seen.output) {
           Object.assign(seen, { ...r, t: seen.t });
+          added = true;
+        }
+        if (tools !== seen.tools) {
+          if (tools) seen.tools = tools;
           added = true;
         }
       }),

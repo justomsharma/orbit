@@ -1,6 +1,8 @@
 import type { Session } from "../features/chats/types";
 import type { QuotaResult } from "../features/usage/quotaInstall";
+import { ORBIT_LINKS } from "../shared/links";
 import { parseViewMsg } from "../shared/protocol";
+import type { Reading } from "../shared/tabs";
 import { MAX_PROMPT_IN_LINK, type Opener } from "./opener";
 import type { OrbitState } from "./state";
 
@@ -15,12 +17,14 @@ export interface HandlerDeps {
   saveImage(dataUrl: string): Promise<void>;
   refresh(): Promise<void>;
   /** The tab the person is looking at, so only its data is read. */
-  setTab(tab: "home" | "chats" | "prompts" | "usage" | "setup"): void;
+  setTab(tab: Reading): void;
   /** Only links that appear in the person's own chats (PR links) may be opened. */
   isKnownLink(url: string): boolean;
   openLink(url: string): Promise<void>;
   info(message: string): void;
   warn(message: string): void;
+  setPref(key: "openChatsIn" | "terminalLocation", value: string): Promise<void>;
+  continueLast(): Promise<void>;
 }
 
 // "not-applied" needs no message: the person cancelled, or the reason was already shown.
@@ -75,6 +79,13 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
       case "openLink":
         if (!d.isKnownLink(m.url)) return;
         return d.openLink(m.url);
+      case "openOrbitLink":
+        return d.openLink(ORBIT_LINKS[m.link]);
+      case "setPref":
+        await d.setPref(m.key, m.value);
+        return d.refresh();
+      case "continueLast":
+        return d.continueLast();
       case "quota": {
         try {
           const r = await (m.on ? d.quota.enable() : d.quota.disable());

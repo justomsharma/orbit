@@ -15,6 +15,8 @@ function summary(daily: { day: string; cost: number; tokens: number }[]): UsageS
     byModel: [],
     byProject: [],
     topSessions: [],
+    tools: [],
+    mcp: [],
   };
 }
 

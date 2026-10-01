@@ -40,6 +40,8 @@ function setup(opts: { known?: boolean; quota?: QuotaResult; recap?: string | nu
     openLink: async (u) => void log.push(`link ${u}`),
     info: (m) => void log.push(`info ${m}`),
     warn: (m) => void log.push(`warn ${m}`),
+    setPref: async (k, v) => void log.push(`pref ${k}=${v}`),
+    continueLast: async () => void log.push("continue last"),
   });
   return { handle, log };
 }
@@ -126,6 +128,8 @@ describe("createHandler", () => {
       getSession: () => undefined,
       opener: {} as never,
       state: {} as never,
+      setPref: async () => {},
+      continueLast: async () => {},
       quota: {
         enable: async () => {
           throw new Error("EPERM: settings.json is read-only");
@@ -183,5 +187,33 @@ describe("newChat from Home's box", () => {
     expect(log[0]).toBe("new chat");
     expect(log[1]).toBe(`clipboard ${long}`);
     expect(log[2]).toMatch(/^info .*paste it/);
+  });
+});
+
+describe("Orbit's own buttons", () => {
+  it("opens only Orbit's fixed links, never a URL from the view", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "openOrbitLink", link: "repo" });
+    await handle({ type: "openOrbitLink", link: "https://evil.example" });
+    expect(log).toEqual(["link https://github.com/justomsharma/orbit"]);
+  });
+
+  it("saves Orbit's own settings and refreshes, refusing unknown values", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "setPref", key: "openChatsIn", value: "claudePanel" });
+    await handle({ type: "setPref", key: "openChatsIn", value: "somewhere" });
+    await handle({ type: "setPref", key: "terminalLocation", value: "panel" });
+    expect(log).toEqual([
+      "pref openChatsIn=claudePanel",
+      "refresh",
+      "pref terminalLocation=panel",
+      "refresh",
+    ]);
+  });
+
+  it("continues the folder's last chat", async () => {
+    const { handle, log } = setup();
+    await handle({ type: "continueLast" });
+    expect(log).toEqual(["continue last"]);
   });
 });

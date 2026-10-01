@@ -1,12 +1,16 @@
 import * as v from "valibot";
 import type { SetupSnapshot } from "../extension/setupService";
 import type { UsageSnapshot } from "../extension/usageService";
+import type { AccountSnapshot } from "../features/account/accounts";
 import type { MessageHit } from "../features/chats/search";
 import type { LiveStatus, Session } from "../features/chats/types";
 import type { PromptEntry } from "../features/prompts/library";
 import type { SettingDef } from "../features/setup/catalog";
+import type { CheckpointSummary } from "../features/timeline/summary";
 import type { ChangedFile, FileVersion } from "../features/timeline/types";
+import { ORBIT_LINK_IDS } from "./links";
 import type { Onboarding } from "./onboarding";
+import { READINGS, type Tab } from "./tabs";
 import { ITEM_NAME, isServerUrl, MCP_NAME } from "./validate";
 
 const SessionId = v.pipe(
@@ -33,6 +37,9 @@ const PngDataUrl = v.pipe(
   v.regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/),
 );
 
+/** Anthropic account ids are UUIDs; this only keeps the id safe to use as a key. */
+const AccountId = v.pipe(v.string(), v.regex(/^[\w-]{1,100}$/));
+
 /** The longest prompt Home's "What should Claude do?" box takes. */
 export const MAX_ASK = 10_000;
 
@@ -55,8 +62,29 @@ export const ViewMsgSchema = v.variant("type", [
     id: SessionId,
     tags: v.pipe(v.array(v.pipe(v.string(), v.maxLength(40))), v.maxLength(20)),
   }),
-  v.object({ type: v.literal("onboarding"), action: v.picklist(["find", "dismiss", "tour"]) }),
+  v.object({
+    type: v.literal("onboarding"),
+    action: v.picklist(["find", "dismiss", "tour", "welcomed"]),
+  }),
   v.object({ type: v.literal("openLink"), url: HttpsUrl }),
+  v.object({ type: v.literal("openOrbitLink"), link: v.picklist(ORBIT_LINK_IDS) }),
+  v.object({
+    type: v.picklist(["account:login", "account:logout", "account:save", "account:pick"]),
+  }),
+  v.object({ type: v.picklist(["account:switch", "account:remove"]), id: AccountId }),
+  v.variant("key", [
+    v.object({
+      type: v.literal("setPref"),
+      key: v.literal("openChatsIn"),
+      value: v.picklist(["terminal", "claudePanel"]),
+    }),
+    v.object({
+      type: v.literal("setPref"),
+      key: v.literal("terminalLocation"),
+      value: v.picklist(["editor", "panel"]),
+    }),
+  ]),
+  v.object({ type: v.literal("continueLast") }),
   v.object({
     type: v.literal("newChat"),
     prompt: v.optional(v.pipe(v.string(), v.maxLength(MAX_ASK))),
@@ -65,7 +93,7 @@ export const ViewMsgSchema = v.variant("type", [
   v.object({ type: v.literal("copyRecap") }),
   v.object({
     type: v.literal("tab"),
-    tab: v.picklist(["home", "chats", "prompts", "usage", "setup"]),
+    tab: v.picklist(READINGS),
   }),
   v.object({ type: v.literal("saveRecapImage"), dataUrl: PngDataUrl }),
   ...setupMessages(),
@@ -120,6 +148,8 @@ function setupMessages() {
       scope: ToggleScope,
       key: Key,
       value: v.union([v.pipe(v.string(), v.maxLength(2000)), v.number(), v.boolean(), v.null()]),
+      /** Config's quick settings: no question first unless the change is risky (still undoable). */
+      quick: v.optional(v.boolean()),
     }),
     v.object({
       type: v.literal("setup:plugin"),
@@ -203,6 +233,16 @@ export interface Environment {
   /** A folder is open in this window. */
   hasWorkspace: boolean;
   platform: string;
+  /** Orbit's own VS Code settings that its views show. */
+  prefs?: OrbitPrefs;
+}
+
+export const OPEN_CHATS_IN = ["terminal", "claudePanel"] as const;
+export const TERMINAL_LOCATIONS = ["editor", "panel"] as const;
+
+export interface OrbitPrefs {
+  openChatsIn: (typeof OPEN_CHATS_IN)[number];
+  terminalLocation: (typeof TERMINAL_LOCATIONS)[number];
 }
 
 /** Messages the host sends to the webview. */
@@ -222,8 +262,10 @@ export type HostMsg =
       env: Environment;
     }
   | { type: "usage"; data: UsageSnapshot }
+  | { type: "account"; data: AccountSnapshot }
+  | { type: "checkpoints"; items: CheckpointSummary[] }
   /** Open a tab (from a command or the Get started walkthrough). */
-  | { type: "goto"; tab: "home" | "chats" | "prompts" | "usage" | "setup" }
+  | { type: "goto"; tab: Tab }
   | { type: "setup"; data: SetupSnapshot }
   | { type: "catalog"; data: SettingDef[] }
   | { type: "chat:details"; id: string; files: ChangedFileView[] }

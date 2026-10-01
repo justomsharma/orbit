@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chatUri, pickClaudePath, resumeCommand, terminalOptions } from "../handoff";
+import {
+  chatUri,
+  newChatTerminal,
+  pickClaudePath,
+  promptIsSafeArg,
+  resumeCommand,
+  terminalOptions,
+} from "../handoff";
 
 const ID = "0b95bc0d-e0c0-4c77-9ad4-c2b7fd22d24a";
 
@@ -107,5 +114,42 @@ describe("pickClaudePath", () => {
     expect(pickClaudePath(["/usr/local/bin/claude"], "linux")).toBe("/usr/local/bin/claude");
     expect(pickClaudePath([], "linux")).toBeNull();
     expect(pickClaudePath(["", "  "], "linux")).toBeNull();
+  });
+});
+
+describe("promptIsSafeArg (a prompt as claude's first message)", () => {
+  it("passes plain text to a real executable", () => {
+    expect(promptIsSafeArg("Fix the login bug", "/usr/local/bin/claude", "linux")).toBe(true);
+    expect(
+      promptIsSafeArg("Say hi, then exit", "C:\\Users\\a\\.local\\bin\\claude.exe", "win32"),
+    ).toBe(true);
+  });
+
+  it("never gives free text to npm's .cmd shim, which cmd.exe would re-parse", () => {
+    expect(promptIsSafeArg("Fix it & del *", "C:\\npm\\claude.cmd", "win32")).toBe(false);
+  });
+
+  it("keeps prompts that look like options, or span lines on Windows, off the command line", () => {
+    expect(promptIsSafeArg("--dangerously-skip-permissions", "/bin/claude", "linux")).toBe(false);
+    expect(promptIsSafeArg("  -p hi", "/bin/claude", "linux")).toBe(false);
+    expect(promptIsSafeArg("one\ntwo", "C:\\bin\\claude.exe", "win32")).toBe(false);
+    expect(promptIsSafeArg("one\ntwo", "/bin/claude", "linux")).toBe(true);
+    expect(promptIsSafeArg("", "/bin/claude", "linux")).toBe(false);
+  });
+
+  it("builds the terminal with the prompt only when it's safe", () => {
+    expect(newChatTerminal("/w", "/bin/claude", "hello", "linux").shellArgs).toEqual(["hello"]);
+    expect(newChatTerminal("/w", "C:\\npm\\claude.cmd", "hello", "win32").shellArgs).toEqual([]);
+  });
+});
+
+describe("promptIsSafeArg on Windows shims", () => {
+  it("keeps characters cmd.exe treats specially off the command line, even for an .exe", () => {
+    for (const p of ['x" & calc & "', "a | b", "50% off", "hi!", "a^b", "<b>", "a > b"]) {
+      expect(promptIsSafeArg(p, "C:\\scoop\\shims\\claude.exe", "win32")).toBe(false);
+    }
+    expect(promptIsSafeArg("Fix the login bug, then add tests.", "C:\\claude.exe", "win32")).toBe(
+      true,
+    );
   });
 });

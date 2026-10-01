@@ -8,6 +8,7 @@ import { App } from "../../app";
 import { setPost } from "../../bus";
 import * as store from "../../store";
 import { ChatsView } from "../ChatsView";
+import { PromptsView } from "../PromptsView";
 
 const sent: ViewMsg[] = [];
 const ID = "00000000-0000-4000-8000-000000000001";
@@ -48,7 +49,6 @@ beforeEach(() => {
   setPost((m) => sent.push(m));
   store.query.value = "";
   store.filter.value = "all";
-  store.chatsMode.value = "chats";
   store.details.value = null;
   store.prompts.value = null;
   store.promptsError.value = null;
@@ -70,22 +70,18 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("Chats | Prompts switch", () => {
+describe("Prompts tab", () => {
   it("tells the host when the prompts view is open, so it only reads history then", async () => {
     store.tab.value = "chats";
     render(<App />);
-    fireEvent.click(screen.getByRole("radio", { name: "Prompts" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Prompts" }));
     await waitFor(() => expect(sent).toContainEqual({ type: "tab", tab: "prompts" }));
   });
 });
 
 describe("Prompts", () => {
-  beforeEach(() => {
-    store.chatsMode.value = "prompts";
-  });
-
   it("waits for the history, then lists prompts with how often they were used", () => {
-    render(<ChatsView />);
+    render(<PromptsView />);
     expect(screen.getByText(/Reading your prompts/)).toBeTruthy();
     act(() => {
       store.applyHostMessage({
@@ -106,7 +102,7 @@ describe("Prompts", () => {
       prompt({}),
       prompt({ id: "bbbbbbbbbbbb", text: "write tests first", sessionId: null }),
     ];
-    render(<ChatsView />);
+    render(<PromptsView />);
     fireEvent.input(screen.getByRole("searchbox", { name: /Search prompts/ }), {
       target: { value: "short" },
     });
@@ -123,12 +119,12 @@ describe("Prompts", () => {
 
   it("offers no chat link for a prompt whose chat is gone", () => {
     store.prompts.value = [prompt({ sessionId: null })];
-    render(<ChatsView />);
+    render(<PromptsView />);
     expect(screen.queryByRole("button", { name: /Open the chat/ })).toBeNull();
   });
 
   it("says so when the history couldn't be read, instead of waiting forever", () => {
-    render(<ChatsView />);
+    render(<PromptsView />);
     act(() =>
       store.applyHostMessage({ type: "prompts", items: [], error: "Orbit couldn't read it." }),
     );
@@ -137,7 +133,7 @@ describe("Prompts", () => {
 
   it("explains an empty history", () => {
     store.prompts.value = [];
-    render(<ChatsView />);
+    render(<PromptsView />);
     expect(screen.getByText(/No prompts yet/)).toBeTruthy();
   });
 });

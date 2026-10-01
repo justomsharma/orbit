@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.0
+
+- **A tab for everything**: Home, Chats, Prompts, Checkpoints, Usage, Account, Config, Skills, MCP,
+  Plugins, Agents, Commands, Hooks and Memory. Icons along the top, the open tab named; hover near
+  either end to glide through them.
+- **Welcome screen**: everything in Orbit, one line each, the first time you open it (and from **?**).
+- **Account**: who's signed in and your plan, save accounts and switch with one click (kept in VS
+  Code's encrypted storage), log in or out with Claude's own `claude auth`, plan limits.
+- **Config**: model, reasoning effort, thinking, permissions, sandbox, auto-compact, checkpoints,
+  memory, answer style and more, in plain words, one click each and undoable.
+- **Chats open in a terminal** running Claude Code's CLI by default (any folder, Orbit's icon), or in
+  Claude's panel: your choice. Home's box starts Claude with your prompt as the first message, and a
+  new button continues the folder's last chat.
+- **Checkpoints**: every chat where Claude kept copies of files, to compare or restore.
+- **Skills** by scope (project, yours, each plugin), with a link to find more skills and MCP servers.
+- **Usage**: streak, active days, favourite model, and the tools and MCP servers Claude used.
+- New commands: Orbit: Switch Claude account, Show account, Show checkpoints.
+
 ## 0.1.2
 
 - **Ask Claude from Home**: type what Claude should do; Claude's chat opens with it typed in.

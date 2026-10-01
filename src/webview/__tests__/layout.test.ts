@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const css = ["styles.css", "styles-usage.css", "styles-setup.css", "styles-chats.css"]
+const css = [
+  "styles.css",
+  "styles-usage.css",
+  "styles-setup.css",
+  "styles-chats.css",
+  "styles-shell.css",
+]
   .map((f) => readFileSync(join(__dirname, "..", f), "utf8"))
   .join("\n");
 

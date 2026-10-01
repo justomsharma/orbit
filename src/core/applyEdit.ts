@@ -26,6 +26,8 @@ export interface JsonEdit {
   /** Short name for the change in history and the Undo notice. */
   label: string;
   warning?: string;
+  /** Apply without asking first (still backed up and undoable). A `warning` always asks. */
+  quick?: boolean;
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -74,7 +76,7 @@ async function applyPlanned(
   writer: SafeWriter,
   host: ConfirmHost,
   makePlan: () => Promise<EditPlan>,
-  edit: { summary: string; label: string; warning?: string },
+  edit: { summary: string; label: string; warning?: string; quick?: boolean },
   opts: {
     /** For JSON files: the inverse change, used when the file changed after Orbit's edit. */
     reverseOf?: (plan: EditPlan) => Mutate | null;
@@ -99,7 +101,7 @@ async function applyPlanned(
       await host.showDiff(plan);
     }
   };
-  if (!(await ask(edit.summary))) return false;
+  if (!(edit.quick && !edit.warning) && !(await ask(edit.summary))) return false;
 
   for (let attempt = 1; ; attempt++) {
     try {
