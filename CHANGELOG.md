@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1
+
+- **Get started**: a short walkthrough opens after install, and Home shows a checklist that ticks
+  itself as you try things, each with a "Show me" link.
+- **Fixed**: the sidebar could slide up, hiding the tabs and leaving an empty bottom half
+  (for example after "See your week").
+- Chats now opens on **All** chats, so none seem missing; "This folder" is one click away.
+- Home shows the first three running chats, with a link to the rest.
+- Links look like links; the three figures on Home and Usage always sit side by side.
+- New commands: Orbit: Show chats, Show prompts, Show usage, Show setup.
+
 ## 0.1.0
 
 First release.

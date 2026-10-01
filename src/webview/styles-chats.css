@@ -289,7 +289,7 @@
   gap: 8px;
 }
 
-.link-btn {
+.filter-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -303,14 +303,14 @@
   cursor: pointer;
 }
 
-.link-btn:hover {
+.filter-btn:hover {
   background: var(--hover);
 }
 
-.link-btn.on {
+.filter-btn.on {
   color: var(--vscode-textLink-foreground, var(--accent));
 }
 
-.link-btn:focus-visible {
+.filter-btn:focus-visible {
   outline: 1px solid var(--focus);
 }

@@ -2,7 +2,7 @@
   "name": "orbit-hq",
   "displayName": "Orbit HQ",
   "description": "Your home for Claude Code: every chat, usage & cost, and your whole setup in one calm sidebar. 100% local.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "OmSharma",
   "license": "MIT",
   "repository": {

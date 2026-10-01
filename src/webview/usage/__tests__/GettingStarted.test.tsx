@@ -86,3 +86,29 @@ describe("Get started checklist on Home", () => {
     expect(screen.queryByRole("region", { name: /Get started/ })).toBeNull();
   });
 });
+
+describe("Running now on Home", () => {
+  it("shows at most three running chats and links to the rest", () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({
+      ...chat,
+      id: `00000000-0000-4000-8000-00000000000${i + 1}`,
+      title: `Running chat ${i + 1}`,
+      lastActiveAt: Date.now() - i * 1000,
+    }));
+    store.sessions.value = many;
+    store.live.value = many.map((s, i) => ({
+      sessionId: s.id,
+      pid: i + 1,
+      status: i === 0 ? ("busy" as const) : ("idle" as const),
+      name: null,
+      updatedAt: Date.now(),
+    }));
+    store.onboarding.value = { done: [], dismissed: true };
+    render(<HomeView />);
+    const running = screen.getByRole("region", { name: /Running now/ });
+    expect(within(running).getAllByRole("listitem")).toHaveLength(3);
+    fireEvent.click(within(running).getByRole("button", { name: /4 more running/ }));
+    expect(store.tab.value).toBe("chats");
+    expect(store.filter.value).toBe("live");
+  });
+});

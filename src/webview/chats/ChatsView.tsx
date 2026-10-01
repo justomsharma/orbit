@@ -434,7 +434,7 @@ function ChatList() {
           </label>
           <button
             type="button"
-            class={`link-btn${filtersOpen || narrowed() ? " on" : ""}`}
+            class={`filter-btn${filtersOpen || narrowed() ? " on" : ""}`}
             aria-label="More filters"
             aria-expanded={filtersOpen || narrowed()}
             onClick={() => setFiltersOpen(!filtersOpen)}

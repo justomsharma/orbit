@@ -11,16 +11,28 @@ import { QuotaCard } from "./QuotaCard";
 
 const LIVE = { busy: "Working…", idle: "Waiting for you", unknown: "Running" } as const;
 
+const MAX_RUNNING = 3;
+
 function Running() {
   const live = new Map(store.live.value.map((l) => [l.sessionId, l]));
-  const chats = store.sessions.value.filter((s) => live.has(s.id));
+  // Working ones first, then the most recent; the rest are one click away in Chats.
+  const chats = store.sessions.value
+    .filter((s) => live.has(s.id))
+    .sort(
+      (a, b) =>
+        Number(live.get(b.id)!.status === "busy") - Number(live.get(a.id)!.status === "busy") ||
+        b.lastActiveAt - a.lastActiveAt,
+    );
   if (!chats.length) return null;
   const renames = store.renames.value;
+  const more = chats.length - MAX_RUNNING;
   return (
-    <section class="card">
-      <h3 class="section-title">Running now</h3>
+    <section class="card" aria-labelledby="running-title">
+      <h3 id="running-title" class="section-title">
+        Running now
+      </h3>
       <ul class="mini-list">
-        {chats.map((s) => {
+        {chats.slice(0, MAX_RUNNING).map((s) => {
           const st = live.get(s.id)!.status;
           return (
             <li key={s.id}>
@@ -37,6 +49,19 @@ function Running() {
           );
         })}
       </ul>
+      {more > 0 ? (
+        <button
+          type="button"
+          class="link-btn"
+          onClick={() => {
+            store.filter.value = "live";
+            store.chatsMode.value = "chats";
+            store.tab.value = "chats";
+          }}
+        >
+          {more} more running
+        </button>
+      ) : null}
     </section>
   );
 }

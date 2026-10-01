@@ -97,17 +97,14 @@ describe("ChatsView", () => {
     expect(sent).toContainEqual({ type: "openChat", id: b.id });
   });
 
-  it("defaults to this folder when it has chats, otherwise to all chats", () => {
+  it("shows every chat by default, so nothing seems missing; This folder is one click away", () => {
     const here = mk(1, { title: "Here chat" });
     const away = mk(2, { title: "Away chat" });
     load([here, away], [here.id]);
     render(<ChatsView />);
-    expect(screen.queryByText("Away chat")).toBeNull();
-    cleanup();
-    store.filter.value = null;
-    load([away], []);
-    render(<ChatsView />);
     expect(screen.getByText("Away chat")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /This folder/ }));
+    expect(screen.queryByText("Away chat")).toBeNull();
   });
 
   it("pins from the row's action button", () => {
