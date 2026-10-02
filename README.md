@@ -7,10 +7,14 @@
 [![Version](https://img.shields.io/visual-studio-marketplace/v/OmSharma.orbit-hq?label=Marketplace&color=1f2a66)](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/OmSharma.orbit-hq?color=1f2a66)](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/OmSharma.orbit-hq?color=1f2a66)](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq&ssr=false#review-details)
+[![Open VSX](https://img.shields.io/open-vsx/v/OmSharma/orbit-hq?label=Open%20VSX&color=1f2a66)](https://open-vsx.org/extension/OmSharma/orbit-hq)
 [![CI](https://github.com/justomsharma/orbit/actions/workflows/ci.yml/badge.svg)](https://github.com/justomsharma/orbit/actions/workflows/ci.yml)
 
-**[Install from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq)**, or search
-"Orbit HQ" in VS Code's Extensions view.
+**Install:**
+
+- **VS Code:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=OmSharma.orbit-hq), or search "Orbit HQ" in the Extensions view.
+- **Cursor, Windsurf, VSCodium, Kiro, Trae and other VS Code-based editors:** search "Orbit HQ" in the
+  Extensions view, or get it from [Open VSX](https://open-vsx.org/extension/OmSharma/orbit-hq).
 
 **Your home for Claude Code.** Every chat, your accounts, your usage and your whole setup, in one
 calm sidebar. 100% local: no sign-up, no network, no telemetry.
@@ -19,12 +23,24 @@ Type what Claude should do on Home and Orbit starts Claude for you, in a termina
 panel (your choice). Orbit finds, explains and tidies everything around Claude, then hands you back.
 
 <p align="center">
+  <img src="docs/images/home.png" alt="Home: tell Claude what to do, continue your last chat, what's running now" width="24%">
   <img src="docs/images/chats.png" alt="Chats: every chat, searchable, with what's running now" width="24%">
+  <img src="docs/images/usage.png" alt="Usage: tokens, API value, a pace verdict for your plan limits" width="24%">
   <img src="docs/images/account.png" alt="Account: profile, saved accounts to switch between, plan limits" width="24%">
-  <img src="docs/images/config.png" alt="Config: model, reasoning effort and permissions in plain words" width="24%">
-  <img src="docs/images/checkpoints.png" alt="Checkpoints: every chat where Claude kept copies of files" width="24%">
 </p>
-<p align="center"><sub>Chats, Account, Config and Checkpoints. Orbit follows your VS Code theme, light or dark.</sub></p>
+<p align="center">
+  <img src="docs/images/prompts.png" alt="Prompts: every prompt you've typed, by project" width="24%">
+  <img src="docs/images/checkpoints.png" alt="Checkpoints: every chat where Claude kept copies of files" width="24%">
+  <img src="docs/images/skills.png" alt="Skills: every skill, with its own page" width="24%">
+  <img src="docs/images/config.png" alt="Config: model, reasoning effort and permissions in plain words" width="24%">
+</p>
+<p align="center"><sub>Home, Chats, Usage, Account, Prompts, Checkpoints, Skills and Config.</sub></p>
+
+<p align="center">
+  <img src="docs/images/usage-light.png" alt="Usage in a light VS Code theme" width="24%">
+  <img src="docs/images/usage.png" alt="Usage in a dark VS Code theme" width="24%">
+</p>
+<p align="center"><sub>Orbit follows your VS Code theme, light or dark.</sub></p>
 
 ## What you get
 
@@ -100,4 +116,5 @@ health**, **Report a problem**, and **Orbit: Show …** for each main tab.
 
 ## Requirements
 
-VS Code 1.94 or later, and Claude Code: the Claude Code extension, the `claude` command, or both.
+VS Code 1.94 or later, or an editor built on it (Cursor, Windsurf, VSCodium and others), and Claude
+Code: the `claude` command, Anthropic's Claude Code extension, or both.
