@@ -14,6 +14,8 @@ const ROOT = join(__dirname, "..", "src");
 const WRITERS: string[] = [
   "core/safeWriter.ts",
   "core/orbitStore.ts",
+  // Deleting moves things here (recoverable); see core/trash.ts.
+  "core/trash.ts",
   // The statusline tap writes only quota.json in its own folder (Orbit storage).
   "tap/statusline.ts",
   // Saves the recap image to a path the person picked in the save dialog.

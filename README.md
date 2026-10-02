@@ -28,19 +28,20 @@ panel (your choice). Orbit finds, explains and tidies everything around Claude, 
 
 ## What you get
 
-Fourteen tabs along the top; hover near either end of the bar to glide through them. A welcome screen
-shows them all the first time (and from the **?** at the bottom).
+Fourteen tabs along the top; hover near either end of the bar to glide through them, reorder or hide
+them in Config, or press **Ctrl+K** (**Cmd+K**) to search everything at once. A welcome screen shows
+them all the first time (and from the **?** at the bottom).
 
 | Tab | |
 |---|---|
 | **Home** | Type what Claude should do, continue your last chat, what's running, today's usage, a Get started checklist. |
-| **Chats** | Every chat from the terminal and the extension, with live status. Search titles or **inside messages**, filter by folder, branch and date, pin, rename, tag, **fork**. Open a chat's files and transcript, export to Markdown. |
-| **Prompts** | Every prompt you've typed (repeats collapsed, pasted text restored), ready to use again. |
-| **Checkpoints** | Every chat where Claude kept copies of files it edited: compare any version with now, or restore it safely. |
-| **Usage** | Tokens and cost by day, model and project, your streak, the tools and MCP servers Claude used, a 6-month activity map and a weekly recap to share. |
-| **Account** | Who's signed in and your plan. **Save accounts and switch with one click**, log in or out, and opt-in 5-hour and weekly **plan limits**. |
-| **Config** | Model, reasoning effort, thinking, permissions, sandbox, auto-compact and more, in plain words, one click each. Then a **health check** (with **Fix with Claude**), permission rules and every Claude setting. |
-| **Skills · MCP · Plugins · Agents · Commands · Hooks · Memory** | Each part of your setup in a tab of its own: skills by scope (project, yours, each plugin), add and sign in to MCP servers, turn plugins on or off, create skills, agents and commands, pause hooks, CLAUDE.md and memory files. |
+| **Chats** | Every chat with live status (green while Claude works, orange when it waits for you), folder, branch and worktree. Grouped by day, filter by project, branch, worktree and date, search titles or **inside messages**. Open a chat to see its stats and read it (latest or earliest first, searchable), continue it in a terminal (Orbit offers to switch branch first), fork, rename, pin, archive, hide, export or import chats, temporary chats. |
+| **Prompts** | Every prompt you've typed (repeats collapsed, pasted text restored), by project; click one to open its chat. |
+| **Checkpoints** | Chats → files → versions: compare any version with the file now, restore it (backed up, undoable), open the file. Finds versions the chat no longer mentions. |
+| **Usage** | Tokens, chats, replies and cache by period, cost by model, projects, tools and MCP servers, a year of activity, your longest chat, and a recap card to share. |
+| **Account** | Who's signed in and your plan, **switch accounts in one click**, log in or out, and **plan limits** with a pace verdict ("enough to last the week?"), also in the status bar, turning yellow and red as you near a limit. |
+| **Config** | Model, effort, thinking, permissions, sandbox, git attribution, voice and more in plain words, one click each. Health check, permission rules with common presets, extra folders, every Claude setting, **Undo history**, sidebar tabs, and **brain backup** to move your setup to another computer. |
+| **Skills · MCP · Plugins · Agents · Commands · Hooks · Memory** | Each part of your setup in its own tab, every item with a page of its own: use skills and commands in a chat, edit agents fully, pause or edit single hooks, check and sign in to MCP servers, see which settings file turns a plugin on, follow links between memories. All 100+ of Claude Code's built-in commands are listed too. |
 
 ## Safe by design
 
@@ -51,6 +52,10 @@ shows them all the first time (and from the **?** at the bottom).
   `~/.claude.json`, and tokens never reach Orbit's views. Logging in and out uses Claude's own
   `claude auth` commands.
 - **Every change asks first.** You see the exact change, Orbit keeps a backup, and one click undoes it.
+  Config's **Undo history** lists every change Orbit made.
+- **Deleting never deletes.** A deleted skill, agent, command or memory moves to Orbit's trash; Undo or
+  the Undo history puts it back. Pausing a hook keeps it in Orbit's storage, never as a key Claude
+  doesn't know.
   If Claude changes a settings file while you're deciding, Orbit applies just your change on top of
   Claude's; for a whole file (like restoring an old version) it asks you again instead of overwriting.
 - **Only Claude's official settings**, straight from its published settings schema. Quick settings in
@@ -60,7 +65,9 @@ shows them all the first time (and from the **?** at the bottom).
 - **Secrets stay hidden in Orbit's views.** API keys and tokens in env values, server arguments, URLs,
   hooks, permission rules and transcript tool lines are masked. (VS Code's own diff of a change shows the
   real file, and chat text is shown as it was written.)
-- Orbit's own data (pins, tags, backups) lives in VS Code's storage, never in `~/.claude`.
+- **Brain backups leave secrets out**: settings' `env` and MCP keys and headers are never exported, and
+  importing backs up everything it replaces, with one Undo.
+- Orbit's own data (pins, tags, backups, trash) lives in VS Code's storage, never in `~/.claude`.
 
 ## Good to know
 
@@ -73,7 +80,8 @@ shows them all the first time (and from the **?** at the bottom).
 
 ## Keyboard
 
-`Ctrl+Alt+O` (`Cmd+Alt+O` on Mac) opens Orbit. `←` `→` `Home` `End` move between tabs. In Chats: `/` search · `↑` `↓` move · `Enter` continue ·
+`Ctrl+Alt+O` (`Cmd+Alt+O` on Mac) opens Orbit, `Ctrl+K` searches everything, `Ctrl+Alt+R` refreshes.
+`←` `→` `Home` `End` move between tabs. In Chats: `/` search · `↑` `↓` move · `Enter` continue ·
 `Shift+Enter` terminal · `Alt+D` files and transcript · `Alt+P` pin · `Alt+C` copy resume command ·
 `F2` rename. Search `#tag` to find tagged chats.
 
@@ -82,9 +90,13 @@ shows them all the first time (and from the **?** at the bottom).
 - `orbit.openChatsIn`: `terminal` (default, Claude Code's CLI, works for chats from any folder) or
   `claudePanel` (Claude's VS Code chat panel).
 - `orbit.terminalLocation`: `editor` (default, a tab beside your code) or `panel`.
+- `orbit.editorPosition`, `orbit.chats.defaultFilter`, `orbit.chats.defaultProject`,
+  `orbit.chats.restoreCount`, `orbit.terminal.keepSessionNames`, `orbit.tabOrder`,
+  `orbit.hiddenTabs`, `orbit.density`.
 
-Both are also on the Config tab. Commands: **Orbit: Switch Claude account**, **Orbit: Get started**,
-and **Orbit: Show …** for each main tab.
+All are also on the Config tab. Commands: **Orbit: Switch Claude account**, **Orbit: Get started**,
+**Orbit: Back up your Claude setup**, **Bring in a Claude setup backup**, **Check Claude Code's
+health**, **Report a problem**, and **Orbit: Show …** for each main tab.
 
 ## Requirements
 

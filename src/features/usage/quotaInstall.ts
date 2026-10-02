@@ -5,6 +5,7 @@ import { obj, str } from "../../core/jsonl";
 import { OrbitStore } from "../../core/orbitStore";
 import { type SafeWriter, SafeWriter as Writer } from "../../core/safeWriter";
 import type { QuotaFile } from "../../tap/statusline";
+import { managedSettingsPath } from "../setup/settings";
 
 const TAP = "statusline-tap.js";
 const INNER = "statusline-inner.json";
@@ -28,6 +29,8 @@ export interface QuotaDeps {
   confirm: ConfirmHost;
   /** The open folder, to notice a project statusline that hides Orbit's there. */
   workspace(): string | null;
+  /** The organisation's managed settings file (default: Claude Code's path for the platform). */
+  managedPath?: string;
 }
 
 interface InstallState {
@@ -35,7 +38,9 @@ interface InstallState {
   command: string | null;
 }
 
-export type QuotaResult = { ok: true } | { ok: false; reason: "no-node" | "not-applied" };
+export type QuotaResult =
+  | { ok: true }
+  | { ok: false; reason: "no-node" | "not-applied" | "managed" };
 
 const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 const slash = (s: string) => s.replace(/\\/g, "/");
@@ -117,6 +122,9 @@ export class QuotaInstaller {
   }
 
   async enable(): Promise<QuotaResult> {
+    // Managed settings win over the person's, so Orbit's statusline would never run.
+    const managed = this.d.managedPath ?? managedSettingsPath(this.d.platform);
+    if ((await this.statusLineIn(managed)) !== undefined) return { ok: false, reason: "managed" };
     const node = await this.d.findNode();
     if (!node) return { ok: false, reason: "no-node" };
     const tap = this.tapStore();

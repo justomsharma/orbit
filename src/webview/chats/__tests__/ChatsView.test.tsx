@@ -5,7 +5,9 @@ import type { Session } from "../../../features/chats/types";
 import type { ViewMsg } from "../../../shared/protocol";
 import { setPost } from "../../bus";
 import * as store from "../../store";
+import { MenuLayer } from "../../ui/Menu";
 import { ChatsView } from "../ChatsView";
+import { DEFAULT_FILTER } from "../model";
 
 const sent: ViewMsg[] = [];
 
@@ -49,7 +51,9 @@ beforeEach(() => {
   sent.length = 0;
   setPost((m) => sent.push(m));
   store.query.value = "";
-  store.filter.value = null;
+  store.chatFilter.value = { ...DEFAULT_FILTER, date: "all" };
+  store.collapsed.value = [];
+  store.selected.value = null;
 });
 afterEach(cleanup);
 
@@ -81,11 +85,11 @@ describe("ChatsView", () => {
   it("tells a newcomer that clicking a chat opens it in Claude, until they've done it", () => {
     load([mk(1)]);
     render(<ChatsView />);
-    expect(screen.getByText(/Click a chat to open it in Claude/)).toBeTruthy();
+    expect(screen.getByText(/Click a chat to continue it/)).toBeTruthy();
     cleanup();
     store.onboarding.value = { done: ["continue"], dismissed: false };
     render(<ChatsView />);
-    expect(screen.queryByText(/Click a chat to open it in Claude/)).toBeNull();
+    expect(screen.queryByText(/Click a chat to continue it/)).toBeNull();
   });
 
   it("continues a chat when its row is clicked", () => {
@@ -113,8 +117,10 @@ describe("ChatsView", () => {
     load([here, away], [here.id]);
     render(<ChatsView />);
     expect(screen.getByText("Away chat")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /This folder/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter chats" }));
+    fireEvent.change(screen.getByLabelText("Folder"), { target: { value: "here" } });
     expect(screen.queryByText("Away chat")).toBeNull();
+    expect(screen.getByRole("list", { name: "Active filters" }).textContent).toMatch(/This folder/);
   });
 
   it("pins from the row's action button", () => {
@@ -128,8 +134,14 @@ describe("ChatsView", () => {
   it("renames inline and saves on Enter", () => {
     const s = mk(1);
     load([s]);
-    render(<ChatsView />);
-    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    render(
+      <>
+        <ChatsView />
+        <MenuLayer />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /More actions for/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename…" }));
     const input = screen.getByRole("textbox", { name: /New name/ });
     fireEvent.input(input, { target: { value: "Better name" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -175,7 +187,7 @@ describe("ChatsView", () => {
       env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
     });
     render(<ChatsView />);
-    expect(screen.getByText(/Running ·/)).toBeTruthy();
+    expect(screen.getByText("Running")).toBeTruthy();
     expect(screen.queryByText(/Waiting for you/)).toBeNull();
   });
 

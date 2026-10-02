@@ -1,14 +1,21 @@
 import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import * as path from "node:path";
 import { type AgentInfo, readAgents } from "../features/setup/agents";
 import { effectiveSetting } from "../features/setup/catalog";
 import { type CommandInfo, readCommands } from "../features/setup/commands";
 import { checkHealth, hookScriptPath, type Issue } from "../features/setup/health";
 import { type HookEntry, readHooks, readPluginHooks } from "../features/setup/hooks";
+import { type Marketplace, readMarketplaces } from "../features/setup/marketplaces";
 import { type McpServer, readClaudeJson, readMcpJson, readMcpServers } from "../features/setup/mcp";
-import { type MemoryInfo, readMemory } from "../features/setup/memory";
+import {
+  listMemoryProjects,
+  type MemoryInfo,
+  type MemoryProject,
+  readMemory,
+} from "../features/setup/memory";
 import { type ModelOption, modelOptions } from "../features/setup/models";
+import { type PausedHook, type PausedHookView, pausedFor } from "../features/setup/pausedHooks";
 import { type Permissions, readPermissions } from "../features/setup/permissions";
 import { type InstalledPlugin, readPlugins } from "../features/setup/plugins";
 import { redactArgs, redactText, redactUrl } from "../features/setup/redact";
@@ -54,8 +61,32 @@ export interface SetupSnapshot {
   claudeJsonPath: string;
   /** Models Config offers: Claude's aliases plus extras this account has. */
   modelOptions: ModelOption[];
+  /** MCP servers Claude Code says need signing in again (`mcp-needs-auth-cache.json`). */
+  mcpNeedsAuth: string[];
+  /** Launch commands of stdio MCP servers that aren't on PATH. */
+  missingCommands: string[];
+  /** Hooks Orbit paused (taken out of their file, kept in Orbit's storage). */
+  pausedHooks: PausedHookView[];
+  /** Where plugins are installed from. */
+  marketplaces: Marketplace[];
+  /** Every project folder with auto memories (for Memory's project picker). */
+  memoryProjects: MemoryProject[];
   /** Settings inside objects that Config shows (sandbox, bypass block): value and where it's set. */
   nested: Record<string, { scope: SettingsScope; value: string | number | boolean } | null>;
+}
+
+/** Names in Claude Code's "needs sign-in" cache, if any. */
+async function needsAuth(home: string): Promise<string[]> {
+  try {
+    const o = JSON.parse(await readFile(path.join(home, "mcp-needs-auth-cache.json"), "utf8"));
+    return o && typeof o === "object" && !Array.isArray(o)
+      ? Object.keys(o)
+          .filter((k) => k.length <= 200)
+          .slice(0, 100)
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 /** The nested settings Config's quick settings show. */
@@ -63,6 +94,9 @@ export const NESTED_KEYS = [
   "permissions.defaultMode",
   "sandbox.enabled",
   "permissions.disableBypassPermissionsMode",
+  "voice.enabled",
+  "attribution.commit",
+  "attribution.pr",
 ] as const;
 
 /** A setting inside an object setting, from the file that decides it. */
@@ -137,6 +171,12 @@ export function viewSnapshot(s: SetupSnapshot): SetupSnapshot {
       command: maybe(h.command, redactText),
       url: maybe(h.url, redactUrl),
     })),
+    marketplaces: s.marketplaces.map((m) => ({ ...m, source: redactText(m.source) })),
+    pausedHooks: s.pausedHooks.map((h) => ({
+      ...h,
+      command: maybe(h.command, redactText),
+      url: maybe(h.url, redactUrl),
+    })),
     // Claude saves exact commands as rules ("don't ask again"), tokens included.
     permissions: {
       ...s.permissions,
@@ -162,6 +202,8 @@ export interface SetupDeps {
   platform: NodeJS.Platform;
   /** Is a bare program name (like `npx`) on PATH? */
   commandExists?: (cmd: string) => Promise<boolean>;
+  /** Hooks Orbit paused. */
+  pausedHooks?: () => Promise<PausedHook[]>;
 }
 
 const exists = async (p: string) => {
@@ -287,6 +329,16 @@ export class SetupService {
       issues,
       claudeJsonPath: this.d.claudeJson,
       modelOptions: modelOptions(claudeJson.data),
+      mcpNeedsAuth: await needsAuth(home),
+      missingCommands: [...missingCommands],
+      marketplaces: await readMarketplaces(home),
+      memoryProjects: await listMemoryProjects(home),
+      pausedHooks: pausedFor(
+        (await this.d.pausedHooks?.().catch(() => [])) ?? [],
+        settings.filter((f) => f.scope !== "managed").map((f) => f.path),
+        hooks,
+        platform,
+      ),
       nested: Object.fromEntries(NESTED_KEYS.map((k) => [k, nestedSetting(settings, k)])),
     };
   }

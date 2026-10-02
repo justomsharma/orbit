@@ -3,6 +3,7 @@ import { post } from "../bus";
 import * as store from "../store";
 import { Empty } from "../ui/Empty";
 import { Icon, IconButton } from "../ui/Icon";
+import { Loading } from "../ui/Loading";
 import { QuotaCard } from "../usage/QuotaCard";
 import { UsageGlance } from "../usage/UsageGlance";
 
@@ -33,6 +34,7 @@ function SavedRow({ a, inUse }: { a: SavedAccount; inUse: boolean }) {
       <div class="acct-text">
         <span class="acct-name">{a.name}</span>
         <span class="acct-sub">{[a.email, a.plan].filter(Boolean).join(" · ")}</span>
+        {a.lastSeen ? <span class="acct-seen">Last seen {a.lastSeen}</span> : null}
       </div>
       {inUse ? (
         <span class="badge ok">In use</span>
@@ -62,20 +64,47 @@ export function AccountView() {
   if (!s) {
     return (
       <section class="account scroll">
-        <div class="loading" role="status">
-          Reading your account…
-        </div>
+        <Loading text="Reading your account…" retry={{ type: "refresh" }} />
       </section>
     );
   }
   const p = s.profile;
   const saved = p ? s.saved.some((a) => a.id === p.id) : false;
+  const planClass = p?.plan ? `plan-${p.plan.split(" ")[0]!.toLowerCase()}` : "";
   return (
     <section class="account scroll">
+      {s.broken ? (
+        <div class="banner error" role="alert">
+          <Icon name="error" />
+          <div>
+            <b>Claude Code's settings file looks broken.</b> ~/.claude.json is empty or not valid,
+            so Claude may ask you to log in again and forget its settings.
+            {s.broken.backup ? (
+              <button
+                type="button"
+                class="btn small"
+                onClick={() => post({ type: "account:restoreConfig" })}
+              >
+                Restore from backup
+              </button>
+            ) : (
+              <span> No backup was found to restore from.</span>
+            )}
+          </div>
+        </div>
+      ) : null}
       {p ? (
         <section class="card profile" aria-labelledby="profile-name">
           <div class="profile-head">
-            <Avatar name={p.name} seed={p.id} />
+            <button
+              type="button"
+              class="avatar-btn"
+              title="Switch account"
+              aria-label="Switch account"
+              onClick={() => post({ type: "account:pick" })}
+            >
+              <Avatar name={p.name} seed={p.id} />
+            </button>
             <div class="profile-text">
               <h2 id="profile-name" class="profile-name">
                 {p.name}
@@ -88,8 +117,15 @@ export function AccountView() {
                 </span>
               ) : null}
             </div>
-            {p.plan ? <span class="plan-badge">{p.plan}</span> : null}
+            {p.plan ? <span class={`plan-badge ${planClass}`}>{p.plan}</span> : null}
           </div>
+          {s.signInDays !== null && s.signInDays !== undefined ? (
+            <p class="profile-meta">
+              {s.signInDays === 0
+                ? "Your sign-in has run out: log in again."
+                : `Signed in for ${s.signInDays} more day${s.signInDays === 1 ? "" : "s"}`}
+            </p>
+          ) : null}
           <div class="profile-actions">
             <button type="button" class="btn" onClick={() => post({ type: "account:pick" })}>
               <Icon name="arrow-swap" /> Switch account
@@ -120,7 +156,9 @@ export function AccountView() {
           title="Not signed in"
           action={{ label: "Log in", onClick: () => post({ type: "account:login" }) }}
         >
-          Log in to Claude Code with your Claude account. A terminal opens to sign you in.
+          {s.saved.length
+            ? "Switch to a saved account below, or log in. A terminal opens to sign you in."
+            : "Log in to Claude Code with your Claude account. A terminal opens to sign you in."}
         </Empty>
       )}
 

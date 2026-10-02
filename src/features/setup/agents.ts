@@ -24,6 +24,8 @@ export interface AgentInfo {
   plugin: string | null;
   file: string;
   problems: string[];
+  /** Skills loaded into the agent when it starts. */
+  skills: string[];
 }
 
 const MODEL_ALIASES = new Set(["sonnet", "opus", "haiku", "fable", "inherit"]);
@@ -46,6 +48,7 @@ async function readAgent(f: Found): Promise<AgentInfo> {
       tools: [],
       model: null,
       problems: [UNREADABLE],
+      skills: [],
     };
   const d = md.data;
   const description = strOrNull(d.description);
@@ -61,6 +64,16 @@ async function readAgent(f: Found): Promise<AgentInfo> {
     tools: toolList(d.tools),
     model,
     problems,
+    skills: Array.isArray(d.skills)
+      ? d.skills
+          .filter((x): x is string => typeof x === "string" && !!x.trim())
+          .map((x) => x.trim())
+      : typeof d.skills === "string"
+        ? d.skills
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean)
+        : [],
   };
 }
 

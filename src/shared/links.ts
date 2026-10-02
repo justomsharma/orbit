@@ -6,6 +6,7 @@ export const ORBIT_LINKS = {
   skills: "https://github.com/anthropics/skills",
   mcp: "https://github.com/modelcontextprotocol/servers",
   claudeUsage: "https://claude.ai/settings/usage",
+  commandsDocs: "https://code.claude.com/docs/en/commands",
 } as const;
 
 export type OrbitLink = keyof typeof ORBIT_LINKS;

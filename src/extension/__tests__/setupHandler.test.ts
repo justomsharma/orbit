@@ -1,23 +1,48 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../test/helpers/tmp";
 import type { ConfirmHost } from "../../core/applyEdit";
 import { SafeWriter } from "../../core/safeWriter";
-import { redactText } from "../../features/setup/redact";
+import { Trash } from "../../core/trash";
+import type { PausedHook, PausedStore } from "../../features/setup/pausedHooks";
+import { redactText, redactUrl } from "../../features/setup/redact";
+import type { HostMsg } from "../../shared/protocol";
 import { handleSetup, type SetupHandlerDeps } from "../setupHandler";
 import { SetupService } from "../setupService";
 
 const tmp = useTmpDir();
 
 async function setup(
-  opts: { workspace?: boolean; settings?: object; platform?: NodeJS.Platform } = {},
+  opts: {
+    workspace?: boolean;
+    settings?: object;
+    platform?: NodeJS.Platform;
+    content?: boolean;
+    answer?: "apply" | "cancel";
+  } = {},
 ) {
   const root = tmp();
   const home = join(root, ".claude");
   const ws = join(root, "shop");
   mkdirSync(home, { recursive: true });
   mkdirSync(join(ws, ".claude"), { recursive: true });
+  if (opts.content) {
+    mkdirSync(join(home, "skills", "notes", "scripts"), { recursive: true });
+    writeFileSync(
+      join(home, "skills", "notes", "SKILL.md"),
+      "---\nname: notes\ndescription: Take notes\n---\nWrite it down.\n",
+    );
+    writeFileSync(join(home, "skills", "notes", "scripts", "x.sh"), "echo\n");
+    mkdirSync(join(home, "commands"), { recursive: true });
+    writeFileSync(join(home, "commands", "ship.md"), "---\ndescription: Ship it\n---\nShip.\n");
+    mkdirSync(join(home, "agents"), { recursive: true });
+    writeFileSync(
+      join(home, "agents", "helper.md"),
+      "---\nname: helper\ncolor: green\ndescription: Helps\nmodel: haiku\n---\nHelp.\n",
+    );
+  }
   writeFileSync(
     join(home, "settings.json"),
     JSON.stringify(
@@ -39,15 +64,32 @@ async function setup(
   );
   const log: string[] = [];
   const replies: [string, boolean][] = [];
+  const undos: (() => Promise<boolean>)[] = [];
+  const posted: unknown[] = [];
   const confirm: ConfirmHost = {
     confirm: async (s, warning) => {
       log.push(`confirm ${s}${warning ? ` ⚠ ${warning}` : ""}`);
-      return "apply";
+      return opts.answer ?? "apply";
     },
     showDiff: async () => {},
-    done: async () => {},
+    done: async (label, undo) => {
+      log.push(`done ${label}`);
+      undos.push(undo);
+    },
     warn: (m) => {
       log.push(`warn ${m}`);
+    },
+  };
+  let pausedList: PausedHook[] = [];
+  const paused: PausedStore = {
+    list: async () => pausedList,
+    add: async (h) => {
+      const e = { ...h, id: randomUUID(), at: 1 };
+      pausedList = [...pausedList, e];
+      return e;
+    },
+    remove: async (id) => {
+      pausedList = pausedList.filter((p) => p.id !== id);
     },
   };
   const service = new SetupService({
@@ -56,9 +98,10 @@ async function setup(
     userHome: root,
     platform: process.platform,
     commandExists: async () => true,
+    pausedHooks: () => paused.list(),
   });
   const workspace = opts.workspace === false ? null : ws;
-  const snap = await service.snapshot(workspace);
+  let snap = await service.snapshot(workspace);
   const deps: SetupHandlerDeps = {
     home,
     claudeJson,
@@ -69,9 +112,13 @@ async function setup(
     snapshot: () => snap,
     refresh: async () => {
       log.push("refresh");
+      snap = await service.snapshot(workspace);
     },
     openFile: async (f) => {
       log.push(`open ${f}`);
+    },
+    reveal: async (f) => {
+      log.push(`reveal ${f}`);
     },
     runClaude: async (args) => {
       log.push(`claude ${args.join(" ")}`);
@@ -82,6 +129,10 @@ async function setup(
     reply: (req, ok) => {
       replies.push([req, ok]);
     },
+    trash: new Trash(join(root, "trash")),
+    paused,
+    otherMemory: { files: [] },
+    post: (m) => posted.push(m),
   };
   const json = (p: string) => JSON.parse(readFileSync(p, "utf8"));
   return {
@@ -92,10 +143,367 @@ async function setup(
     deps,
     log,
     replies,
+    undos,
+    posted,
+    paused,
+    snapshot: () => snap,
     json,
     handle: (m: object) => handleSetup(m, deps),
   };
 }
+
+describe("handleSetup: history", () => {
+  it("lists Orbit's changes and its trash, newest first, and undoes a change", async () => {
+    const { handle, posted, home, json } = await setup({ content: true });
+    await handle({ type: "setup:setSetting", scope: "user", key: "effortLevel", value: "high" });
+    await handle({ type: "setup:trash", file: join(home, "commands", "ship.md") });
+    await handle({ type: "history:list" });
+    const h = posted.find((m) => (m as { type: string }).type === "history") as Extract<
+      HostMsg,
+      { type: "history" }
+    >;
+    expect(h.edits.map((e) => e.label)).toEqual(["Effort level: high"]);
+    expect(h.trash.map((t) => t.label)).toEqual(["Deleted command /ship"]);
+    await handle({ type: "history:undo", id: h.edits[0]!.id });
+    expect(json(join(home, "settings.json")).effortLevel).toBeUndefined();
+    await handle({ type: "history:restore", id: h.trash[0]!.id });
+    expect(existsSync(join(home, "commands", "ship.md"))).toBe(true);
+  });
+
+  it("deletes something in the trash for good only after asking", async () => {
+    const { handle, posted, home, log } = await setup({ content: true });
+    await handle({ type: "setup:trash", file: join(home, "commands", "ship.md") });
+    await handle({ type: "history:list" });
+    const h = posted.find((m) => (m as { type: string }).type === "history") as Extract<
+      HostMsg,
+      { type: "history" }
+    >;
+    await handle({ type: "history:forget", id: h.trash[0]!.id });
+    expect(log.some((l) => /^confirm Delete .*for good/.test(l))).toBe(true);
+  });
+});
+
+describe("handleSetup: other projects' memories", () => {
+  it("reads another project's memories, then lets them be opened and deleted", async () => {
+    const { handle, posted, home, log, undos } = await setup();
+    const dir = join(home, "projects", "C--code-api", "memory");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "api.md"), "---\nname: api\n---\nThe API.\n");
+    await handle({ type: "setup:memoryOf", slug: "C--code-api" });
+    expect(posted[0]).toMatchObject({ type: "setup:memoryFiles", slug: "C--code-api" });
+    const file = join(dir, "api.md");
+    await handle({ type: "setup:open", file });
+    await handle({ type: "setup:revealFile", file });
+    expect(log).toEqual([`open ${file}`, `reveal ${file}`]);
+    await handle({ type: "setup:trash", file });
+    expect(existsSync(file)).toBe(false);
+    expect(await undos[0]!()).toBe(true);
+    expect(existsSync(file)).toBe(true);
+  });
+
+  it("answers an unknown project with nothing", async () => {
+    const { handle, posted } = await setup();
+    await handle({ type: "setup:memoryOf", slug: "nope" });
+    expect(posted).toEqual([{ type: "setup:memoryFiles", slug: "nope", files: [] }]);
+  });
+});
+
+describe("handleSetup: edits never save hidden secrets", () => {
+  const SECRET = 'curl -H "Authorization: Bearer abcdef0123456789abcdef" https://x/hook';
+
+  it("keeps a hook's real command when only its time limit changed", async () => {
+    const { handle, json, home, snapshot } = await setup({
+      settings: { hooks: { Stop: [{ hooks: [{ type: "command", command: SECRET }] }] } },
+    });
+    const h = snapshot().hooks[0]!;
+    await handle({
+      type: "setup:hookEdit",
+      req: "m1",
+      id: h.id,
+      scope: "user",
+      event: "Stop",
+      matcher: null,
+      command: redactText(SECRET),
+      timeout: 30,
+    });
+    expect(json(join(home, "settings.json")).hooks.Stop[0].hooks[0]).toEqual({
+      type: "command",
+      command: SECRET,
+      timeout: 30,
+    });
+  });
+
+  it("refuses a command that still has a hidden part but was changed", async () => {
+    const { handle, json, home, snapshot, log } = await setup({
+      settings: { hooks: { Stop: [{ hooks: [{ type: "command", command: SECRET }] }] } },
+    });
+    await handle({
+      type: "setup:hookEdit",
+      req: "m2",
+      id: snapshot().hooks[0]!.id,
+      scope: "user",
+      event: "Stop",
+      matcher: null,
+      command: `${redactText(SECRET)} --verbose`,
+      timeout: null,
+    });
+    expect(json(join(home, "settings.json")).hooks.Stop[0].hooks[0].command).toBe(SECRET);
+    expect(log.some((l) => /hidden/.test(l))).toBe(true);
+  });
+
+  it("keeps an MCP server's real address when editing it", async () => {
+    const { handle, claudeJson, json } = await setup();
+    const url = "https://mcp.x.com/mcp?token=abcdef0123456789abcdef";
+    await handle({
+      type: "setup:mcpAdd",
+      req: "a",
+      scope: "user",
+      name: "web",
+      transport: "http",
+      url,
+    });
+    await handle({
+      type: "setup:mcpAdd",
+      req: "b",
+      scope: "user",
+      name: "web2",
+      transport: "http",
+      url: redactUrl(url),
+      replace: "web",
+    });
+    expect(json(claudeJson).mcpServers.web2.url).toBe(url);
+  });
+});
+
+describe("handleSetup: one hook at a time", () => {
+  it("pauses a hook by taking it out of its file, and puts the same thing back", async () => {
+    const { handle, json, home, paused, snapshot } = await setup();
+    const file = join(home, "settings.json");
+    const id = snapshot().hooks[0]!.id;
+    await handle({ type: "setup:hookPause", id });
+    expect(json(file).hooks).toBeUndefined();
+    const [p] = await paused.list();
+    expect(p).toMatchObject({ event: "Stop", handler: { type: "command", command: "done.sh" } });
+    expect(snapshot().pausedHooks).toEqual([
+      expect.objectContaining({ id: p!.id, command: "done.sh" }),
+    ]);
+    await handle({ type: "setup:hookResume", id: p!.id });
+    expect(json(file).hooks).toEqual({
+      Stop: [{ hooks: [{ type: "command", command: "done.sh" }] }],
+    });
+    expect(await paused.list()).toEqual([]);
+    expect(json(file).theme).toBe("dark");
+  });
+
+  it("leaves a hook on when its pause can't be kept", async () => {
+    const { handle, json, home, paused, snapshot, log } = await setup();
+    paused.add = async () => {
+      throw new Error("disk full");
+    };
+    await handle({ type: "setup:hookPause", id: snapshot().hooks[0]!.id });
+    expect(json(join(home, "settings.json")).hooks).toEqual({
+      Stop: [{ hooks: [{ type: "command", command: "done.sh" }] }],
+    });
+    expect(log.some((l) => /couldn't pause/.test(l))).toBe(true);
+  });
+
+  it("only resumes a paused hook this window shows", async () => {
+    const { handle, paused, json, home } = await setup();
+    const p = await paused.add({
+      scope: "user",
+      source: join(home, "..", "elsewhere", "settings.json"),
+      event: "Stop",
+      matcher: null,
+      handler: { type: "command", command: "x.sh" },
+    });
+    await handle({ type: "setup:hookResume", id: p.id });
+    expect(await paused.list()).toHaveLength(1);
+    expect(json(join(home, "settings.json")).hooks.Stop[0].hooks).toHaveLength(1);
+  });
+
+  it("edits a hook's command and event in place", async () => {
+    const { handle, json, home, snapshot, log } = await setup();
+    await handle({
+      type: "setup:hookEdit",
+      req: "e1",
+      id: snapshot().hooks[0]!.id,
+      scope: "user",
+      event: "PreToolUse",
+      matcher: "Bash",
+      command: "guard.sh",
+      timeout: 10,
+    });
+    expect(log[0]).toMatch(/^confirm Change this hook to run "guard.sh" on PreToolUse/);
+    expect(json(join(home, "settings.json")).hooks).toEqual({
+      PreToolUse: [
+        { matcher: "Bash", hooks: [{ type: "command", command: "guard.sh", timeout: 10 }] },
+      ],
+    });
+  });
+
+  it("never loses a hook when the file it moves to can't be written", async () => {
+    const { handle, json, home, ws, snapshot } = await setup();
+    writeFileSync(join(ws, ".claude", "settings.json"), "{ not json");
+    await handle({
+      type: "setup:hookEdit",
+      req: "e3",
+      id: snapshot().hooks[0]!.id,
+      scope: "project",
+      event: "Stop",
+      matcher: null,
+      command: "done.sh",
+      timeout: null,
+    });
+    expect(json(join(home, "settings.json")).hooks).toEqual({
+      Stop: [{ hooks: [{ type: "command", command: "done.sh" }] }],
+    });
+  });
+
+  it("moves a hook to the project's settings", async () => {
+    const { handle, json, home, ws, snapshot } = await setup();
+    await handle({
+      type: "setup:hookEdit",
+      req: "e2",
+      id: snapshot().hooks[0]!.id,
+      scope: "project",
+      event: "Stop",
+      matcher: null,
+      command: "done.sh",
+      timeout: null,
+    });
+    expect(json(join(home, "settings.json")).hooks).toBeUndefined();
+    expect(json(join(ws, ".claude", "settings.json")).hooks).toEqual({
+      Stop: [{ hooks: [{ type: "command", command: "done.sh" }] }],
+    });
+  });
+});
+
+describe("handleSetup: skills, agents and commands", () => {
+  it("sends a known file's text to its detail page, and nothing for other files", async () => {
+    const { handle, posted, home, root } = await setup({ content: true });
+    const file = join(home, "skills", "notes", "SKILL.md");
+    await handle({ type: "setup:read", file });
+    await handle({ type: "setup:read", file: join(root, "secret.txt") });
+    expect(posted).toEqual([
+      {
+        type: "setup:content",
+        file,
+        text: expect.stringContaining("Write it down."),
+        truncated: false,
+      },
+    ]);
+  });
+
+  it("starts a chat with the skill or command typed in, never other text", async () => {
+    const { handle, log, home } = await setup({ content: true });
+    await handle({ type: "setup:launch", file: join(home, "skills", "notes", "SKILL.md") });
+    await handle({ type: "setup:launch", file: join(home, "commands", "ship.md") });
+    await handle({ type: "setup:launch", file: join(home, "settings.json") });
+    expect(log).toEqual(["chat /notes ", "chat /ship "]);
+  });
+
+  it("starts a chat with a built-in command, only one from Claude's list", async () => {
+    const { handle, log } = await setup();
+    await handle({ type: "setup:launchBuiltin", name: "compact" });
+    await handle({ type: "setup:launchBuiltin", name: "not-a-command" });
+    expect(log).toEqual(["chat /compact "]);
+  });
+
+  it("deletes a skill by moving its whole folder to Orbit's trash, with Undo", async () => {
+    const { handle, log, undos, home } = await setup({ content: true });
+    const dir = join(home, "skills", "notes");
+    await handle({ type: "setup:trash", file: join(dir, "SKILL.md") });
+    expect(log[0]).toMatch(/^confirm Delete the skill notes\?/);
+    expect(existsSync(dir)).toBe(false);
+    expect(log).toContain("done Deleted skill notes");
+    expect(await undos[0]!()).toBe(true);
+    expect(readFileSync(join(dir, "scripts", "x.sh"), "utf8")).toBe("echo\n");
+  });
+
+  it("creates an agent from the form, in the chosen place", async () => {
+    const { handle, home, log } = await setup({ content: true });
+    await handle({
+      type: "setup:agentSave",
+      req: "r1",
+      scope: "user",
+      name: "reviewer",
+      description: "Reviews code",
+      model: "opus",
+      tools: ["Read"],
+      skills: [],
+      prompt: "Review it.",
+    });
+    expect(log[0]).toMatch(/^confirm Create the agent reviewer/);
+    expect(readFileSync(join(home, "agents", "reviewer.md"), "utf8")).toBe(
+      "---\nname: reviewer\ndescription: Reviews code\nmodel: opus\ntools: Read\n---\nReview it.\n",
+    );
+  });
+
+  it("edits an agent in place, keeping its other fields", async () => {
+    const { handle, home } = await setup({ content: true });
+    const file = join(home, "agents", "helper.md");
+    expect(readFileSync(file, "utf8")).toContain("color: green");
+    await handle({
+      type: "setup:agentSave",
+      req: "r2",
+      file,
+      name: "helper",
+      description: "Helps more",
+      model: null,
+      tools: [],
+      skills: ["notes"],
+      prompt: "Help.",
+    });
+    expect(readFileSync(file, "utf8")).toBe(
+      "---\nname: helper\ncolor: green\ndescription: Helps more\nskills:\n  - notes\n---\nHelp.\n",
+    );
+  });
+
+  it("won't create over an agent that exists, or edit a file that isn't an agent", async () => {
+    const { handle, home, log, replies } = await setup({ content: true });
+    await handle({
+      type: "setup:agentSave",
+      req: "r3",
+      scope: "user",
+      name: "helper",
+      description: "x",
+      model: null,
+      tools: [],
+      skills: [],
+      prompt: "",
+    });
+    await handle({
+      type: "setup:agentSave",
+      req: "r4",
+      file: join(home, "settings.json"),
+      name: "x",
+      description: "x",
+      model: null,
+      tools: [],
+      skills: [],
+      prompt: "",
+    });
+    expect(log).toEqual([expect.stringMatching(/^warn There's already an agent named helper/)]);
+    expect(replies).toEqual([
+      ["r3", false],
+      ["r4", false],
+    ]);
+  });
+
+  it("duplicates an agent as name-copy next to it", async () => {
+    const { handle, home } = await setup({ content: true });
+    await handle({ type: "setup:agentDuplicate", file: join(home, "agents", "helper.md") });
+    const copy = readFileSync(join(home, "agents", "helper-copy.md"), "utf8");
+    expect(copy).toContain("name: helper-copy");
+    expect(copy).toContain("color: green");
+  });
+
+  it("keeps it when the question is cancelled", async () => {
+    const { handle, home } = await setup({ content: true, answer: "cancel" });
+    await handle({ type: "setup:trash", file: join(home, "commands", "ship.md") });
+    expect(existsSync(join(home, "commands", "ship.md"))).toBe(true);
+  });
+});
 
 describe("handleSetup: settings", () => {
   it("sets a setting in the chosen scope after asking", async () => {
@@ -120,6 +528,45 @@ describe("handleSetup: settings", () => {
     const { handle, log } = await setup();
     await handle({ type: "setup:setSetting", scope: "user", ...m });
     expect(log[0]).toMatch(why);
+  });
+
+  it("sets git attribution to nothing or custom text, and voice dictation, from Config", async () => {
+    const { handle, home, json, log } = await setup();
+    await handle({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "attribution.commit",
+      value: "",
+      quick: true,
+    });
+    await handle({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "attribution.pr",
+      value: "Made with Claude",
+      quick: true,
+    });
+    await handle({
+      type: "setup:setSetting",
+      scope: "auto",
+      key: "voice.enabled",
+      value: true,
+      quick: true,
+    });
+    await handle({ type: "setup:setSetting", scope: "auto", key: "voice.enabled", value: "loud" });
+    const s = json(join(home, "settings.json"));
+    expect(s.attribution).toEqual({ commit: "", pr: "Made with Claude" });
+    expect(s.voice).toEqual({ enabled: true });
+    expect(log.filter((l) => l.startsWith("warn") || l.startsWith("confirm"))).toEqual([
+      expect.stringMatching(/^warn "loud" isn't a value/),
+    ]);
+  });
+
+  it("resets the user settings file after asking, with a backup and Undo", async () => {
+    const { handle, home, json, log } = await setup();
+    await handle({ type: "setup:resetUserSettings" });
+    expect(log[0]).toMatch(/^confirm Reset your user settings to Claude's defaults\?.* ⚠ /);
+    expect(json(join(home, "settings.json"))).toEqual({});
   });
 
   it("applies Config's quick settings without a question, still backed up and undoable", async () => {
@@ -281,6 +728,47 @@ describe("handleSetup: plugins, MCP, hooks, permissions, skills", () => {
     expect(log).toContain("claude mcp login gh");
   });
 
+  it("runs only Claude's fixed MCP and slash commands, with a server name where needed", async () => {
+    const { handle, log } = await setup();
+    await handle({ type: "setup:run", what: "mcpList" });
+    await handle({ type: "setup:run", what: "mcpGet", name: "gh" });
+    await handle({ type: "setup:run", what: "mcpLogout" });
+    await handle({ type: "setup:run", what: "slashHooks" });
+    expect(log).toContain("claude mcp list");
+    expect(log).toContain("claude mcp get gh");
+    expect(log).toContain("claude /hooks");
+    expect(log.some((l: string) => l.includes("logout"))).toBe(false);
+  });
+
+  it("edits a user server, keeping its saved secrets and adding new ones", async () => {
+    const { handle, claudeJson, json } = await setup();
+    await handle({
+      type: "setup:mcpAdd",
+      scope: "user",
+      name: "gh",
+      transport: "http",
+      url: "https://a/mcp",
+      headers: { Authorization: "Bearer one" },
+    });
+    await handle({
+      type: "setup:mcpAdd",
+      scope: "user",
+      name: "github",
+      transport: "http",
+      url: "https://b/mcp",
+      env: { REGION: "eu" },
+      replace: "gh",
+    });
+    const servers = json(claudeJson).mcpServers;
+    expect(servers.gh).toBeUndefined();
+    expect(servers.github).toEqual({
+      type: "http",
+      url: "https://b/mcp",
+      env: { REGION: "eu" },
+      headers: { Authorization: "Bearer one" },
+    });
+  });
+
   it("removes a hook by its id", async () => {
     const { handle, deps, home, json } = await setup();
     const id = deps.snapshot()!.hooks[0]!.id;
@@ -313,6 +801,25 @@ describe("handleSetup: plugins, MCP, hooks, permissions, skills", () => {
     const s = json(join(home, "settings.json"));
     expect(s.hooks.SessionStart[0].hooks[0].command).toBe("hi.sh");
     expect(s.disableAllHooks).toBe(true);
+  });
+
+  it("adds a folder Claude may use, from the folder picker, and removes it", async () => {
+    const { handle, home, json, root, deps } = await setup();
+    const extra = join(root, "shared-lib");
+    deps.pickFolder = async () => extra;
+    await handle({ type: "setup:dir", op: "add", scope: "user" });
+    expect(json(join(home, "settings.json")).permissions.additionalDirectories).toEqual([extra]);
+    await handle({ type: "setup:dir", op: "add", scope: "user" });
+    expect(json(join(home, "settings.json")).permissions.additionalDirectories).toEqual([extra]);
+    await handle({ type: "setup:dir", op: "remove", scope: "user", dir: extra });
+    expect(json(join(home, "settings.json")).permissions?.additionalDirectories ?? []).toEqual([]);
+  });
+
+  it("does nothing when the folder picker is closed", async () => {
+    const { handle, home, json, deps } = await setup();
+    deps.pickFolder = async () => null;
+    await handle({ type: "setup:dir", op: "add", scope: "user" });
+    expect(json(join(home, "settings.json")).permissions).toBeUndefined();
   });
 
   it("adds and removes a permission rule", async () => {

@@ -66,6 +66,23 @@ export function sampleUsage(over: Partial<UsageSnapshot> = {}, now = Date.now())
       d.setDate(d.getDate() - (181 - i));
       return { day: key(d), tokens: i % 5 === 0 ? 0 : ((i * 7919) % 13) * 100_000 };
     }),
+    year: (() => {
+      const today = new Date(now);
+      const back = (today.getDay() + 6) % 7;
+      const n = 51 * 7 + back + 1;
+      return Array.from({ length: n }, (_, i) => {
+        const d = new Date(now);
+        d.setDate(d.getDate() - (n - 1 - i));
+        const t = i % 5 === 0 ? 0 : ((i * 7919) % 13) * 100_000;
+        return {
+          day: key(d),
+          tokens: t,
+          messages: t ? (i % 9) + 1 : 0,
+          sessions: t ? (i % 3) + 1 : 0,
+        };
+      });
+    })(),
+    longest: { month: (5 * 60 + 12) * 60_000, all: (35 * 24 + 12) * 3_600_000 },
     recap: {
       from: now - 6 * 86_400_000,
       to: now,

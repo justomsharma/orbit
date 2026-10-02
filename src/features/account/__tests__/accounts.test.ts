@@ -27,6 +27,7 @@ let claudeJson: string;
 let credFile: string;
 let secrets: Map<string, string>;
 let list: SavedAccount[];
+let memo: Map<string, unknown>;
 
 function deps(over: Partial<AccountDeps> = {}): AccountDeps {
   return {
@@ -42,6 +43,12 @@ function deps(over: Partial<AccountDeps> = {}): AccountDeps {
       get: () => list,
       set: async (v) => {
         list = v;
+      },
+    },
+    memo: {
+      get: (k, d) => (memo.has(k) ? memo.get(k) : d) as never,
+      set: async (k, v) => {
+        memo.set(k, v);
       },
     },
     writer: new SafeWriter(join(dir, "backups")),
@@ -67,6 +74,7 @@ beforeEach(() => {
   credFile = join(dir, ".credentials.json");
   secrets = new Map();
   list = [];
+  memo = new Map();
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -254,5 +262,81 @@ describe("Accounts: nothing is ever lost", () => {
     expect(
       profileFrom({ oauthAccount: { accountUuid: "a/../b", emailAddress: "x@y.z" } }),
     ).toBeNull();
+  });
+});
+
+describe("Accounts: last seen plan limits", () => {
+  const quota = (seven: number, at: number) => ({
+    v: 1 as const,
+    updatedAt: at,
+    sessionId: null,
+    model: null,
+    contextPct: null,
+    costUsd: null,
+    fiveHour: { pct: 10, resetsAt: at + 3_600_000 },
+    sevenDay: { pct: seven, resetsAt: at + 3 * 86_400_000 },
+    spendLimit: null,
+  });
+
+  it("remembers each account's weekly use and shows it on its saved row", async () => {
+    signIn("a", "ana@x.com", "tokA");
+    const acc = new Accounts(deps());
+    await acc.saveCurrent();
+    await acc.remember(quota(62, Date.now() - 3 * 3_600_000));
+    const snap = await acc.snapshot();
+    expect(snap.saved[0]?.lastSeen).toBe("62% weekly · 3h ago");
+  });
+
+  it("keeps only the newest reading, and forgets one from before the week reset", async () => {
+    signIn("a", "ana@x.com", "tokA");
+    const acc = new Accounts(deps());
+    await acc.saveCurrent();
+    await acc.remember(quota(62, Date.now() - 60_000));
+    await acc.remember(quota(20, Date.now() - 3 * 3_600_000));
+    expect((await acc.snapshot()).saved[0]?.lastSeen).toMatch(/^62% weekly/);
+    const old = quota(50, Date.now() - 5 * 86_400_000);
+    await acc.remember(old);
+    expect((await acc.snapshot()).saved[0]?.lastSeen).toMatch(/^62% weekly/);
+  });
+
+  it("marks when the account was switched, so older numbers aren't shown as the new account's", async () => {
+    signIn("b", "bo@x.com", "tokB");
+    const acc = new Accounts(deps());
+    await acc.saveCurrent();
+    signIn("a", "ana@x.com", "tokA");
+    const before = Date.now();
+    await acc.switchTo("b");
+    expect((await acc.snapshot()).switchedAt).toBeGreaterThanOrEqual(before);
+  });
+});
+
+describe("Accounts: sign-in health", () => {
+  it("says how many days the sign-in has left, without the tokens", async () => {
+    signIn("a", "ana@x.com", "tokA");
+    writeFileSync(
+      credFile,
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: "tokA",
+          refreshTokenExpiresAt: Date.now() + 9.5 * 86_400_000,
+        },
+      }),
+    );
+    const snap = await new Accounts(deps()).snapshot();
+    expect(snap.signInDays).toBe(9);
+    expect(JSON.stringify(snap)).not.toContain("tokA");
+  });
+
+  it("reports a broken ~/.claude.json with the backup to restore", async () => {
+    signIn("a", "ana@x.com", "tokA");
+    const acc = new Accounts(
+      deps({
+        health: async () => ({ broken: true, backup: "/b/.claude.json.backup.1", backupAt: 1 }),
+      }),
+    );
+    expect((await acc.snapshot()).broken).toEqual({
+      backup: "/b/.claude.json.backup.1",
+      backupAt: 1,
+    });
   });
 });

@@ -186,7 +186,8 @@ fieldset.sec > legend {
 .setting-control input,
 .form select,
 .form input,
-.field select {
+.field select,
+.prompt-project {
   font: inherit;
   font-size: 12px;
   padding: 2px 4px;
@@ -479,4 +480,269 @@ fieldset.sec > legend {
 .muted {
   color: var(--muted);
   font-size: 12px;
+}
+
+/* ---------- Detail pages and clickable rows ---------- */
+.srow-main.as-button {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.srow-main.as-button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.srow.dim .srow-title {
+  opacity: 0.7;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--vscode-badge-background, var(--hover));
+  color: var(--vscode-badge-foreground, var(--fg));
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.copied {
+  margin-left: 2px;
+  font-size: 11px;
+}
+
+.detail-head {
+  margin: 8px 0 6px;
+}
+
+.detail-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.detail-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.detail-actions .btn {
+  margin-top: 0;
+}
+
+.detail-block {
+  margin: 0 0 14px;
+}
+
+.info-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.info-row {
+  display: grid;
+  grid-template-columns: minmax(84px, 34%) minmax(0, 1fr);
+  gap: 8px;
+  font-size: 12px;
+}
+
+.info-row dt {
+  color: var(--muted);
+}
+
+.info-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.info-row .tags {
+  margin: 0;
+}
+
+.detail-problems {
+  margin: 0 0 12px;
+  padding: 6px 8px;
+  list-style: none;
+  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  font-size: 12px;
+}
+
+.detail-problems li + li {
+  margin-top: 4px;
+}
+
+.detail-problem-icon {
+  color: var(--warn);
+  font-size: 12px;
+  vertical-align: -1px;
+}
+
+.file-text {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--vscode-textCodeBlock-background, transparent);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Agents ---------- */
+.page-filter {
+  width: 100%;
+  margin: 0 0 8px;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 4px;
+  color: var(--vscode-dropdown-foreground, var(--fg));
+  background: var(--vscode-dropdown-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-dropdown-border, var(--border));
+  border-radius: 4px;
+}
+
+.badge.model-sonnet {
+  color: var(--vscode-charts-blue, #3794ff);
+  border-color: currentColor;
+}
+
+.badge.model-opus {
+  color: var(--vscode-charts-purple, #b180d7);
+  border-color: currentColor;
+}
+
+.badge.model-haiku {
+  color: var(--vscode-charts-green, #89d185);
+  border-color: currentColor;
+}
+
+.badge.model-fable {
+  color: var(--vscode-charts-orange, #d18616);
+  border-color: currentColor;
+}
+
+.warn-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.tags.inline {
+  display: inline-flex;
+}
+
+.tag.more {
+  background: transparent;
+  color: var(--muted);
+}
+
+/* ---------- Hooks ---------- */
+.srow-mono.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Memory ---------- */
+.link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.link-list li > .muted .codicon {
+  font-size: 12px;
+  vertical-align: -1px;
+}
+
+/* ---------- Config extras ---------- */
+.q-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+
+.q-actions .btn {
+  margin-top: 0;
+}
+
+.q-notice {
+  padding: 6px 8px;
+  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.q-notice .q-hint {
+  margin-top: 0;
+}
+
+.tab-prefs {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.tab-pref {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.tab-pref-icon {
+  font-size: 13px;
+  vertical-align: -2px;
+}
+
+.tab-pref-moves {
+  display: inline-flex;
 }

@@ -34,6 +34,7 @@ function setup(
     platform?: NodeJS.Platform;
     answer?: "apply" | "cancel";
     storageName?: string;
+    managed?: unknown;
   } = {},
 ) {
   const root = tmp();
@@ -48,6 +49,8 @@ function setup(
         : `${JSON.stringify(opts.settings, null, 4)}\n`,
     );
   }
+  const managedPath = join(root, "managed-settings.json");
+  if (opts.managed !== undefined) writeFileSync(managedPath, JSON.stringify(opts.managed));
   const storage = join(root, opts.storageName ?? "omsharma.orbit");
   const tapSource = join(root, "dist-tap.js");
   writeFileSync(tapSource, "// tap");
@@ -62,6 +65,7 @@ function setup(
     platform: opts.platform ?? "linux",
     confirm: host,
     workspace: () => null,
+    managedPath,
   });
   const read = () => JSON.parse(readFileSync(settings, "utf8"));
   return { q, root, settings, storage, read, log };
@@ -78,6 +82,15 @@ describe("tapCommand", () => {
 });
 
 describe("QuotaInstaller.enable", () => {
+  it("won't take over a statusline the organisation's managed settings set", async () => {
+    const { q, log } = setup({
+      settings: { theme: "dark" },
+      managed: { statusLine: { type: "command", command: "corp-line" } },
+    });
+    expect(await q.enable()).toEqual({ ok: false, reason: "managed" });
+    expect(log).toEqual([]);
+  });
+
   it("asks first, then sets Orbit's statusline, keeping other settings and formatting", async () => {
     const { q, settings, storage, read, log } = setup({
       settings: { model: "opus", theme: "dark" },

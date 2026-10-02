@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0
+
+- **Plan limits you can read at a glance**: 5-hour and weekly use in the status bar (yellow from 75%,
+  red from 90%), and a pace verdict on Account: "Enough to last the week" or when you'd run out.
+- **Chats, rebuilt**: live dots (green while working, orange while Claude waits for you), folder,
+  branch and worktree on every chat, groups by day, a filter panel, select many to pin, export or hide.
+  A chat's page shows its stats and the whole conversation (latest or earliest first, searchable).
+  Continue, fork, rename, archive, temporary chats, import and export, and a branch check before
+  continuing.
+- **Checkpoints in three steps**: chats → files → versions, with sizes, versions the chat no longer
+  mentions, Open file, and a guard against unsaved editor changes.
+- **A page for everything**: every skill, agent, command, hook, MCP server, plugin and memory opens a
+  page with what it is and what you can do. Use skills and commands in a chat, edit agents fully,
+  duplicate them, pause or edit one hook, check MCP servers, see which settings file turns a plugin on,
+  follow links between memories, and memories of other projects.
+- **All of Claude Code's built-in commands** (100+) on Commands, with a link to the docs.
+- **Delete without fear**: deleting moves things to Orbit's trash; Undo or the new **Undo history** in
+  Config puts them back.
+- **Config**: commit and PR attribution, built-in git guidance, voice, status line, reset settings
+  (undoable), common permission rules, extra folders for Claude, sidebar tab order and hiding,
+  **brain backup and import** (secrets left out), health report and Report a problem.
+- **Search everything with Ctrl+K**, a crash guard per tab, slow-load notices with Try again, a
+  spinning refresh with `Ctrl+Alt+R`, and compact spacing.
+
 ## 0.2.0
 
 - **A tab for everything**: Home, Chats, Prompts, Checkpoints, Usage, Account, Config, Skills, MCP,

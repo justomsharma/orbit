@@ -4,6 +4,7 @@ import { post } from "../bus";
 import * as store from "../store";
 import { Empty } from "../ui/Empty";
 import { Icon, IconButton } from "../ui/Icon";
+import { Loading } from "../ui/Loading";
 import { VirtualList } from "../ui/VirtualList";
 import { relativeTime } from "./model";
 
@@ -17,6 +18,14 @@ const folderName = (p: string | null) =>
         .pop() ?? p)
     : null;
 
+/** "2 pasted · 300 lines", read from Claude's "[Pasted text #1 +290 lines]" placeholders. */
+export function pasteNote(p: Pick<PromptEntry, "text" | "pastes">): string | null {
+  if (!p.pastes) return null;
+  let lines = 0;
+  for (const m of p.text.matchAll(/\[Pasted text #\d+ \+(\d+) lines?\]/g)) lines += Number(m[1]);
+  return `${p.pastes} pasted${lines ? ` · ${lines} line${lines === 1 ? "" : "s"}` : ""}`;
+}
+
 function matches(p: PromptEntry, words: string[]): boolean {
   const hay = `${p.text} ${p.project ?? ""}`.toLowerCase();
   return words.every((w) => hay.includes(w));
@@ -28,7 +37,7 @@ function PromptRow({ p, now }: { p: PromptEntry; now: number }) {
     folderName(p.project),
     relativeTime(p.last, now),
     p.count > 1 ? `used ${p.count}×` : null,
-    p.pastes ? `${p.pastes} pasted` : null,
+    pasteNote(p),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -38,10 +47,22 @@ function PromptRow({ p, now }: { p: PromptEntry; now: number }) {
       data-row="prompt"
       title={p.text.length > 300 ? `${p.text.slice(0, 300)}…` : p.text}
     >
-      <div class="prompt-main">
-        <div class="prompt-text">{p.text}</div>
-        <div class="chat-meta">{meta}</div>
-      </div>
+      {chatKnown ? (
+        <button
+          type="button"
+          class="prompt-main as-button"
+          title="Open the chat it came from"
+          onClick={() => post({ type: "openChat", id: p.sessionId! })}
+        >
+          <span class="prompt-text">{p.text}</span>
+          <span class="chat-meta">{meta}</span>
+        </button>
+      ) : (
+        <div class="prompt-main">
+          <div class="prompt-text">{p.text}</div>
+          <div class="chat-meta">{meta}</div>
+        </div>
+      )}
       <div class="chat-actions">
         <IconButton
           icon="comment-discussion"
@@ -69,17 +90,23 @@ function PromptRow({ p, now }: { p: PromptEntry; now: number }) {
 export function PromptsView() {
   const all = store.prompts.value;
   const q = store.promptQuery.value;
+  const project = store.promptProject.value;
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const list = all ? (words.length ? all.filter((p) => matches(p, words)) : all) : [];
+  const list = (all ?? []).filter(
+    (p) => (!project || p.project === project) && (!words.length || matches(p, words)),
+  );
+  const projects = new Map<string, number>();
+  for (const p of all ?? [])
+    if (p.project) projects.set(p.project, (projects.get(p.project) ?? 0) + 1);
+  const projectList = [...projects].sort(
+    (a, b) => b[1] - a[1] || (folderName(a[0]) ?? "").localeCompare(folderName(b[0]) ?? ""),
+  );
+  const filtered = !!project || words.length > 0;
   const now = store.now.value;
 
   let body: ComponentChildren;
   if (all === null) {
-    body = (
-      <div class="loading" role="status">
-        Reading your prompts…
-      </div>
-    );
+    body = <Loading text="Reading your prompts…" retry={{ type: "prompts:list" }} />;
   } else if (store.promptsError.value) {
     body = (
       <Empty icon="warning" title="Couldn't read your prompts">
@@ -96,8 +123,14 @@ export function PromptsView() {
     body = (
       <Empty
         icon="search"
-        title={`No prompts match "${q}"`}
-        action={{ label: "Clear search", onClick: () => (store.promptQuery.value = "") }}
+        title={q ? `No prompts match "${q}"` : "No prompts in this project"}
+        action={{
+          label: "Show all",
+          onClick: () => {
+            store.promptQuery.value = "";
+            store.promptProject.value = "";
+          },
+        }}
       />
     );
   } else {
@@ -129,9 +162,26 @@ export function PromptsView() {
             }}
           />
         </div>
+        {projectList.length > 1 ? (
+          <select
+            class="prompt-project"
+            aria-label="Project"
+            value={project}
+            onChange={(e) => (store.promptProject.value = (e.target as HTMLSelectElement).value)}
+          >
+            <option value="">All projects ({all?.length ?? 0})</option>
+            {projectList.map(([path, n]) => (
+              <option key={path} value={path} title={path}>
+                {folderName(path)} ({n})
+              </option>
+            ))}
+          </select>
+        ) : null}
         {all?.length ? (
           <p class="toolbar-note">
-            {all.length} different prompt{all.length === 1 ? "" : "s"}, most recent first
+            {filtered
+              ? `${list.length} of ${all.length} prompts`
+              : `${all.length} different prompt${all.length === 1 ? "" : "s"}, most recent first`}
           </p>
         ) : null}
       </div>

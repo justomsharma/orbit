@@ -1,3 +1,5 @@
+import type { WorktreeInfo } from "./worktree";
+
 export interface Session {
   id: string;
   /** Absolute path of the transcript file. */
@@ -21,9 +23,12 @@ export interface Session {
   prLinks: string[];
   continuedIn: string | null;
   sizeBytes: number;
+  /** Set when the chat's folder is a git worktree. */
+  worktree?: WorktreeInfo | null;
 }
 
-export type LiveState = "busy" | "idle" | "unknown";
+/** "waiting": Claude asked for permission or asked you a question, and is waiting for you. */
+export type LiveState = "busy" | "idle" | "waiting" | "unknown";
 
 export interface LiveStatus {
   sessionId: string;

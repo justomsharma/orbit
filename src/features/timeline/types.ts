@@ -11,6 +11,8 @@ export interface FileVersion {
   blob: string | null;
   /** The blob exists on disk (always true when `blob` is null). */
   available: boolean;
+  /** Size of the blob on disk; 0 when there is none. */
+  bytes: number;
 }
 
 /** A file Claude changed during one chat, with every checkpoint of it. */

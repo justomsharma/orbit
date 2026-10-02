@@ -108,15 +108,29 @@ function serversFor(o: Obj, t: McpTarget, create: boolean): Obj | null {
   return create ? child(entry, "mcpServers") : isObj(entry.mcpServers) ? entry.mcpServers : null;
 }
 
-export function addMcpServer(t: McpTarget & { server: Obj }): Mutate {
+export function addMcpServer(t: McpTarget & { server: Obj; replace?: string }): Mutate {
   return (o) => {
     if (!MCP_NAME.test(t.name)) {
       throw new EditError("Use letters, numbers, dots, dashes or underscores for the server name.");
     }
     const servers = serversFor(o, t, true)!;
+    let server = t.server;
+    if (t.replace !== undefined) {
+      // Editing: keep env and header values the view never saw (they're secrets),
+      // with any typed in now added on top.
+      const prev = servers[t.replace];
+      if (!isObj(prev))
+        throw new EditError(`"${t.replace}" is no longer in this file. Refresh and try again.`);
+      const merged = (k: "env" | "headers") => {
+        const both = { ...(isObj(prev[k]) ? prev[k] : {}), ...(isObj(server[k]) ? server[k] : {}) };
+        return Object.keys(both).length ? { [k]: both } : {};
+      };
+      server = { ...server, ...merged("env"), ...merged("headers") };
+      delete servers[t.replace];
+    }
     if (Object.hasOwn(servers, t.name))
       throw new EditError(`A server named "${t.name}" already exists here.`);
-    servers[t.name] = t.server;
+    servers[t.name] = server;
   };
 }
 
@@ -139,6 +153,11 @@ interface HookRef {
 }
 
 export function removeHook(h: HookRef): Mutate {
+  return takeHook(h, {});
+}
+
+/** Removes one handler and hands back exactly what was written, to put back later. */
+export function takeHook(h: HookRef, out: { handler?: Obj }): Mutate {
   return (o) => {
     const hooks = child(o, "hooks");
     const groups = hooks[h.event];
@@ -149,10 +168,57 @@ export function removeHook(h: HookRef): Mutate {
     if (!handlers || !isObj(handler) || command !== h.command) {
       throw new EditError("This hook changed since Orbit showed it. Refresh and try again.");
     }
+    out.handler = structuredClone(handler);
     handlers.splice(h.index, 1);
     if (handlers.length === 0) (groups as unknown[]).splice(h.group, 1);
     if ((groups as unknown[]).length === 0) delete hooks[h.event];
     if (Object.keys(hooks).length === 0) delete o.hooks;
+  };
+}
+
+/** Adds a handler object as is, under its event and matcher. */
+export function putHook(h: { event: string; matcher: string | null; handler: Obj }): Mutate {
+  return (o) => {
+    const groups = list(child(o, "hooks"), h.event);
+    const same = groups.find(
+      (g) => isObj(g) && (g.matcher ?? null) === h.matcher && Array.isArray(g.hooks),
+    );
+    const handler = structuredClone(h.handler);
+    if (same) (same as { hooks: unknown[] }).hooks.push(handler);
+    else groups.push(h.matcher ? { matcher: h.matcher, hooks: [handler] } : { hooks: [handler] });
+  };
+}
+
+/**
+ * Changes one command hook: its command and timeout in place, or moved to another
+ * event or matcher. Fields Orbit doesn't edit (async, statusMessage…) are kept.
+ */
+export function changeHook(
+  h: HookRef,
+  to: { event: string; matcher: string | null; command: string; timeout: number | null },
+): Mutate {
+  return (o) => {
+    if (!to.command.trim()) throw new EditError("Enter the command the hook should run.");
+    const out: { handler?: Obj } = {};
+    const hooks = child(o, "hooks");
+    const groups = hooks[h.event];
+    const group = Array.isArray(groups) ? groups[h.group] : undefined;
+    const moved = h.event !== to.event || ((isObj(group) && group.matcher) ?? null) !== to.matcher;
+    if (!moved) {
+      const handlers = isObj(group) && Array.isArray(group.hooks) ? group.hooks : undefined;
+      const handler = handlers?.[h.index];
+      if (!isObj(handler) || (handler.command ?? null) !== h.command)
+        throw new EditError("This hook changed since Orbit showed it. Refresh and try again.");
+      handler.command = to.command;
+      if (to.timeout) handler.timeout = to.timeout;
+      else delete handler.timeout;
+      return;
+    }
+    takeHook(h, out)(o);
+    const handler: Obj = { ...out.handler!, command: to.command };
+    if (to.timeout) handler.timeout = to.timeout;
+    else delete handler.timeout;
+    putHook({ event: to.event, matcher: to.matcher, handler })(o);
   };
 }
 
@@ -172,6 +238,29 @@ export function addHook(h: {
     );
     if (same) (same as { hooks: unknown[] }).hooks.push(handler);
     else groups.push(h.matcher ? { matcher: h.matcher, hooks: [handler] } : { hooks: [handler] });
+  };
+}
+
+/** A folder Claude may read and edit besides the project (`permissions.additionalDirectories`). */
+export function addDirectory(dir: string): Mutate {
+  return (o) => {
+    const d = dir.trim();
+    if (!d) throw new EditError("Pick a folder.");
+    const dirs = list(child(o, "permissions"), "additionalDirectories");
+    if (dirs.includes(d)) throw new EditError("Claude can already use that folder.");
+    dirs.push(d);
+  };
+}
+
+export function removeDirectory(dir: string): Mutate {
+  return (o) => {
+    const perms = child(o, "permissions");
+    const dirs = Array.isArray(perms.additionalDirectories) ? perms.additionalDirectories : [];
+    const i = dirs.indexOf(dir);
+    if (i < 0) throw new EditError("That folder is no longer in this file. Refresh and try again.");
+    dirs.splice(i, 1);
+    if (dirs.length === 0) delete perms.additionalDirectories;
+    if (Object.keys(perms).length === 0) delete o.permissions;
   };
 }
 

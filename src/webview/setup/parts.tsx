@@ -80,6 +80,14 @@ interface SectionProps {
   hidden?: boolean;
 }
 
+/** "1 agent", "3 skills", "2 MCP servers", "1 memory". */
+export function countText(n: number, title: string): string {
+  const word = title.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase());
+  if (n !== 1) return `${n} ${/[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : word}`;
+  const one = word.endsWith("ies") ? `${word.slice(0, -3)}y` : word.replace(/s$/, "");
+  return `${n} ${one}`;
+}
+
 /** True inside a tab of its own (Skills, MCP…): the group is the whole page, always open. */
 export const PageMode = createContext(false);
 
@@ -92,9 +100,7 @@ export function Section({ id, title, icon, count, note, children, hidden }: Sect
       <section class="page-sec" aria-label={title}>
         {count !== undefined || note ? (
           <p class="page-count">
-            {count !== undefined
-              ? `${count} ${title.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())}`
-              : null}
+            {count !== undefined ? countText(count, title) : null}
             {count !== undefined && note ? " · " : null}
             {note}
           </p>
@@ -133,21 +139,36 @@ interface RowProps {
   sub?: string | null;
   mono?: string | null;
   badges?: ComponentChildren;
+  /** Under the description, e.g. tags. */
+  extra?: ComponentChildren;
   actions?: ComponentChildren;
   onOpen?: () => void;
+  /** Clicking the row opens its detail page. */
+  onSelect?: () => void;
+  dim?: boolean;
 }
 
-export function Row({ title, sub, mono, badges, actions, onOpen }: RowProps) {
+export function Row({ title, sub, mono, badges, extra, actions, onOpen, onSelect, dim }: RowProps) {
+  const body = (
+    <>
+      <span class="srow-title-line">
+        <span class="srow-title">{title}</span>
+        {badges}
+      </span>
+      {sub ? <span class="srow-sub">{sub}</span> : null}
+      {mono ? <code class="srow-mono">{mono}</code> : null}
+      {extra}
+    </>
+  );
   return (
-    <li class="srow">
-      <div class="srow-main">
-        <div class="srow-title-line">
-          <span class="srow-title">{title}</span>
-          {badges}
-        </div>
-        {sub ? <div class="srow-sub">{sub}</div> : null}
-        {mono ? <code class="srow-mono">{mono}</code> : null}
-      </div>
+    <li class={`srow${dim ? " dim" : ""}`}>
+      {onSelect ? (
+        <button type="button" class="srow-main as-button" onClick={onSelect}>
+          {body}
+        </button>
+      ) : (
+        <div class="srow-main">{body}</div>
+      )}
       <div class="srow-actions">
         {actions}
         {onOpen ? <IconButton icon="go-to-file" label={`Open ${title}`} onClick={onOpen} /> : null}

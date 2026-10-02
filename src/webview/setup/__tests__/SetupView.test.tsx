@@ -31,6 +31,7 @@ beforeEach(() => {
   store.setup.value = sampleSetup();
   store.catalog.value = settingsCatalog();
   store.setupQuery.value = "";
+  store.setupDetail.value = null;
   store.openSections.value = [
     "health",
     "mcp",
@@ -174,9 +175,8 @@ describe("SetupView", () => {
         skillOverrides: { entries: { "release-notes": "off" } },
       });
       render(<SetupView />);
-      const select = within(section(/Skills/)).getByLabelText(
-        /release-notes visibility/,
-      ) as HTMLSelectElement;
+      fireEvent.click(within(section(/Skills/)).getByRole("button", { name: /^release-notes/ }));
+      const select = screen.getByLabelText(/release-notes visibility/) as HTMLSelectElement;
       expect(select.value).toBe("off");
       expect(within(select).getByRole("option", { name: /you type/i })).toBeTruthy();
     });
@@ -250,18 +250,19 @@ describe("SetupView", () => {
   it("hides a skill from Claude and opens its file", () => {
     render(<SetupView />);
     const skills = section(/Skills/);
-    fireEvent.change(within(skills).getByLabelText(/release-notes visibility/), {
+    fireEvent.click(within(skills).getByRole("button", { name: /Open release-notes/ }));
+    expect(sent).toContainEqual({
+      type: "setup:open",
+      file: "/Users/ana/code/shop/.claude/skills/release-notes/SKILL.md",
+    });
+    fireEvent.click(within(skills).getByRole("button", { name: /^release-notes/ }));
+    fireEvent.change(screen.getByLabelText(/release-notes visibility/), {
       target: { value: "off" },
     });
     expect(sent).toContainEqual({
       type: "setup:skillVisibility",
       name: "release-notes",
       visibility: "off",
-    });
-    fireEvent.click(within(skills).getByRole("button", { name: /Open release-notes/ }));
-    expect(sent).toContainEqual({
-      type: "setup:open",
-      file: "/Users/ana/code/shop/.claude/skills/release-notes/SKILL.md",
     });
   });
 

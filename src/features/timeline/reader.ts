@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { mapLimit } from "../../core/concurrency";
-import { MiB, statSafe } from "../../core/fsSafe";
+import { listDirSafe, MiB, statSafe } from "../../core/fsSafe";
 import { type JsonObject, num, obj, str } from "../../core/jsonl";
 import { parseJsonLine, streamLines } from "../../core/lines";
 import { fileHistoryDir, normPath } from "../../core/paths";
@@ -85,7 +86,23 @@ function entriesOf(l: JsonObject, cwd: string): Entry[] {
   });
 }
 
-const isRegularFile = async (p: string) => (await statSafe(p))?.isFile() === true;
+/** The hash Claude names a file's blobs by. */
+const pathHash = (path: string) => createHash("sha256").update(path).digest("hex").slice(0, 16);
+const hashOf = (blobName: string) => blobName.slice(0, 16);
+
+/** Every checkpoint blob in a chat's folder: name → size and time. Real files only. */
+async function blobIndex(dir: string): Promise<Map<string, { bytes: number; at: number }>> {
+  const out = new Map<string, { bytes: number; at: number }>();
+  const names = (await listDirSafe(dir))
+    .filter((e) => e.isFile() && BLOB_NAME.test(e.name))
+    .map((e) => e.name);
+  const stats = await mapLimit(names, PARALLEL, (n) => statSafe(join(dir, n)));
+  names.forEach((n, i) => {
+    const st = stats[i];
+    if (st?.isFile()) out.set(n, { bytes: st.size, at: st.mtimeMs });
+  });
+  return out;
+}
 
 /**
  * Files Claude changed in one chat, from the checkpoints it records in the
@@ -97,8 +114,25 @@ export async function readTimeline(opts: {
   transcript: string;
   cwd: string;
 }): Promise<ChangedFile[]> {
-  if (!isSessionId(opts.sessionId)) return [];
+  return (await readCheckpoints(opts)).files;
+}
+
+/**
+ * Like {@link readTimeline}, plus the versions Claude kept that the chat no longer
+ * mentions (found by the file's hash) and how many backups no file explains.
+ * With no transcript (the chat is gone) only that count is known.
+ */
+export async function readCheckpoints(opts: {
+  home: string;
+  sessionId: string;
+  transcript: string | null;
+  cwd: string;
+}): Promise<{ files: ChangedFile[]; orphans: number }> {
+  if (!isSessionId(opts.sessionId)) return { files: [], orphans: 0 };
   const blobDir = join(fileHistoryDir(opts.home), opts.sessionId);
+  const blobs = await blobIndex(blobDir);
+  if (opts.transcript === null) return { files: [], orphans: blobs.size };
+  const claimed = new Set<string>();
   // (file, version) → entry. A delta describes one edit exactly, so it beats a snapshot.
   const byVersion = new Map<string, Entry>();
   try {
@@ -120,20 +154,38 @@ export async function readTimeline(opts: {
       else byFile.set(k, [e]);
     }
     const files = await mapLimit([...byFile.values()], PARALLEL, async (entries) => {
-      entries.sort((a, b) => a.version - b.version);
-      const versions = await Promise.all(
-        entries.map(async (e): Promise<FileVersion> => {
-          const blob = e.blobName === null ? null : join(blobDir, e.blobName);
-          return {
-            version: e.version,
-            at: e.at,
-            messageId: e.messageId,
-            blob,
-            available: blob === null || (await isRegularFile(blob)),
-          };
-        }),
-      );
+      const versions = entries.map((e): FileVersion => {
+        const kept = e.blobName === null ? undefined : blobs.get(e.blobName);
+        if (e.blobName) claimed.add(e.blobName);
+        return {
+          version: e.version,
+          at: e.at,
+          messageId: e.messageId,
+          blob: e.blobName === null ? null : join(blobDir, e.blobName),
+          available: e.blobName === null || kept !== undefined,
+          bytes: kept?.bytes ?? 0,
+        };
+      });
       const path = entries[0]!.path;
+      // Versions on disk under this file's hash that the transcript doesn't cite (trimmed lines).
+      const cited = entries.find((e) => e.blobName)?.blobName;
+      const hash = cited ? hashOf(cited) : pathHash(path);
+      const known = new Set(versions.map((v) => v.version));
+      for (const [name, b] of blobs) {
+        if (hashOf(name) !== hash) continue;
+        claimed.add(name);
+        const version = Number(name.slice(name.indexOf("@v") + 2));
+        if (known.has(version)) continue;
+        versions.push({
+          version,
+          at: b.at,
+          messageId: null,
+          blob: join(blobDir, name),
+          available: true,
+          bytes: b.bytes,
+        });
+      }
+      versions.sort((a, b) => a.version - b.version);
       return {
         path,
         name: basename(path),
@@ -143,9 +195,10 @@ export async function readTimeline(opts: {
       } satisfies ChangedFile;
     });
     const latest = (f: ChangedFile) => Math.max(...f.versions.map((v) => v.at));
-    return files.sort((a, b) => latest(b) - latest(a));
+    files.sort((a, b) => latest(b) - latest(a));
+    return { files, orphans: [...blobs.keys()].filter((n) => !claimed.has(n)).length };
   } catch {
-    return [];
+    return { files: [], orphans: blobs.size };
   }
 }
 

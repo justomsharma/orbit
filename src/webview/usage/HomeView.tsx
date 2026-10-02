@@ -1,17 +1,17 @@
 import { useState } from "preact/hooks";
 import { MAX_ASK } from "../../shared/protocol";
 import { post } from "../bus";
+import { LIVE_LABEL, liveClass } from "../chats/live";
 import { relativeTime } from "../chats/model";
 import * as store from "../store";
 import { formatCost, formatTokens } from "../ui/charts/format";
 import { StatTile } from "../ui/charts/StatTile";
 import { Empty } from "../ui/Empty";
 import { Icon, IconButton } from "../ui/Icon";
+import { Loading } from "../ui/Loading";
 import { GettingStarted } from "./GettingStarted";
 import { costDelta, greeting } from "./model";
 import { QuotaCard } from "./QuotaCard";
-
-const LIVE = { busy: "Working…", idle: "Waiting for you", unknown: "Running" } as const;
 
 const MAX_RUNNING = 3;
 
@@ -43,9 +43,9 @@ function Running() {
                 class="mini-row"
                 onClick={() => post({ type: "openChat", id: s.id })}
               >
-                <span class={`live-dot ${st === "busy" ? "busy" : "idle"}`} aria-hidden="true" />
+                <span class={`live-dot ${liveClass(st)}`} aria-hidden="true" />
                 <span class="mini-title">{renames[s.id] ?? s.title}</span>
-                <span class={`mini-meta live-label ${st}`}>{LIVE[st]}</span>
+                <span class={`mini-meta live-label ${st}`}>{LIVE_LABEL[st]}</span>
               </button>
             </li>
           );
@@ -56,7 +56,7 @@ function Running() {
           type="button"
           class="link-btn"
           onClick={() => {
-            store.filter.value = "live";
+            store.setFilters({ view: "chats" });
             store.tab.value = "chats";
           }}
         >
@@ -217,9 +217,7 @@ export function HomeView() {
       <Ask />
       <GettingStarted />
       {!store.loaded.value ? (
-        <div class="loading" role="status">
-          Loading…
-        </div>
+        <Loading text="Loading…" retry={{ type: "refresh" }} />
       ) : hasChats ? (
         <>
           <Running />

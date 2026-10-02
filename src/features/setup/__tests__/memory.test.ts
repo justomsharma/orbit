@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useTmpDir } from "../../../../test/helpers/tmp";
-import { managedClaudeMdPath, readMemory } from "../memory";
+import { listMemoryProjects, managedClaudeMdPath, readMemory, readMemoryDir } from "../memory";
 import { OVERSIZED, put } from "./helpers";
 
 const tmp = useTmpDir();
@@ -144,6 +144,26 @@ describe("readMemory — auto memory", () => {
     expect(by("lonely.md")).toMatchObject({ orphan: true, brokenLinks: [] });
   });
 
+  it("knows each memory's type, who links to it, its index line and when it changed", async () => {
+    const { userHome, home, ws } = setup();
+    const dir = join(home, "projects", slug(ws), "memory");
+    put(dir, "MEMORY.md", "# Memory\n- [Role](role.md) — who I am\n");
+    put(dir, "role.md", "---\nname: role\ndescription: Who\nmetadata:\n  type: user\n---\nx\n");
+    put(dir, "tests.md", "---\nname: tests\ntype: feedback\n---\nSee [[role]].\n");
+    put(dir, "plain.md", "No frontmatter here.\n");
+    const m = await readMemory({ home, workspace: ws, settings: {}, userHome });
+    const by = (n: string) => m.auto.files.find((f) => f.name === n)!;
+    expect(by("role.md")).toMatchObject({
+      type: "user",
+      linksIn: ["tests"],
+      indexEntry: "- [Role](role.md) — who I am",
+      frontmatter: true,
+    });
+    expect(by("tests.md")).toMatchObject({ type: "feedback", linksIn: [], indexEntry: null });
+    expect(by("plain.md")).toMatchObject({ type: null, frontmatter: false });
+    expect(by("role.md").modified).toBeGreaterThan(0);
+  });
+
   it("counts every line of a long index", async () => {
     const { userHome, home, ws } = setup();
     const dir = join(home, "projects", slug(ws), "memory");
@@ -249,5 +269,30 @@ describe("readMemory — auto memory", () => {
     expect(m.claudeMd.every((f) => !f.exists || f.scope === "managed")).toBe(true);
     expect(m.auto.files).toEqual([]);
     expect(m.auto.enabled).toBe(true);
+  });
+});
+
+describe("memories of other projects", () => {
+  it("lists every project folder that has memories, with how many", async () => {
+    const { home } = setup();
+    put(home, "projects/C--code-shop/memory/a.md", "a");
+    put(home, "projects/C--code-shop/memory/MEMORY.md", "index");
+    put(home, "projects/C--code-api/memory/b.md", "b");
+    put(home, "projects/C--code-api/memory/c.md", "c");
+    put(home, "projects/C--empty/x.jsonl", "{}");
+    expect(await listMemoryProjects(home)).toEqual([
+      { slug: "C--code-api", dir: join(home, "projects", "C--code-api", "memory"), count: 2 },
+      { slug: "C--code-shop", dir: join(home, "projects", "C--code-shop", "memory"), count: 1 },
+    ]);
+  });
+
+  it("reads one project's memories like this project's", async () => {
+    const { home } = setup();
+    const dir = put(home, "projects/C--code-api/memory/b.md", "---\nname: b\n---\n").replace(
+      /[\\/]b\.md$/,
+      "",
+    );
+    const files = await readMemoryDir(dir);
+    expect(files.map((f) => f.title)).toEqual(["b"]);
   });
 });

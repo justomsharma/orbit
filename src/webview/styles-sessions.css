@@ -1,0 +1,882 @@
+/* Chats: launch bar, filters, rows, select mode, menus and a chat's details. VS Code tokens only. */
+
+/* ---------- Launch bar, search row, filters ---------- */
+.launch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.launch .launch-new {
+  flex: 1;
+  justify-content: center;
+  margin-top: 0;
+  padding: 5px 12px;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.search-row .search {
+  flex: 1;
+  min-width: 0;
+}
+
+.icon-btn.on {
+  background: var(--vscode-toolbar-activeBackground, var(--hover));
+  color: var(--fg);
+}
+
+.spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 4px;
+  border: 2px solid var(--muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0.7;
+  animation: orbit-spin 700ms linear infinite;
+}
+
+.filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.filter-panel .field.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-panel .field.inline > span {
+  flex: none;
+  width: 56px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.filter-panel select {
+  flex: 1;
+  min-width: 0;
+}
+
+.active-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.achip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 2px 0 8px;
+  border-radius: 11px;
+  font-size: 12px;
+  background: var(--vscode-badge-background, var(--hover));
+  color: var(--vscode-badge-foreground, var(--fg));
+}
+
+.achip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.achip button:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.active-chips .link-btn {
+  margin: 0 0 0 4px;
+  font-size: 12px;
+}
+
+/* ---------- List header and select mode ---------- */
+.list-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  min-height: 30px;
+  padding: 2px 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.list-count {
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.list-head.bulk {
+  background: var(--active);
+  color: var(--active-fg);
+}
+
+.bulk-count {
+  flex: 1;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ghost-btn:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground, var(--hover));
+}
+
+.ghost-btn.outline {
+  border-color: var(--border);
+}
+
+.ghost-btn.danger {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.list-head.bulk .ghost-btn.danger {
+  color: inherit;
+}
+
+.ghost-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.list-more {
+  margin: 6px 14px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.list-more .link-btn {
+  margin: 0;
+}
+
+/* ---------- Group headers ---------- */
+button.group-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+button.group-header {
+  align-items: center;
+  padding-top: 8px;
+}
+
+button.group-header .group-label {
+  flex: 1;
+}
+
+button.group-header:hover {
+  color: var(--fg);
+}
+
+/* ---------- Rows ---------- */
+.chat-row {
+  align-items: flex-start;
+  padding-top: 6px;
+}
+
+.chat-row .chat-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-time {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-row:hover .chat-time,
+.chat-row:focus-within .chat-time {
+  display: none;
+}
+
+.chat-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-row .chat-meta {
+  margin-top: 0;
+}
+
+.row-tags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.row-tags .tag {
+  flex: none;
+  max-width: 130px;
+  height: 18px;
+  color: var(--muted);
+}
+
+.row-tags .tag-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag.folder {
+  border-color: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+.row-tags .tag.temp {
+  font-weight: 600;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+.row-tags .tag.wt.claude {
+  color: var(--vscode-textLink-foreground);
+  background: color-mix(in srgb, var(--vscode-textLink-foreground) 11%, transparent);
+  border-color: color-mix(in srgb, var(--vscode-textLink-foreground) 38%, transparent);
+}
+
+.tag.wt.removed {
+  opacity: 0.55;
+}
+
+.tag.wt.removed .tag-name {
+  text-decoration: line-through;
+}
+
+.chat-row.selected {
+  background: var(--hover);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.chat-row .chat-actions {
+  align-self: center;
+}
+
+.row-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ok) 20%, transparent);
+  color: var(--ok);
+  cursor: pointer;
+}
+
+.row-go:hover {
+  background: color-mix(in srgb, var(--ok) 32%, transparent);
+}
+
+/* ---------- Live status: green pulse working, orange pulse needs you, grey done ---------- */
+.live-dot.busy {
+  background: var(--ok);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 25%, transparent);
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+.live-dot.idle {
+  background: var(--muted);
+  box-shadow: none;
+  animation: none;
+}
+
+.live-dot.waiting {
+  background: var(--vscode-charts-orange, #f5a623);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-charts-orange, #f5a623) 30%, transparent);
+  animation: live-pulse 1s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.live-label.busy {
+  color: var(--ok);
+}
+
+.live-label.idle {
+  color: var(--muted);
+}
+
+.live-label.waiting {
+  color: var(--vscode-charts-orange, #f5a623);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot.busy,
+  .live-dot.waiting,
+  .spinner {
+    animation: none;
+  }
+}
+
+/* ---------- Menus ---------- */
+.menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 190px;
+  max-width: calc(100vw - 8px);
+  padding: 4px;
+  border: 1px solid var(--vscode-menu-border, var(--border));
+  border-radius: 6px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background, var(--bg)));
+  color: var(--vscode-menu-foreground, var(--fg));
+  box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  outline: none;
+  background: var(--vscode-menu-selectionBackground, var(--active));
+  color: var(--vscode-menu-selectionForeground, var(--active-fg));
+}
+
+.menu-item.danger {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.menu-pad {
+  width: 16px;
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  border: none;
+  background: var(--vscode-menu-separatorBackground, var(--border));
+}
+
+/* ---------- A chat's details ---------- */
+.details.scroll-y {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.back-btn:hover {
+  color: var(--fg);
+}
+
+.details .details-title {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.rename-input.big {
+  font-size: 15px;
+}
+
+.details-sub {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.details-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 12px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--vscode-badge-background, var(--hover));
+  color: var(--vscode-badge-foreground, var(--fg));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill.mono {
+  font-family: var(--vscode-editor-font-family);
+}
+
+.details-date {
+  color: var(--muted);
+}
+
+.wt-card {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+
+.wt-card.removed {
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+}
+
+.wt-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.wt-card dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 10px;
+  margin: 0;
+}
+
+.wt-card dt {
+  color: var(--muted);
+}
+
+.wt-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: var(--vscode-editorWidget-background, var(--hover));
+  font-size: 12px;
+}
+
+.notice .link-btn {
+  margin: 0;
+}
+
+.details .details-actions .btn {
+  margin-top: 0;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.messages-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  background: var(--bg);
+}
+
+.messages-head .subgroup-title {
+  margin: 0;
+}
+
+.messages-head .segmented {
+  flex: none;
+}
+
+.search-count {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.messages-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.turn {
+  padding: 6px 8px 6px 10px;
+  border-left: 2px solid var(--muted);
+}
+
+.turn.you {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
+.turn-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+
+.turn-role {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.turn.you .turn-role {
+  color: var(--vscode-textLink-foreground);
+}
+
+.turn-time {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.turn-actions {
+  display: none;
+}
+
+.turn:hover .turn-actions,
+.turn:focus-within .turn-actions {
+  display: inline-flex;
+}
+
+.turn-actions .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.turn-text {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.turns mark {
+  background: var(--vscode-editor-findMatchHighlightBackground, rgb(255 200 0 / 28%));
+  color: inherit;
+}
+
+.turn-thinking {
+  margin: 2px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.turn-thinking summary {
+  cursor: pointer;
+}
+
+.turn-thinking p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.turn-tools {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.turn-tools li {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tool-name {
+  flex: none;
+  font-weight: 600;
+}
+
+.tool-arg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--vscode-editor-font-family);
+  color: var(--muted);
+}
+
+.turn-usage {
+  display: block;
+  margin-top: 2px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- Usage: four tiles, blocks, models bar, year map ---------- */
+.tiles.four {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: 10px;
+}
+
+/* Two per row: the first of each row starts at the edge, without a divider. */
+.tiles.four .stat:nth-child(odd) {
+  padding-left: 0;
+  border-left: none;
+}
+
+.glance-extra {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.block-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.block-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.block-toggle .section-title {
+  margin: 0;
+}
+
+.block-toggle .codicon {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.block-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.block-body {
+  margin-top: 8px;
+}
+
+.models-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.models-head strong {
+  font-size: 18px;
+  color: var(--fg);
+}
+
+.share-bar {
+  display: flex;
+  height: 8px;
+  margin: 8px 0;
+  overflow: hidden;
+  border-radius: 3px;
+  gap: 2px;
+}
+
+.share-seg {
+  height: 100%;
+}
+
+.legend {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legend-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.rank-row .rank-label {
+  flex: 1;
+}
+
+.rank-sub {
+  display: block;
+  margin-top: -2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.year-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
+}
+
+.year-scroll svg {
+  display: block;
+}
+
+.year-month,
+.year-day {
+  font-size: 9px;
+  fill: var(--muted);
+}
+
+.year-map .heat-cell.today {
+  stroke: var(--vscode-charts-orange, #f5a623);
+  stroke-width: 1.5;
+}
+
+.year-tip {
+  margin: 4px 0 2px;
+  min-height: 16px;
+  font-size: 12px;
+  color: var(--muted);
+}

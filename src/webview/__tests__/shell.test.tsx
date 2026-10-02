@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/preact";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sampleSetup } from "../../../test/helpers/setupFixture";
 import { sampleUsage } from "../../../test/helpers/usageFixture";
@@ -65,6 +65,7 @@ beforeEach(() => {
   store.usage.value = sampleUsage();
   store.account.value = null;
   store.checkpoints.value = null;
+  store.cpOpen.value = null;
   store.setupQuery.value = "";
   store.skillScope.value = "all";
   loadSessions();
@@ -72,6 +73,37 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("tab bar", () => {
+  it("follows your tab order and hides the tabs you hid", () => {
+    render(<App />);
+    store.applyHostMessage({
+      type: "sessions",
+      items: [chat],
+      live: [],
+      pins: [],
+      renames: {},
+      tags: {},
+      here: [ID],
+      onboarding: { done: [], dismissed: true, welcomed: true },
+      env: {
+        claudeExtension: true,
+        hasWorkspace: true,
+        platform: "linux",
+        prefs: {
+          openChatsIn: "terminal",
+          terminalLocation: "editor",
+          tabOrder: ["usage"],
+          hiddenTabs: ["memory", "home"],
+        },
+      },
+    });
+    return waitFor(() => {
+      const tabs = screen.getAllByRole("tab").map((t) => t.getAttribute("title"));
+      expect(tabs[0]).toBe("Usage");
+      expect(tabs).not.toContain("Memory");
+      expect(store.tab.value).toBe("usage");
+    });
+  });
+
   it("has every tab, names only the open one, and moves with the arrow keys and Home/End", () => {
     render(<App />);
     const tabs = screen.getAllByRole("tab");
@@ -216,6 +248,11 @@ describe("Skills tab", () => {
           modelInvocable: true,
           problems: [],
           linked: false,
+          tags: [],
+          argumentHint: null,
+          group: null,
+          loaded: true,
+          command: "/superpowers:brainstorming",
         },
       ],
     });
@@ -239,12 +276,14 @@ describe("Account", () => {
   };
 
   it("shows who is signed in, with the plan, and every account action", () => {
-    store.account.value = { profile, saved: [], canSwitch: true };
+    store.account.value = { profile, saved: [], canSwitch: true, switchedAt: null };
     render(<AccountView />);
     expect(screen.getByRole("heading", { name: "Ana Ruiz" })).toBeTruthy();
     expect(screen.getByText("Max 20x")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Save this account/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Switch account/ }));
+    // The avatar is a switch button too.
+    expect(screen.getAllByRole("button", { name: /Switch account/ })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: /Switch account/ })[1]!);
     fireEvent.click(screen.getByRole("button", { name: /Log out/ }));
     expect(sent.map((m) => m.type)).toEqual(["account:save", "account:pick", "account:logout"]);
   });
@@ -271,6 +310,7 @@ describe("Account", () => {
         },
       ],
       canSwitch: true,
+      switchedAt: null,
     };
     render(<AccountView />);
     expect(screen.queryByRole("button", { name: /Save this account/ })).toBeNull();
@@ -279,8 +319,29 @@ describe("Account", () => {
     expect(sent).toContainEqual({ type: "account:switch", id: "b" });
   });
 
+  it("shows how long the sign-in lasts and the plan's colour", () => {
+    store.account.value = { profile, saved: [], canSwitch: true, switchedAt: null, signInDays: 12 };
+    render(<AccountView />);
+    expect(screen.getByText("Signed in for 12 more days")).toBeTruthy();
+    expect(screen.getByText("Max 20x").className).toContain("plan-max");
+  });
+
+  it("warns when Claude Code's settings file is broken, and offers its backup", () => {
+    store.account.value = {
+      profile,
+      saved: [],
+      canSwitch: true,
+      switchedAt: null,
+      broken: { backup: "/b/x", backupAt: 1 },
+    };
+    render(<AccountView />);
+    expect(screen.getByRole("alert").textContent).toMatch(/settings file looks broken/);
+    fireEvent.click(screen.getByRole("button", { name: "Restore from backup" }));
+    expect(sent).toContainEqual({ type: "account:restoreConfig" });
+  });
+
   it("offers to log in when signed out", () => {
-    store.account.value = { profile: null, saved: [], canSwitch: true };
+    store.account.value = { profile: null, saved: [], canSwitch: true, switchedAt: null };
     render(<AccountView />);
     fireEvent.click(screen.getByRole("button", { name: "Log in" }));
     expect(sent).toContainEqual({ type: "account:login" });
@@ -289,11 +350,11 @@ describe("Account", () => {
 
 describe("Checkpoints", () => {
   it("lists chats with checkpoints and opens one to compare or restore", () => {
-    store.checkpoints.value = [{ id: ID, files: 3, versions: 7, bytes: 2048 }];
+    store.checkpoints.value = [{ id: ID, files: 3, versions: 7, bytes: 2048, newest: 1 }];
     render(<CheckpointsView />);
     expect(screen.getByText(/3 files · 7 versions · 2.0 KB/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Fix checkout race/ }));
-    expect(sent).toContainEqual({ type: "chat:details", id: ID });
+    expect(sent).toContainEqual({ type: "cp:files", id: ID });
   });
 
   it("explains what checkpoints are when there are none", () => {

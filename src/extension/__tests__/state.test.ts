@@ -123,3 +123,34 @@ describe("OrbitState", () => {
     expect(await s.markStep("bogus" as never)).toBe(false);
   });
 });
+
+describe("OrbitState chat sets", () => {
+  const A = "0b95bc0d-e0c0-4c77-9ad4-c2b7fd22d24a";
+  const B = "11111111-2222-4333-8444-555555555555";
+  const mem = () => {
+    const m = new Map<string, unknown>();
+    return {
+      get: <T>(k: string, d: T) => (m.has(k) ? (m.get(k) as T) : d),
+      update: async (k: string, v: unknown) => void m.set(k, v),
+    };
+  };
+
+  it("archives and hides chats, unpinning them, and brings them back", async () => {
+    const s = new OrbitState(mem());
+    await s.setPin(A, true);
+    await s.mark("archived", [A, B], true);
+    expect(s.marked("archived").sort()).toEqual([A, B].sort());
+    expect(s.pins()).toEqual([]);
+    await s.mark("archived", [A], false);
+    expect(s.marked("archived")).toEqual([B]);
+    await s.mark("hidden", [B, "not-an-id"], true);
+    expect(s.marked("hidden")).toEqual([B]);
+  });
+
+  it("keeps pins for temporary chats", async () => {
+    const s = new OrbitState(mem());
+    await s.setPin(A, true);
+    await s.mark("temp", [A], true);
+    expect(s.pins()).toEqual([A]);
+  });
+});

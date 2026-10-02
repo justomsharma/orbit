@@ -190,3 +190,66 @@ export function heatmap(
   }
   return [...totals].map(([day, tokens]) => ({ day, tokens }));
 }
+
+export interface YearDay {
+  day: string;
+  tokens: number;
+  /** Claude's replies that day. */
+  messages: number;
+  /** Chats active that day. */
+  sessions: number;
+}
+
+/**
+ * A year of days for the activity map: 52 whole weeks, Monday to Sunday, the last
+ * week holding today (days after today are left out). Oldest first.
+ */
+export function yearGrid(records: UsageRecord[], now: number, weeks = 52): YearDay[] {
+  const d = new Date(now);
+  const today = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const sinceMonday = (today.getDay() + 6) % 7;
+  const start = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() - sinceMonday - (weeks - 1) * 7,
+  );
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).getTime();
+  const out = new Map<string, { tokens: number; messages: number; sessions: Set<string> }>();
+  for (let i = 0; ; i++) {
+    const t = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    if (t.getTime() >= end) break;
+    out.set(dayKey(t.getTime()), { tokens: 0, messages: 0, sessions: new Set() });
+  }
+  const from = start.getTime();
+  for (const r of records) {
+    if (r.t < from || r.t >= end) continue;
+    const e = out.get(dayKey(r.t));
+    if (!e) continue;
+    e.tokens += totalTokens(r);
+    e.messages++;
+    e.sessions.add(r.session);
+  }
+  return [...out].map(([day, e]) => ({
+    day,
+    tokens: e.tokens,
+    messages: e.messages,
+    sessions: e.sessions.size,
+  }));
+}
+
+/** The longest chat in the records: from its first reply to its last. */
+export function longestChat(records: UsageRecord[], from: number, to: number): number {
+  const spans = new Map<string, [number, number]>();
+  for (const r of records) {
+    if (r.t < from || r.t >= to) continue;
+    const s = spans.get(r.session);
+    if (!s) spans.set(r.session, [r.t, r.t]);
+    else {
+      s[0] = Math.min(s[0], r.t);
+      s[1] = Math.max(s[1], r.t);
+    }
+  }
+  let best = 0;
+  for (const [a, b] of spans.values()) best = Math.max(best, b - a);
+  return best;
+}

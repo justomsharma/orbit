@@ -15,6 +15,14 @@ const TAGS = "orbit.tags";
 const ONBOARDING = "orbit.onboarding";
 const MAX_TAGGED = 5000;
 const MAX_TAGS = 8;
+const MAX_MARKED = 5000;
+
+export type ChatSet = "archived" | "hidden" | "temp";
+const SETS: Record<ChatSet, string> = {
+  archived: "orbit.archived",
+  hidden: "orbit.hidden",
+  temp: "orbit.temp",
+};
 
 /** `#Big Refactor` → `big-refactor`: lowercase letters, digits, - and _, up to 24 long. */
 export function cleanTag(t: string): string {
@@ -43,6 +51,25 @@ export class OrbitState {
     if (!isSessionId(id)) return;
     const rest = this.pins().filter((p) => p !== id);
     await this.store.update(PINS, on ? [id, ...rest].slice(0, MAX_PINS) : rest);
+  }
+
+  /** Chats in a named set: archived (out of the main list) or hidden (Orbit's "delete"). */
+  marked(set: ChatSet): string[] {
+    const v = this.store.get<unknown>(SETS[set], []);
+    return Array.isArray(v) ? v.filter(isSessionId) : [];
+  }
+
+  /** Adds or removes chats from a set. Archiving or hiding a chat also unpins it. */
+  async mark(set: ChatSet, ids: string[], on: boolean): Promise<void> {
+    const valid = ids.filter(isSessionId);
+    if (!valid.length) return;
+    const drop = new Set(valid);
+    const rest = this.marked(set).filter((x) => !drop.has(x));
+    await this.store.update(SETS[set], on ? [...valid, ...rest].slice(0, MAX_MARKED) : rest);
+    if (on && set !== "temp") {
+      const pins = this.pins().filter((p) => !drop.has(p));
+      await this.store.update(PINS, pins);
+    }
   }
 
   renames(): Record<string, string> {

@@ -2,7 +2,7 @@
   "name": "orbit-hq",
   "displayName": "Orbit HQ",
   "description": "Your home for Claude Code: every chat, usage & cost, and your whole setup in one calm sidebar. 100% local.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "OmSharma",
   "license": "MIT",
   "repository": {
@@ -100,6 +100,22 @@
       {
         "command": "orbit.showSetup",
         "title": "Orbit: Show config"
+      },
+      {
+        "command": "orbit.exportBrain",
+        "title": "Orbit: Back up your Claude setup (brain)…"
+      },
+      {
+        "command": "orbit.importBrain",
+        "title": "Orbit: Bring in a Claude setup backup…"
+      },
+      {
+        "command": "orbit.runDiagnostics",
+        "title": "Orbit: Check Claude Code's health"
+      },
+      {
+        "command": "orbit.reportProblem",
+        "title": "Orbit: Report a problem…"
       }
     ],
     "keybindings": [
@@ -107,6 +123,12 @@
         "command": "orbit.open",
         "key": "ctrl+alt+o",
         "mac": "cmd+alt+o"
+      },
+      {
+        "command": "orbit.refresh",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "focusedView == orbit.main"
       }
     ],
     "configuration": {
@@ -116,11 +138,15 @@
           "type": "string",
           "enum": [
             "terminal",
-            "claudePanel"
+            "claudePanel",
+            "auto",
+            "ask"
           ],
           "enumDescriptions": [
             "Run Claude Code's CLI in a VS Code terminal (works for chats from any folder).",
-            "Open Claude's VS Code chat panel (needs the Claude Code extension)."
+            "Open Claude's VS Code chat panel (needs the Claude Code extension).",
+            "Claude's panel for chats started there, a terminal for the rest.",
+            "Ask each time."
           ],
           "default": "terminal",
           "description": "Where Orbit opens and starts Claude chats."
@@ -137,6 +163,130 @@
           ],
           "default": "editor",
           "description": "Where Orbit shows Claude terminals."
+        },
+        "orbit.editorPosition": {
+          "type": "string",
+          "enum": [
+            "beside",
+            "active",
+            "one",
+            "two",
+            "three"
+          ],
+          "enumDescriptions": [
+            "Beside the current editor.",
+            "In the active editor group.",
+            "In the first group.",
+            "In the second group.",
+            "In the third group."
+          ],
+          "default": "beside",
+          "description": "Where a Claude terminal opens in the editor area (it joins a group that already has a terminal)."
+        },
+        "orbit.chats.defaultFilter": {
+          "type": "string",
+          "enum": [
+            "recent",
+            "week",
+            "month",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Pinned chats and the 20 most recent.",
+            "The last 7 days.",
+            "The last 30 days.",
+            "Every chat."
+          ],
+          "default": "recent",
+          "description": "Which chats the Chats tab shows at first."
+        },
+        "orbit.chats.defaultProject": {
+          "type": "string",
+          "enum": [
+            "all",
+            "current"
+          ],
+          "enumDescriptions": [
+            "Chats from every folder.",
+            "Only chats from the folder open in this window."
+          ],
+          "default": "all",
+          "description": "Whether the Chats tab starts with every folder or just this one."
+        },
+        "orbit.chats.restoreCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "default": 4,
+          "description": "How many recent chats \"Restore recent terminals\" reopens."
+        },
+        "orbit.terminal.keepSessionNames": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "Show the chat's own name (set by Claude Code, like \"✳ Fix cart\") on Claude terminal tabs. Orbit changes VS Code's terminal tab title settings and puts yours back when you turn this off."
+        },
+        "orbit.tabOrder": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "home",
+              "chats",
+              "prompts",
+              "checkpoints",
+              "usage",
+              "account",
+              "config",
+              "skills",
+              "mcp",
+              "plugins",
+              "agents",
+              "commands",
+              "hooks",
+              "memory"
+            ]
+          },
+          "default": [],
+          "uniqueItems": true,
+          "description": "The order of Orbit's tabs. Tabs left out keep their usual place after these."
+        },
+        "orbit.hiddenTabs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "home",
+              "chats",
+              "prompts",
+              "checkpoints",
+              "usage",
+              "account",
+              "skills",
+              "mcp",
+              "plugins",
+              "agents",
+              "commands",
+              "hooks",
+              "memory"
+            ]
+          },
+          "default": [],
+          "uniqueItems": true,
+          "description": "Orbit tabs to hide. Config always stays."
+        },
+        "orbit.density": {
+          "type": "string",
+          "enum": [
+            "comfortable",
+            "compact"
+          ],
+          "enumDescriptions": [
+            "Roomy rows (default)",
+            "Tighter rows for a small sidebar"
+          ],
+          "default": "comfortable",
+          "description": "How much space Orbit's lists take."
         }
       }
     },
@@ -149,7 +299,7 @@
           {
             "id": "open",
             "title": "Open Orbit",
-            "description": "Orbit lives in the bar on the far left: look for the planet. The icons along the top are its tabs; hover near either end to scroll through them. Ask Claude anything from the box on Home.\n[Open Orbit](command:orbit.open)",
+            "description": "Orbit lives in the bar on the far left: look for the planet. The icons along the top are its tabs; hover near either end to scroll through them, or press Ctrl+K (Cmd+K) to search everything. Ask Claude anything from the box on Home.\n[Open Orbit](command:orbit.open)",
             "media": {
               "image": "media/walkthrough/home.png",
               "altText": "Orbit Home: ask Claude, what is running, where you left off, and today's usage"
@@ -174,7 +324,7 @@
           {
             "id": "changes",
             "title": "Undo anything Claude changed",
-            "description": "Checkpoints lists every chat where Claude kept copies of the files it edited. Open one to compare any version with now, or restore it with a preview and undo. Orbit never deletes anything.\n[Show checkpoints](command:orbit.showCheckpoints)",
+            "description": "Checkpoints lists every chat where Claude kept copies of the files it edited. Open a chat, then a file, to compare any version with now or restore it with a preview and undo. Orbit never deletes anything.\n[Show checkpoints](command:orbit.showCheckpoints)",
             "media": {
               "image": "media/walkthrough/checkpoints.png",
               "altText": "Checkpoints: chats with the files and versions Claude kept"

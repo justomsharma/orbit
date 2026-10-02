@@ -609,3 +609,341 @@
 .home-actions .btn {
   margin-top: 0;
 }
+
+.acct-seen {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.avatar-btn {
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  transition: transform 80ms ease;
+}
+
+.avatar-btn:hover .avatar {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.avatar-btn:active {
+  transform: scale(0.96);
+}
+
+.profile-meta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.plan-badge.plan-max {
+  --plan: #ff9966;
+}
+
+.plan-badge.plan-pro {
+  --plan: #58a6ff;
+}
+
+.plan-badge.plan-team,
+.plan-badge.plan-enterprise {
+  --plan: #a371f7;
+}
+
+.plan-badge[class*="plan-"] {
+  color: var(--plan, var(--vscode-charts-purple));
+  background: color-mix(in srgb, var(--plan, var(--vscode-charts-purple)) 15%, transparent);
+  border-color: color-mix(in srgb, var(--plan, var(--vscode-charts-purple)) 30%, transparent);
+}
+
+.banner {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  background: var(
+    --vscode-inputValidation-errorBackground,
+    color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent)
+  );
+  border-left: 3px solid var(--vscode-errorForeground, #f14c4c);
+}
+
+.banner .btn {
+  display: flex;
+  margin-top: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-btn {
+    transition: none;
+  }
+}
+
+.cp-title .codicon {
+  font-size: 12px;
+  color: var(--muted);
+  vertical-align: -1px;
+}
+
+.cp-title .badge {
+  margin-left: 6px;
+}
+
+.cp-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+
+.cp-head-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cp-head-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cp-file.open > .cp-row {
+  background: var(--hover);
+}
+
+.cp-versions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 6px 10px 22px;
+}
+
+.cp-versions .versions {
+  align-self: stretch;
+}
+
+.cp-versions .version.missing .version-label {
+  opacity: 0.6;
+}
+
+.cp-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.skeleton-row {
+  height: 38px;
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--hover) 0%, transparent 50%, var(--hover) 100%);
+  background-size: 200% 100%;
+  animation: skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-row {
+    animation: none;
+  }
+}
+
+/* ---------- Search everything (Ctrl/Cmd+K) ---------- */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 36px 8px 8px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 520px;
+  max-height: min(70vh, 560px);
+  border: 1px solid var(--vscode-widget-border, var(--border));
+  border-radius: 6px;
+  background: var(--vscode-quickInput-background, var(--bg));
+  color: var(--vscode-quickInput-foreground, var(--fg));
+  box-shadow: 0 6px 24px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
+  overflow: hidden;
+}
+
+.palette-search {
+  margin: 6px;
+}
+
+.palette-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 4px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.palette-group {
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.palette-item.on {
+  background: var(
+    --vscode-quickInputList-focusBackground,
+    var(--vscode-list-activeSelectionBackground)
+  );
+  color: var(
+    --vscode-quickInputList-focusForeground,
+    var(--vscode-list-activeSelectionForeground, var(--fg))
+  );
+}
+
+.palette-title {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-sub {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.palette-empty {
+  padding: 10px;
+  color: var(--muted);
+}
+
+.palette-hint {
+  margin: 0;
+  padding: 4px 10px 6px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- A tab that crashed ---------- */
+.guard {
+  margin: 16px 12px;
+  padding: 12px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--border));
+  border-radius: 6px;
+}
+
+.guard > .codicon {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.guard-title {
+  margin: 6px 0 2px;
+  font-weight: 600;
+}
+
+/* ---------- Refreshing ---------- */
+.codicon.spin {
+  animation: orbit-spin 0.9s linear infinite;
+}
+
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .codicon.spin {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ---------- Compact spacing ---------- */
+.app.compact .srow {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.app.compact .q-row {
+  margin-bottom: 6px;
+}
+
+.app.compact .cp-row {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.busy-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.busy-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: var(--vscode-progressBar-background, var(--accent));
+  animation: busy-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes busy-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy-bar::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}

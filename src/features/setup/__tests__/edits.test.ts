@@ -3,7 +3,9 @@ import {
   addHook,
   addMcpServer,
   addPermissionRule,
+  changeHook,
   EditError,
+  putHook,
   removeHook,
   removeMcpServer,
   removePermissionRule,
@@ -11,14 +13,90 @@ import {
   setPluginEnabled,
   setSetting,
   setSkillVisibility,
+  takeHook,
 } from "../edits";
 
 type Obj = Record<string, unknown>;
+type Hooks = Record<string, { matcher?: string; hooks: Obj[] }[]>;
 const run = (mutate: (o: Obj) => void, start: Obj) => {
   const o = structuredClone(start);
   mutate(o);
   return o;
 };
+
+describe("pausing and editing one hook", () => {
+  const start = () => ({
+    hooks: {
+      Stop: [
+        {
+          hooks: [
+            { type: "command", command: "a.sh", async: true },
+            { type: "command", command: "b.sh" },
+          ],
+        },
+      ],
+      PreToolUse: [
+        { matcher: "Bash", hooks: [{ type: "command", command: "guard.sh", timeout: 5 }] },
+      ],
+    },
+    theme: "dark",
+  });
+
+  it("takes a hook out exactly as written, so it can come back the same", () => {
+    const out: { handler?: Record<string, unknown> } = {};
+    const after = run(
+      takeHook({ event: "Stop", group: 0, index: 0, command: "a.sh" }, out),
+      start(),
+    );
+    expect(out.handler).toEqual({ type: "command", command: "a.sh", async: true });
+    expect(after.hooks).toEqual({
+      Stop: [{ hooks: [{ type: "command", command: "b.sh" }] }],
+      PreToolUse: start().hooks.PreToolUse,
+    });
+    const back = run(putHook({ event: "Stop", matcher: null, handler: out.handler! }), after);
+    expect((back.hooks as Hooks).Stop![0]!.hooks).toContainEqual({
+      type: "command",
+      command: "a.sh",
+      async: true,
+    });
+  });
+
+  it("refuses to take a hook that changed since it was shown", () => {
+    expect(() =>
+      run(takeHook({ event: "Stop", group: 0, index: 0, command: "other.sh" }, {}), start()),
+    ).toThrow(EditError);
+  });
+
+  it("changes a hook in place, keeping fields Orbit doesn't edit", () => {
+    const after = run(
+      changeHook(
+        { event: "PreToolUse", group: 0, index: 0, command: "guard.sh" },
+        { event: "PreToolUse", matcher: "Bash", command: "guard2.sh", timeout: null },
+      ),
+      start(),
+    );
+    expect((after.hooks as Hooks).PreToolUse).toEqual([
+      { matcher: "Bash", hooks: [{ type: "command", command: "guard2.sh" }] },
+    ]);
+  });
+
+  it("moves a hook to another event or matcher, keeping its other fields", () => {
+    const after = run(
+      changeHook(
+        { event: "Stop", group: 0, index: 0, command: "a.sh" },
+        { event: "PreToolUse", matcher: "Edit", command: "a.sh", timeout: 9 },
+      ),
+      start(),
+    );
+    expect((after.hooks as Hooks).Stop).toEqual([
+      { hooks: [{ type: "command", command: "b.sh" }] },
+    ]);
+    expect((after.hooks as Hooks).PreToolUse![1]).toEqual({
+      matcher: "Edit",
+      hooks: [{ type: "command", command: "a.sh", async: true, timeout: 9 }],
+    });
+  });
+});
 
 describe("setSetting", () => {
   it("sets, replaces and removes a top-level key", () => {
@@ -73,6 +151,22 @@ describe("setMcpApproval", () => {
 
 describe("MCP servers in ~/.claude.json and .mcp.json", () => {
   const ws = "C:\\code\\shop";
+
+  it("refuses to edit a server that's gone, and to rename onto another", () => {
+    const start = { mcpServers: { a: { command: "x" }, b: { command: "y" } } };
+    expect(() =>
+      run(
+        addMcpServer({ scope: "user", name: "c", server: { command: "z" }, replace: "zz" }),
+        start,
+      ),
+    ).toThrow(EditError);
+    expect(() =>
+      run(
+        addMcpServer({ scope: "user", name: "b", server: { command: "z" }, replace: "a" }),
+        start,
+      ),
+    ).toThrow(/already exists/);
+  });
 
   it("adds and removes a user server", () => {
     const added = run(

@@ -1,4 +1,5 @@
 import { isInside, samePath } from "../core/paths";
+import { safeBranch } from "../features/chats/branch";
 import {
   CLAUDE_EXTENSION_ID,
   chatUri,
@@ -26,7 +27,15 @@ export interface OpenerHost {
   ask(message: string, ...actions: string[]): Promise<string | undefined>;
   info(message: string): void;
   /** Where chats open (Orbit's "Open chats in" setting). Claude's panel when not given. */
-  openIn?(): "terminal" | "claudePanel";
+  openIn?(): "terminal" | "claudePanel" | "auto" | "ask";
+  /** A running chat: show its terminal ("shown"), or Orbit doesn't know where it runs. */
+  running?(id: string): "shown" | "untracked" | "no";
+  /** For "ask": which one this time. */
+  chooseWhere?(): Promise<"terminal" | "claudePanel" | undefined>;
+  /** The branch the folder is on now (null when unknown). */
+  branchOf?(cwd: string): Promise<string | null>;
+  /** Runs `git checkout <branch>` in the folder; resolves to an error message, or null. */
+  checkout?(cwd: string, branch: string): Promise<string | null>;
 }
 
 const INSTALL_DOCS = "https://code.claude.com/docs/en/setup";
@@ -49,10 +58,33 @@ export class Opener {
     return this.host.openIn?.() === "terminal";
   }
 
+  /** Where this chat opens: the setting, "auto" by how the chat was started, or asked. */
+  private async where(s: Session): Promise<"terminal" | "claudePanel" | null> {
+    const h = this.host;
+    const pref = h.openIn?.() ?? "claudePanel";
+    if (pref === "ask") return (await h.chooseWhere?.()) ?? null;
+    if (pref === "auto")
+      return /vscode/i.test(s.entrypoint ?? "") && h.claudeExtensionInstalled()
+        ? "claudePanel"
+        : "terminal";
+    return pref;
+  }
+
   /** Continue a chat where Orbit opens chats: a terminal, or Claude's chat panel. */
   async continueChat(s: Session): Promise<void> {
     const h = this.host;
-    if (this.terminalFirst()) return this.continueInTerminal(s);
+    // Already running: show it rather than starting it a second time.
+    const r = h.running?.(s.id) ?? "no";
+    if (r === "shown") return;
+    if (r === "untracked") {
+      h.info(
+        "This chat is already running, but not in a terminal Orbit opened (another window, or a terminal started by hand). Switch to it there.",
+      );
+      return;
+    }
+    const where = await this.where(s);
+    if (!where) return;
+    if (where === "terminal") return this.continueInTerminal(s);
     if (!h.claudeExtensionInstalled()) {
       const pick = await h.ask(
         "The Claude Code extension isn't installed or enabled, so this chat can't open in its panel.",
@@ -91,6 +123,25 @@ export class Opener {
       h.info(`The folder for this chat no longer exists: ${s.cwd}`);
       return;
     }
+    // The chat was on another branch: Claude would work on the wrong code.
+    const now = s.cwd && s.branch && h.branchOf ? await h.branchOf(s.cwd) : null;
+    if (now && s.branch && now !== s.branch && !o.fork) {
+      const pick = await h.ask(
+        `This chat was on branch "${s.branch}", but ${s.project} is on "${now}" now.`,
+        "Switch & continue",
+        "Continue anyway",
+      );
+      if (!pick) return;
+      if (pick === "Switch & continue") {
+        const err = safeBranch(s.branch)
+          ? ((await h.checkout?.(s.cwd, s.branch)) ?? null)
+          : "That branch name isn't one Orbit will pass to git.";
+        if (err) {
+          h.info(`Couldn't switch to "${s.branch}": ${err}`);
+          return;
+        }
+      }
+    }
     const claude = await h.findClaude();
     if (!claude) {
       const pick = await h.ask(
@@ -102,7 +153,7 @@ export class Opener {
       if (pick === "How to install") await h.openExternal(INSTALL_DOCS);
       return;
     }
-    h.createTerminal(terminalOptions(s.id, s.cwd, claude, o));
+    h.createTerminal(terminalOptions(s.id, s.cwd, claude, { title: s.title, ...o }));
   }
 
   /**

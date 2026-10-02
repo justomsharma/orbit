@@ -88,6 +88,44 @@ describe("readSkills", () => {
     expect(await readSkills(home, null, [])).toEqual([]);
   });
 
+  it("reads tags, from tags or metadata.tags, as a list or comma text", async () => {
+    const { home } = setup();
+    put(home, "skills/a/SKILL.md", "---\nname: a\ndescription: A\ntags: docs, release\n---\n");
+    put(
+      home,
+      "skills/b/SKILL.md",
+      "---\nname: b\ndescription: B\nmetadata:\n  tags: [ci]\nargument-hint: <pr>\n---\n",
+    );
+    const [a, b] = await readSkills(home, null, []);
+    expect(a!.tags).toEqual(["docs", "release"]);
+    expect(b).toMatchObject({ tags: ["ci"], argumentHint: "<pr>", group: null });
+  });
+
+  it("shows skills nested in a grouping folder, saying Claude won't load them there", async () => {
+    const { home } = setup();
+    put(home, "skills/team/lint/SKILL.md", "---\nname: lint\ndescription: Lints\n---\n");
+    put(home, "skills/team/lint/examples/x/SKILL.md", "---\nname: inner\n---\n");
+    const skills = await readSkills(home, null, []);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]).toMatchObject({
+      name: "lint",
+      group: "team",
+      loaded: false,
+      problems: [expect.stringMatching(/Claude Code only loads skills one folder below skills/)],
+    });
+  });
+
+  it("names how you type a skill: /name, or /plugin:name for a plugin's", async () => {
+    const { home, plug } = setup();
+    put(home, "skills/notes/SKILL.md", "---\nname: notes\ndescription: N\n---\n");
+    put(plug, "skills/lint/SKILL.md", "---\nname: lint\ndescription: L\n---\n");
+    const skills = await readSkills(home, null, [{ id: "tools@market", installPath: plug }]);
+    expect(skills.map((k) => [k.command, k.loaded])).toEqual([
+      ["/notes", true],
+      ["/tools:lint", true],
+    ]);
+  });
+
   it("reports an unreadable SKILL.md instead of dropping it", async () => {
     const { home } = setup();
     put(home, "skills/big/SKILL.md", OVERSIZED);

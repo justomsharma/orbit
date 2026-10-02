@@ -211,3 +211,76 @@ describe("Opener.continueLast without a folder", () => {
     expect(calls[0]).toMatch(/^info Open a folder first/);
   });
 });
+
+describe("Opener: running chats, auto and ask", () => {
+  it("shows a running chat's terminal instead of starting it again", async () => {
+    const { host, calls } = fakeHost({ openIn: () => "terminal", running: () => "shown" });
+    await new Opener(host).continueChat(session("/code/shop"));
+    expect(calls).toEqual([]);
+  });
+
+  it("says where a running chat is when Orbit didn't open its terminal", async () => {
+    const { host, calls } = fakeHost({ openIn: () => "terminal", running: () => "untracked" });
+    await new Opener(host).continueChat(session("/code/shop"));
+    expect(calls[0]).toMatch(/^info This chat is already running/);
+  });
+
+  it("auto: Claude's panel for chats started there, a terminal for the rest", async () => {
+    const panel = fakeHost({ openIn: () => "auto" });
+    await new Opener(panel.host).continueChat({
+      ...session("/code/shop"),
+      entrypoint: "claude-vscode",
+    });
+    expect(panel.calls[0]).toMatch(/^open vscode:\/\/anthropic\.claude-code/);
+    const term = fakeHost({ openIn: () => "auto" });
+    await new Opener(term.host).continueChat({ ...session("/code/shop"), entrypoint: "cli" });
+    expect(term.calls[0]).toMatch(/^terminal \/usr\/bin\/claude --resume/);
+  });
+
+  it("ask: does what you pick, nothing when you cancel", async () => {
+    const pick = fakeHost({ openIn: () => "ask", chooseWhere: async () => "terminal" });
+    await new Opener(pick.host).continueChat(session("/code/shop"));
+    expect(pick.calls[0]).toMatch(/^terminal /);
+    const cancel = fakeHost({ openIn: () => "ask", chooseWhere: async () => undefined });
+    await new Opener(cancel.host).continueChat(session("/code/shop"));
+    expect(cancel.calls).toEqual([]);
+  });
+});
+
+describe("Opener: continuing on another branch", () => {
+  it("asks first, and switches with git before continuing when you say so", async () => {
+    const { host, calls } = fakeHost({
+      openIn: () => "terminal",
+      choose: "Switch & continue",
+      branchOf: async () => "main",
+      checkout: async (cwd, b) => {
+        calls.push(`checkout ${cwd} ${b}`);
+        return null;
+      },
+    });
+    await new Opener(host).continueChat({ ...session("/code/shop"), branch: "fix/cart" });
+    expect(calls[0]).toMatch(/^ask This chat was on branch "fix\/cart", but shop is on "main" now/);
+    expect(calls[1]).toBe("checkout /code/shop fix/cart");
+    expect(calls[2]).toMatch(/^terminal \/usr\/bin\/claude --resume/);
+  });
+
+  it("stops when git can't switch, and does nothing when cancelled", async () => {
+    const fail = fakeHost({
+      openIn: () => "terminal",
+      choose: "Switch & continue",
+      branchOf: async () => "main",
+      checkout: async () => "your local changes would be overwritten",
+    });
+    await new Opener(fail.host).continueChat({ ...session("/code/shop"), branch: "fix" });
+    expect(fail.calls.at(-1)).toMatch(/^info Couldn't switch to "fix": your local changes/);
+    const cancel = fakeHost({ openIn: () => "terminal", branchOf: async () => "main" });
+    await new Opener(cancel.host).continueChat({ ...session("/code/shop"), branch: "fix" });
+    expect(cancel.calls.some((c) => c.startsWith("terminal"))).toBe(false);
+  });
+
+  it("continues straight away on the same branch", async () => {
+    const { host, calls } = fakeHost({ openIn: () => "terminal", branchOf: async () => "fix" });
+    await new Opener(host).continueChat({ ...session("/code/shop"), branch: "fix" });
+    expect(calls[0]).toMatch(/^terminal /);
+  });
+});

@@ -128,7 +128,7 @@ describe("UsageView", () => {
     });
     render(<UsageView />);
     expect(screen.queryByText("97%")).toBeNull();
-    expect(screen.getByText(/5-hour limit reset/i)).toBeTruthy();
+    expect(screen.getByText(/outdated · open Claude to refresh/)).toBeTruthy();
   });
 
   it("copies the weekly recap", () => {

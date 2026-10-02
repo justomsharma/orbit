@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type { LiveStatus, Session } from "../../../features/chats/types";
-import { branchesOf, buildItems, type ChatsInput, projectsOf, relativeTime } from "../model";
+import {
+  branchesOf,
+  buildItems,
+  type ChatFilter,
+  type ChatsInput,
+  DEFAULT_FILTER,
+  dateGroup,
+  duration,
+  facets,
+  projectsOf,
+  RECENT,
+  relativeTime,
+  visible,
+} from "../model";
 
 const NOW = new Date(2026, 8, 30, 15, 0, 0).getTime(); // Wed 30 Sep 2026, 15:00 local
 const H = 3600_000;
 const D = 24 * H;
+const ALL: ChatFilter = { ...DEFAULT_FILTER, date: "all" };
 
 let n = 0;
 function s(over: Partial<Session> = {}): Session {
@@ -43,106 +57,141 @@ function input(sessions: Session[], over: Partial<ChatsInput> = {}): ChatsInput 
   };
 }
 
+const live = (x: Session): LiveStatus => ({
+  sessionId: x.id,
+  pid: 1,
+  status: "busy",
+  name: null,
+  updatedAt: NOW,
+});
+
 const labels = (items: ReturnType<typeof buildItems>) =>
   items.map((i) => (i.kind === "header" ? `# ${i.label}` : i.vm.title));
 
+describe("dateGroup", () => {
+  it("names days, then week ranges, then months", () => {
+    expect(dateGroup(NOW - H, NOW)).toBe("Today");
+    expect(dateGroup(NOW - D, NOW)).toBe("Yesterday");
+    expect(dateGroup(NOW - 3 * D, NOW)).toMatch(/Sun.*Sep.*27|27.*Sep.*Sun/);
+    expect(dateGroup(NOW - 8 * D, NOW)).toMatch(/Sep 17 – Sep 23|17 Sep – 23 Sep/);
+    expect(dateGroup(new Date(2026, 6, 4).getTime(), NOW)).toMatch(/July 2026/);
+  });
+});
+
 describe("buildItems", () => {
-  it("groups chats by how recently they were active", () => {
-    const items = buildItems(
-      input([
-        s({ title: "a", lastActiveAt: NOW - H }),
-        s({ title: "b", lastActiveAt: NOW - 20 * H }),
-        s({ title: "c", lastActiveAt: NOW - 3 * D }),
-        s({ title: "d", lastActiveAt: NOW - 20 * D }),
-        s({ title: "e", lastActiveAt: NOW - 90 * D }),
-      ]),
-      "",
-      "all",
-      NOW,
-    );
+  it("puts running chats first, then today, then pinned, then by date, each chat once", () => {
+    const a = s({ title: "Running", lastActiveAt: NOW - 3 * D });
+    const b = s({ title: "Today", lastActiveAt: NOW - H });
+    const c = s({ title: "Pinned old", lastActiveAt: NOW - 20 * D });
+    const d = s({ title: "Yesterday", lastActiveAt: NOW - D });
+    const items = buildItems(input([a, b, c, d], { live: [live(a)], pins: [c.id] }), "", ALL, NOW);
     expect(labels(items)).toEqual([
+      "# Running now",
+      "Running",
       "# Today",
-      "a",
+      "Today",
+      "# Pinned",
+      "Pinned old",
       "# Yesterday",
-      "b",
-      "# Previous 7 days",
-      "c",
-      "# Previous 30 days",
-      "d",
-      "# Older",
-      "e",
+      "Yesterday",
     ]);
   });
 
-  it("puts running chats first, then pinned, each chat only once", () => {
-    const live = s({ title: "live" });
-    const pinned = s({ title: "pinned" });
-    const both = s({ title: "both" });
-    const plain = s({ title: "plain" });
-    const status: LiveStatus[] = [live, both].map((x) => ({
-      sessionId: x.id,
-      pid: 1,
-      status: "busy",
-      name: null,
-      updatedAt: 0,
-    }));
-    const items = buildItems(
-      input([plain, pinned, both, live], { live: status, pins: [pinned.id, both.id] }),
-      "",
-      "all",
-      NOW,
-    );
-    expect(labels(items)).toEqual([
-      "# Running now",
-      "both",
-      "live",
-      "# Pinned",
-      "pinned",
-      "# Today",
-      "plain",
+  it("keeps a collapsed group's header and count, without its chats", () => {
+    const a = s({ title: "A" });
+    const b = s({ title: "B" });
+    const items = buildItems(input([a, b]), "", ALL, NOW, ["Today"]);
+    expect(items).toEqual([
+      { kind: "header", key: "h:Today", label: "Today", count: 2, collapsed: true },
     ]);
+  });
+
+  it("shows a flat list while searching, over title, prompt, project, branch and #tags", () => {
+    const a = s({ title: "Fix cart", branch: "fix/cart" });
+    const b = s({ title: "Other", firstPrompt: "the cart again" });
+    const c = s({ title: "Tagged" });
+    const items = buildItems(input([a, b, c], { tags: { [c.id]: ["bug"] } }), "cart", ALL, NOW);
+    expect(labels(items)).toEqual(["Fix cart", "Other"]);
+    expect(
+      labels(buildItems(input([a, b, c], { tags: { [c.id]: ["bug"] } }), "#bug", ALL, NOW)),
+    ).toEqual(["Tagged"]);
   });
 
   it("uses Orbit renames as the title", () => {
-    const a = s({ title: "Original" });
-    const items = buildItems(input([a], { renames: { [a.id]: "Renamed" } }), "", "all", NOW);
-    expect(labels(items)).toEqual(["# Today", "Renamed"]);
+    const a = s();
+    expect(labels(buildItems(input([a], { renames: { [a.id]: "Mine" } }), "", ALL, NOW))).toEqual([
+      "# Today",
+      "Mine",
+    ]);
+  });
+});
+
+describe("filters", () => {
+  it("Recent shows pinned and running chats plus the 20 newest, and says how many more there are", () => {
+    const many = Array.from({ length: 25 }, (_, i) => s({ lastActiveAt: NOW - i * H }));
+    const old = s({ lastActiveAt: NOW - 90 * D });
+    const v = visible(input([...many, old], { pins: [old.id] }), "", DEFAULT_FILTER, NOW);
+    expect(v.list).toHaveLength(RECENT + 1);
+    expect(v.more).toBe(5);
+    // Searching always looks at every chat.
+    expect(visible(input(many), "chat", DEFAULT_FILTER, NOW).more).toBe(0);
   });
 
-  it("searches title, first prompt, project and branch; every word must match", () => {
-    const list = [
-      s({ title: "Fix login", project: "shop", branch: "main" }),
-      s({ title: "Refactor", firstPrompt: "clean up the LOGIN form", project: "api" }),
-      s({ title: "Docs", branch: "feature/login-page" }),
-      s({ title: "Other" }),
-    ];
-    expect(
-      labels(buildItems(input(list), "login", "all", NOW)).filter((l) => !l.startsWith("#")),
-    ).toEqual(["Fix login", "Refactor", "Docs"]);
-    expect(labels(buildItems(input(list), "login api", "all", NOW))).toEqual([
-      "# Today",
-      "Refactor",
+  it("Week and Month go back 7 or 30 days, keeping pinned chats", () => {
+    const a = s({ lastActiveAt: NOW - 3 * D });
+    const b = s({ lastActiveAt: NOW - 20 * D });
+    const c = s({ lastActiveAt: NOW - 60 * D });
+    const i = input([a, b, c], { pins: [c.id] });
+    expect(visible(i, "", { ...ALL, date: "week" }, NOW).list.map((x) => x.s.id)).toEqual([
+      a.id,
+      c.id,
+    ]);
+    expect(visible(i, "", { ...ALL, date: "month" }, NOW).list).toHaveLength(3);
+  });
+
+  it("narrows by folder, branch (including no branch) and worktree", () => {
+    const a = s({ cwd: "/code/api", project: "api" });
+    const b = s({ branch: null });
+    const c = s({ worktree: { kind: "claude", name: "fix", removed: false } });
+    const i = input([a, b, c], { here: [b.id] });
+    expect(visible(i, "", { ...ALL, project: "/code/api" }, NOW).list.map((x) => x.s.id)).toEqual([
+      a.id,
+    ]);
+    expect(visible(i, "", { ...ALL, project: "here" }, NOW).list.map((x) => x.s.id)).toEqual([
+      b.id,
+    ]);
+    expect(visible(i, "", { ...ALL, branch: "" }, NOW).list.map((x) => x.s.id)).toEqual([b.id]);
+    expect(visible(i, "", { ...ALL, worktree: "claude" }, NOW).list.map((x) => x.s.id)).toEqual([
+      c.id,
     ]);
   });
 
-  it("filters to this folder, pinned, or running", () => {
-    const here = s({ title: "here" });
-    const away = s({ title: "away" });
-    const base = input([here, away], {
-      here: [here.id],
-      pins: [away.id],
-      live: [{ sessionId: here.id, pid: 1, status: "idle", name: null, updatedAt: 0 }],
-    });
-    const chats = (f: Parameters<typeof buildItems>[2]) =>
-      labels(buildItems(base, "", f, NOW)).filter((l) => !l.startsWith("#"));
-    expect(chats("workspace")).toEqual(["here"]);
-    expect(chats("pinned")).toEqual(["away"]);
-    expect(chats("live")).toEqual(["here"]);
-    expect(chats("all")).toEqual(["here", "away"]);
+  it("keeps archived and hidden chats out of the list, each in a view of its own", () => {
+    const a = s();
+    const b = s();
+    const c = s();
+    const i = input([a, b, c], { archived: [b.id], hidden: [c.id] });
+    expect(visible(i, "", ALL, NOW).list.map((x) => x.s.id)).toEqual([a.id]);
+    expect(visible(i, "", { ...ALL, view: "archived" }, NOW).list.map((x) => x.s.id)).toEqual([
+      b.id,
+    ]);
+    expect(visible(i, "", { ...ALL, view: "hidden" }, NOW).list.map((x) => x.s.id)).toEqual([c.id]);
   });
 
-  it("returns nothing when nothing matches", () => {
-    expect(buildItems(input([s()]), "zzz", "all", NOW)).toEqual([]);
+  it("counts each menu's options with the other filters applied", () => {
+    const a = s({ cwd: "/code/api", project: "api", branch: "dev" });
+    const b = s({ branch: "main" });
+    const c = s({ branch: "main" });
+    const f = facets(input([a, b, c], { here: [b.id] }), { ...ALL, branch: "main" }, NOW);
+    expect(f.projects.find((p) => p.value === "/code/shop")?.count).toBe(2);
+    expect(f.projects.find((p) => p.value === "/code/api")?.count).toBe(0);
+    expect(f.projects.find((p) => p.value === "here")?.count).toBe(1);
+    expect(f.branches.map((x) => [x.label, x.count])).toEqual([
+      ["All branches", 3],
+      ["main", 2],
+      ["dev", 1],
+    ]);
+    expect(f.hasWorktrees).toBe(false);
   });
 });
 
@@ -160,40 +209,14 @@ describe("relativeTime", () => {
   });
 });
 
-describe("buildItems: tags and narrowing", () => {
-  it("finds chats by #tag and shows tags to plain search too", () => {
-    const a = s({ title: "Alpha" });
-    const b = s({ title: "Beta" });
-    const i = input([a, b], { tags: { [a.id]: ["release", "bug"] } });
-    expect(labels(buildItems(i, "#bug", "all", NOW)).filter((l) => !l.startsWith("#"))).toEqual([
-      "Alpha",
-    ]);
-    expect(labels(buildItems(i, "#bu", "all", NOW)).filter((l) => !l.startsWith("#"))).toEqual([]);
-    expect(labels(buildItems(i, "release", "all", NOW)).filter((l) => !l.startsWith("#"))).toEqual([
-      "Alpha",
-    ]);
-    const vm = buildItems(i, "", "all", NOW).find((x) => x.kind === "chat" && x.vm.s.id === a.id);
-    expect(vm?.kind === "chat" && vm.vm.tags).toEqual(["release", "bug"]);
-  });
-
-  it("narrows by project folder, branch and date", () => {
-    const shopMain = s({ title: "Shop main", cwd: "/code/shop", branch: "main" });
-    const shopFix = s({
-      title: "Shop fix",
-      cwd: "/code/shop",
-      branch: "fix/cart",
-      lastActiveAt: NOW - 3 * D,
-    });
-    const api = s({ title: "Api", cwd: "/code/api", project: "api", lastActiveAt: NOW - 40 * D });
-    const i = input([shopMain, shopFix, api]);
-    const titles = (more: Parameters<typeof buildItems>[4]) =>
-      labels(buildItems(i, "", "all", NOW, more)).filter((l) => !l.startsWith("#"));
-    expect(titles({ project: "/code/shop" })).toEqual(["Shop main", "Shop fix"]);
-    expect(titles({ project: "/code/shop", branch: "fix/cart" })).toEqual(["Shop fix"]);
-    expect(titles({ since: "today" })).toEqual(["Shop main"]);
-    expect(titles({ since: "week" })).toEqual(["Shop main", "Shop fix"]);
-    expect(titles({ since: "month" })).toEqual(["Shop main", "Shop fix"]);
-    expect(titles({})).toEqual(["Shop main", "Shop fix", "Api"]);
+describe("duration", () => {
+  it.each([
+    [20_000, "<1m"],
+    [30 * 60_000, "30m"],
+    [145 * 60_000, "2h 25m"],
+    [(13 * 24 + 16) * H, "13d 16h"],
+  ])("formats %s as %s", (ms, want) => {
+    expect(duration(ms)).toBe(want);
   });
 });
 

@@ -20,6 +20,8 @@ export interface AccountHandlerDeps {
   info(message: string): void;
   warn(message: string): void;
   refresh(): Promise<void>;
+  /** Puts Claude Code's newest backup of ~/.claude.json back (Orbit keeps the broken one). */
+  restoreConfig?(backup: string): Promise<boolean>;
 }
 
 const err = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -111,6 +113,23 @@ export async function handleAccount(raw: unknown, d: AccountHandlerDeps): Promis
       if (pick === "Forget") await d.accounts.remove(m.id);
       break;
     }
+    case "account:restoreConfig": {
+      const b = (await d.accounts.snapshot()).broken;
+      if (!b?.backup || !d.restoreConfig) {
+        d.warn("There's no backup of ~/.claude.json to restore from.");
+        break;
+      }
+      const when = b.backupAt ? new Date(b.backupAt).toLocaleString() : "an earlier time";
+      const pick = await d.ask(
+        "Restore ~/.claude.json from Claude Code's backup?",
+        `Claude Code's settings file is empty or broken, so Claude may ask you to log in again. The backup is from ${when}. Orbit keeps a copy of the broken file, and you can undo this.`,
+        "Restore",
+      );
+      if (pick === "Restore") {
+        if (await d.restoreConfig(b.backup)) d.info("Restored ~/.claude.json from the backup.");
+      }
+      break;
+    }
     case "account:pick": {
       const snap = await d.accounts.snapshot();
       const activeSaved = snap.saved.some((a) => a.id === snap.profile?.id);
@@ -118,7 +137,10 @@ export async function handleAccount(raw: unknown, d: AccountHandlerDeps): Promis
         ...snap.saved.map((a) => ({
           id: a.id,
           label: `${a.id === snap.profile?.id ? "$(check)" : "$(account)"} ${a.name}`,
-          description: a.id === snap.profile?.id ? "In use" : (a.plan ?? undefined),
+          description:
+            [a.id === snap.profile?.id ? "In use" : a.plan, a.lastSeen]
+              .filter(Boolean)
+              .join(" · ") || undefined,
           detail: [a.email, a.organization].filter(Boolean).join(" · "),
         })),
         ...(snap.profile && !activeSaved

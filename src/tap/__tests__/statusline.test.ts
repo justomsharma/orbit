@@ -28,7 +28,62 @@ describe("parseStatusInput", () => {
       fiveHour: { pct: 23.5, resetsAt: 1790760000 * 1000 },
       sevenDay: { pct: 41.2, resetsAt: 1791200000 * 1000 },
       spendLimit: null,
+      cache: null,
+      pr: null,
+      worktree: null,
+      repo: null,
     });
+  });
+
+  it("keeps the prompt cache, pull request, worktree and repo Claude reports", () => {
+    const r = parseStatusInput(
+      JSON.stringify({
+        ...INPUT,
+        prompt_cache: {
+          ttl: "5m",
+          requests: 40,
+          misses: 3,
+          expected_rebuilds: 1,
+          hit_ratio: 0.82,
+          miss_recache_tokens: 120000,
+          last_miss_cause: { causes: ["tools_changed"], tools_added: 2, tools_removed: 1 },
+        },
+        pr: { number: 412, url: "https://github.com/acme/shop/pull/412", review_state: "approved" },
+        worktree: { name: "feat-x", branch: "feat/x", original_branch: "main", path: "/w/x" },
+        workspace: { repo: { host: "github.com", owner: "acme", name: "shop" } },
+      }),
+    )!;
+    expect(r.cache).toEqual({
+      ttl: "5m",
+      requests: 40,
+      misses: 3,
+      rebuilds: 1,
+      hitRatio: 0.82,
+      recached: 120000,
+      lastMiss: ["tools_changed"],
+      toolsAdded: 2,
+      toolsRemoved: 1,
+    });
+    expect(r.pr).toEqual({
+      number: 412,
+      url: "https://github.com/acme/shop/pull/412",
+      review: "approved",
+      kind: "pr",
+    });
+    expect(r.worktree).toEqual({
+      name: "feat-x",
+      branch: "feat/x",
+      originalBranch: "main",
+      path: "/w/x",
+    });
+    expect(r.repo).toEqual({ host: "github.com", owner: "acme", name: "shop" });
+  });
+
+  it("drops a PR link that isn't a web address", () => {
+    const r = parseStatusInput(
+      JSON.stringify({ ...INPUT, pr: { number: 1, url: "javascript:x" } }),
+    )!;
+    expect(r.pr?.url).toBeNull();
   });
 
   it("tolerates missing windows, nulls and junk", () => {
@@ -74,7 +129,9 @@ describe("mergeQuota", () => {
 
 describe("defaultLine", () => {
   it("shows model and context", () => {
-    expect(defaultLine(parseStatusInput(JSON.stringify(INPUT)))).toBe("Opus 5.5 · 42% context");
+    expect(defaultLine(parseStatusInput(JSON.stringify(INPUT)))).toBe(
+      "Opus 5.5 · 42% context · 5h 24% · 7d 41%",
+    );
     expect(defaultLine(null)).toBe("");
   });
 });
@@ -128,7 +185,7 @@ describe("runTap", () => {
 
   it("prints a default line when there is no previous statusline", () => {
     const out = runTap(JSON.stringify(INPUT), tmp(), { now: () => 1, runInner: () => "x" });
-    expect(out).toBe("Opus 5.5 · 42% context");
+    expect(out).toBe("Opus 5.5 · 42% context · 5h 24% · 7d 41%");
   });
 
   it("never throws: bad input, unwritable folder, failing inner command", () => {
@@ -143,7 +200,7 @@ describe("runTap", () => {
         throw new Error("boom");
       },
     });
-    expect(out).toBe("Opus 5.5 · 42% context");
+    expect(out).toBe("Opus 5.5 · 42% context · 5h 24% · 7d 41%");
   });
 });
 

@@ -104,28 +104,28 @@ export const TABS: readonly TabDef[] = [
     id: "plugins",
     label: "Plugins",
     icon: "package",
-    blurb: "Turn plugins on or off, no JSON",
+    blurb: "Turn plugins on or off, see where they come from",
     reads: "setup",
   },
   {
     id: "agents",
     label: "Agents",
     icon: "hubot",
-    blurb: "Helpers Claude hands focused work to",
+    blurb: "Helpers Claude hands work to, fully editable",
     reads: "setup",
   },
   {
     id: "commands",
     label: "Commands",
     icon: "terminal",
-    blurb: "Your slash commands in one place",
+    blurb: "Yours and all of Claude Code's built-in commands",
     reads: "setup",
   },
   {
     id: "hooks",
     label: "Hooks",
     icon: "zap",
-    blurb: "Scripts that run on Claude's events",
+    blurb: "Scripts on Claude's events: pause or edit one",
     reads: "setup",
   },
   {
@@ -142,3 +142,23 @@ export const TAB_IDS = TABS.map((t) => t.id);
 export const isTab = (v: unknown): v is Tab => TAB_IDS.includes(v as Tab);
 
 export const tabDef = (id: Tab): TabDef => TABS.find((t) => t.id === id)!;
+
+/** Config holds the tab settings, so it can't be hidden. */
+export const ALWAYS_SHOWN: Tab = "config";
+
+/**
+ * The tabs to show: in the person's order (tabs it doesn't name keep their usual
+ * place after it), without the hidden ones. Unknown ids are ignored.
+ */
+export function arrangeTabs(order?: readonly string[], hidden?: readonly string[]): TabDef[] {
+  const seen = new Set<Tab>();
+  const out: TabDef[] = [];
+  for (const id of order ?? [])
+    if (isTab(id) && !seen.has(id)) {
+      seen.add(id);
+      out.push(tabDef(id));
+    }
+  for (const t of TABS) if (!seen.has(t.id)) out.push(t);
+  const hide = new Set(hidden ?? []);
+  return out.filter((t) => t.id === ALWAYS_SHOWN || !hide.has(t.id));
+}

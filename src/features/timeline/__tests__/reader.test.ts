@@ -54,6 +54,7 @@ describe("readTimeline", () => {
         messageId: "m1",
         blob: f.blobPath(B1),
         available: true,
+        bytes: 3,
       },
     ]);
   });
@@ -227,6 +228,7 @@ describe("readVersion", () => {
     messageId: null,
     blob,
     available: true,
+    bytes: 0,
   });
 
   it("reads a text checkpoint", async () => {
@@ -281,6 +283,7 @@ describe("readVersion and linked folders", () => {
       messageId: null,
       blob: join(hist, id, "0123456789abcdef@v1"),
       available: true,
+      bytes: 0,
     };
     expect(await readVersion(v)).toBeNull();
   });

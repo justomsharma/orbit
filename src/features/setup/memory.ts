@@ -23,6 +23,22 @@ export interface MemoryFile {
   links: string[];
   brokenLinks: string[];
   orphan: boolean;
+  /** `type` or `metadata.type` in its frontmatter (user, feedback, project, reference…). */
+  type: string | null;
+  /** Names of the memories that link here. */
+  linksIn: string[];
+  /** The MEMORY.md line that points here, if any. */
+  indexEntry: string | null;
+  frontmatter: boolean;
+  /** Last changed (ms since epoch). */
+  modified: number;
+}
+
+/** A project folder in `~/.claude/projects` that has auto memories. */
+export interface MemoryProject {
+  slug: string;
+  dir: string;
+  count: number;
 }
 
 export interface MemoryInfo {
@@ -166,15 +182,36 @@ interface Raw {
   title: string | null;
   description: string | null;
   links: string[];
+  type: string | null;
+  frontmatter: boolean;
+  modified: number;
 }
 
 async function readMemoryFile(dir: string, name: string): Promise<Raw> {
   const path = join(dir, name);
   const stem = name.slice(0, -3);
-  const bytes = (await statSafe(path))?.size ?? 0;
+  const st = await statSafe(path);
+  const bytes = st?.size ?? 0;
+  const modified = st?.mtimeMs ?? 0;
   const text = await readTextSafe(path, MAX_FILE_BYTES);
-  if (text === null) return { name, path, bytes, stem, title: stem, description: null, links: [] };
+  if (text === null)
+    return {
+      name,
+      path,
+      bytes,
+      stem,
+      title: stem,
+      description: null,
+      links: [],
+      type: null,
+      frontmatter: false,
+      modified,
+    };
   const fm = parseFrontmatter(text);
+  const meta = fm.data.metadata;
+  const type =
+    strOrNull(fm.data.type) ??
+    (meta && typeof meta === "object" ? strOrNull((meta as Record<string, unknown>).type) : null);
   return {
     name,
     path,
@@ -183,6 +220,9 @@ async function readMemoryFile(dir: string, name: string): Promise<Raw> {
     title: strOrNull(fm.data.name) ?? stem,
     description: strOrNull(fm.data.description),
     links: wikiLinks(fm.body),
+    type,
+    frontmatter: /^﻿?---[ \t]*\r?\n/.test(text),
+    modified,
   };
 }
 
@@ -212,11 +252,22 @@ async function readAuto(dir: string): Promise<Omit<MemoryInfo["auto"], "enabled"
     const t = target(l);
     if (t) referenced.add(t);
   }
+  const linksIn = new Map<Raw, string[]>();
   for (const r of raws)
     for (const l of r.links) {
       const t = target(l);
-      if (t && t !== r) referenced.add(t);
+      if (t && t !== r) {
+        referenced.add(t);
+        linksIn.set(t, [...(linksIn.get(t) ?? []), r.title ?? r.stem]);
+      }
     }
+  const indexLines = indexText.split(/\r?\n/);
+  const entryFor = (r: Raw) =>
+    indexLines.find((line) => {
+      const files = linkedFiles(line);
+      if (files.has(r.name.toLowerCase())) return true;
+      return wikiLinks(line).some((l) => target(l) === r);
+    }) ?? null;
 
   return {
     indexPath: hasIndex ? indexPath : null,
@@ -231,8 +282,33 @@ async function readAuto(dir: string): Promise<Omit<MemoryInfo["auto"], "enabled"
       links: r.links,
       brokenLinks: r.links.filter((l) => !target(l)),
       orphan: !referenced.has(r),
+      type: r.type,
+      linksIn: [...new Set(linksIn.get(r) ?? [])],
+      indexEntry: entryFor(r)?.trim() ?? null,
+      frontmatter: r.frontmatter,
+      modified: r.modified,
     })),
   };
+}
+
+/** The memories in one folder (another project's, say), read the same way. */
+export async function readMemoryDir(dir: string): Promise<MemoryFile[]> {
+  return (await readAuto(dir).catch(() => ({ files: [] as MemoryFile[] }))).files;
+}
+
+/** Every project folder Claude keeps with at least one memory, by name. */
+export async function listMemoryProjects(home: string): Promise<MemoryProject[]> {
+  const root = join(home, "projects");
+  const out: MemoryProject[] = [];
+  const dirs = (await listDirSafe(root)).filter((e) => e.isDirectory());
+  await mapLimit(dirs, PARALLEL, async (e) => {
+    const dir = join(root, e.name, "memory");
+    const count = (await listDirSafe(dir)).filter(
+      (f) => f.isFile() && /\.md$/i.test(f.name) && f.name.toLowerCase() !== "memory.md",
+    ).length;
+    if (count) out.push({ slug: e.name, dir, count });
+  });
+  return out.sort((a, b) => a.slug.localeCompare(b.slug));
 }
 
 /** Every CLAUDE.md that could apply here, plus this project's auto memory. */

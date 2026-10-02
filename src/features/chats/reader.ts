@@ -49,6 +49,7 @@ class SessionBuilder {
   private aiTitle: string | null = null;
   private agentName: string | null = null;
   private customTitle: string | null = null;
+  private summary: string | null = null;
   private model: string | null = null;
   private entrypoint: string | null = null;
   private continuedIn: string | null = null;
@@ -88,6 +89,9 @@ class SessionBuilder {
       case "custom-title":
         this.customTitle = str(l.customTitle) ?? this.customTitle;
         break;
+      case "summary":
+        this.summary = str(l.summary) ?? this.summary;
+        break;
       case "pr-link": {
         const u = str(l.prUrl);
         if (u) this.prLinks.add(u);
@@ -112,7 +116,7 @@ class SessionBuilder {
   ): Session {
     const where = this.cwd ?? "";
     const title = clip(
-      (this.customTitle ?? this.agentName ?? this.aiTitle ?? this.firstPrompt ?? "")
+      (this.customTitle ?? this.agentName ?? this.aiTitle ?? this.summary ?? this.firstPrompt ?? "")
         .replace(/\s+/g, " ")
         .trim(),
       MAX_TITLE,

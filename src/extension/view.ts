@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import type { Accounts } from "../features/account/accounts";
+import { ConversationCache } from "../features/chats/conversation";
 import { settingsCatalog } from "../features/setup/catalog";
+import type { MemoryFile } from "../features/setup/memory";
 import { checkpointSummaries } from "../features/timeline/summary";
 import type { QuotaInstaller } from "../features/usage/quotaInstall";
 import type { HostMsg, OrbitPrefs } from "../shared/protocol";
@@ -13,6 +15,7 @@ import { createHandler } from "./handler";
 import { makeNonce, renderHtml } from "./html";
 import { stepFor } from "./onboarding";
 import type { Opener } from "./opener";
+import { handleSessions, type SessionsDeps } from "./sessionsHandler";
 import { handleSetup, type SetupHandlerDeps } from "./setupHandler";
 import { type SetupService, type SetupSnapshot, viewSnapshot } from "./setupService";
 import type { OrbitState } from "./state";
@@ -29,14 +32,19 @@ export interface ViewDeps {
   opener: Opener;
   setup: SetupService;
   /** Everything the Setup actions need except the snapshot, which the view owns. */
-  setupDeps: Omit<SetupHandlerDeps, "snapshot" | "refresh">;
+  setupDeps: Omit<SetupHandlerDeps, "snapshot" | "refresh" | "post">;
   /** Everything the Chats-tab actions need except posting, which the view owns. */
   chatsDeps: Omit<ChatsHandlerDeps, "post" | "getSession" | "sessions">;
+  sessionsDeps: Omit<
+    SessionsDeps,
+    "getSession" | "sessions" | "live" | "here" | "post" | "refresh" | "state" | "conversations"
+  >;
+  terminals: { sync(live: ChatsSnapshot["live"]): Promise<void>; linked(): string[] };
   log: vscode.LogOutputChannel;
   onSnapshot(s: ChatsSnapshot): void;
   accounts: Accounts;
   prefs(): OrbitPrefs;
-  setPref(key: keyof OrbitPrefs, value: string): Promise<void>;
+  setPref(key: keyof OrbitPrefs, value: string | number | boolean | string[]): Promise<void>;
   accountDeps: Omit<AccountHandlerDeps, "accounts" | "refresh" | "running">;
   /** Opens the Get started walkthrough. */
   openTour(): Promise<void>;
@@ -54,6 +62,8 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   lastUsage: UsageSnapshot | null = null;
   /** Host copy with real values, for Setup actions. Post only `viewSnapshot(lastSetup)`. */
   lastSetup: SetupSnapshot | null = null;
+  /** Another project's memories the view asked for (Memory's project picker). */
+  private readonly otherMemory: { files: MemoryFile[] } = { files: [] };
   /** The tab the person is looking at; only its data is read (chats always, for the status bar). */
   private tab: Reading = "home";
   /** Signatures of the data the view last received; identical refreshes are not re-sent. */
@@ -68,6 +78,8 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
   };
   /** A tab asked for before the view was ready; sent when it says "ready". */
   private pendingGoto: Tab | null = null;
+  private remembered = 0;
+  private readonly conversations = new ConversationCache();
 
   /**
    * Runs one message from the webview (every message is validated inside the
@@ -91,9 +103,20 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       setTab: (t) => {
         this.tab = t;
       },
-      isKnownLink: (u) => this.d.chats.isKnownLink(u),
+      // PR links from chats, and the PR Claude's statusline reported.
+      isKnownLink: (u) => this.d.chats.isKnownLink(u) || this.lastUsage?.quota.data?.pr?.url === u,
       openLink: async (url) => {
         await vscode.env.openExternal(vscode.Uri.parse(url, true));
+      },
+      logError: (m) => this.d.log.error(m),
+      orbitCommand: async (id) => {
+        await vscode.commands.executeCommand(`orbit.${id}`);
+      },
+      openOrbitSettings: async () => {
+        await vscode.commands.executeCommand(
+          "workbench.action.openSettings",
+          "@ext:OmSharma.orbit-hq",
+        );
       },
       info: (m) => void vscode.window.showInformationMessage(m),
       warn: (m) => void vscode.window.showWarningMessage(m),
@@ -103,12 +126,25 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       snapshot: () => this.lastSetup,
       refresh: () => this.refresh(),
       reply: (req, ok) => this.post({ type: "setup:result", req, ok }),
+      post: (m) => this.post(m),
+      otherMemory: this.otherMemory,
     };
     const chatsDeps: ChatsHandlerDeps = {
       ...this.d.chatsDeps,
       getSession: (id) => this.d.chats.get(id),
       sessions: () => this.d.chats.all(),
       post: (msg) => this.post(msg),
+    };
+    const sessionsDeps: SessionsDeps = {
+      ...this.d.sessionsDeps,
+      getSession: (id) => this.d.chats.get(id),
+      sessions: () => this.d.chats.all(),
+      live: () => this.last?.live ?? [],
+      here: () => this.last?.here ?? [],
+      post: (msg) => this.post(msg),
+      refresh: () => this.refresh(),
+      state: this.d.state,
+      conversations: this.conversations,
     };
     const accountDeps: AccountHandlerDeps = {
       ...this.d.accountDeps,
@@ -120,6 +156,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       try {
         if (
           !(await handleSetup(m, setupDeps)) &&
+          !(await handleSessions(m, sessionsDeps)) &&
           !(await handleChats(m, chatsDeps)) &&
           !(await handleAccount(m, accountDeps))
         )
@@ -229,6 +266,7 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     this.last = snap;
+    await this.d.terminals.sync(snap.live).catch(() => {});
     this.d.onSnapshot(snap);
     if (this.view?.visible) {
       this.postOnce("sessions", {
@@ -240,6 +278,10 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
         tags: this.d.state.tags(),
         onboarding: this.d.state.onboarding(),
         here: snap.here,
+        archived: this.d.state.marked("archived"),
+        hidden: this.d.state.marked("hidden"),
+        temp: this.d.state.marked("temp"),
+        terminals: this.d.terminals.linked(),
         env: {
           claudeExtension: this.d.opener.claudeExtensionInstalled(),
           hasWorkspace: workspaceFolders().length > 0,
@@ -303,6 +345,12 @@ export class OrbitViewProvider implements vscode.WebviewViewProvider {
       if (this.lastUsage.quota.enabled && (await this.d.state.markStep("limits")))
         this.again = true;
       if (this.view?.visible) this.postOnce("usage", { type: "usage", data: this.lastUsage });
+      // Keep each account's latest limits, to show after switching away from it.
+      const q = this.lastUsage.quota.data;
+      if (q && q.updatedAt !== this.remembered) {
+        this.remembered = q.updatedAt;
+        void this.d.accounts.remember(q).catch(() => {});
+      }
     } catch (e) {
       this.d.log.error("Could not read Claude Code usage", errText(e));
     }

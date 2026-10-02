@@ -8,6 +8,7 @@ const css = [
   "styles-setup.css",
   "styles-chats.css",
   "styles-shell.css",
+  "styles-sessions.css",
 ]
   .map((f) => readFileSync(join(__dirname, "..", f), "utf8"))
   .join("\n");

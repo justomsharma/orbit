@@ -1,6 +1,7 @@
 import { mkdirSync, truncateSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { sampleSetup } from "../../../test/helpers/setupFixture";
 import { useTmpDir } from "../../../test/helpers/tmp";
 import { redactText } from "../../features/setup/redact";
 import { SetupService, viewSnapshot } from "../setupService";
@@ -191,5 +192,22 @@ describe("SetupService", () => {
     expect(s.workspace).toBeNull();
     expect(s.mcp).toEqual([]);
     expect(Array.isArray(s.issues)).toBe(true);
+  });
+});
+
+describe("viewSnapshot: marketplaces", () => {
+  it("hides tokens in a marketplace's address", () => {
+    const view = viewSnapshot({
+      ...sampleSetup(),
+      marketplaces: [
+        {
+          name: "team",
+          source: "https://oauth2:glpat-abcdef123456@gitlab.com/org/repo.git",
+          official: false,
+          lastUpdated: null,
+        },
+      ],
+    });
+    expect(view.marketplaces[0]!.source).not.toContain("glpat-abcdef123456");
   });
 });

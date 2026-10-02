@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayKey, heatmap, summarize, totalTokens } from "../aggregate";
+import { dayKey, heatmap, longestChat, summarize, totalTokens, yearGrid } from "../aggregate";
 import type { UsageRecord } from "../types";
 
 let n = 0;
@@ -208,5 +208,44 @@ describe("heatmap", () => {
     expect(h.at(-2)).toEqual({ day: "2026-09-29", tokens: 11 });
     expect(h.at(-1)).toEqual({ day: "2026-09-30", tokens: 7 });
     expect(h.reduce((a, d) => a + d.tokens, 0)).toBe(18);
+  });
+});
+
+describe("yearGrid", () => {
+  const now = local(2026, 9, 30, 15); // a Wednesday
+
+  it("covers 52 whole weeks from a Monday, ending today", () => {
+    const g = yearGrid([], now);
+    expect(g).toHaveLength(51 * 7 + 3);
+    expect(new Date(`${g[0]!.day}T12:00:00`).getDay()).toBe(1);
+    expect(g.at(-1)!.day).toBe("2026-09-30");
+  });
+
+  it("counts tokens, replies and chats per day", () => {
+    const g = yearGrid(
+      [
+        rec(local(2026, 9, 29, 9), { input: 5, session: "a" }),
+        rec(local(2026, 9, 29, 10), { output: 6, session: "b" }),
+        rec(local(2026, 9, 29, 11), { output: 1, session: "a" }),
+      ],
+      now,
+    );
+    expect(g.at(-2)).toEqual({ day: "2026-09-29", tokens: 12, messages: 3, sessions: 2 });
+  });
+});
+
+describe("longestChat", () => {
+  it("measures each chat from its first reply to its last", () => {
+    const h = 3_600_000;
+    const ms = longestChat(
+      [
+        rec(1000, { session: "a" }),
+        rec(1000 + 2 * h, { session: "a" }),
+        rec(5000, { session: "b" }),
+      ],
+      0,
+      Number.POSITIVE_INFINITY,
+    );
+    expect(ms).toBe(2 * h);
   });
 });

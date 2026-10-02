@@ -1,7 +1,14 @@
 import type { OrbitStore } from "../core/orbitStore";
 import { PRICING_AS_OF } from "../core/pricing";
 import type { Session } from "../features/chats/types";
-import { heatmap, summarize, type UsageSummary } from "../features/usage/aggregate";
+import {
+  heatmap,
+  longestChat,
+  summarize,
+  type UsageSummary,
+  type YearDay,
+  yearGrid,
+} from "../features/usage/aggregate";
 import { type IndexState, UsageIndex } from "../features/usage/index";
 import { type Recap, recapMarkdown, weeklyRecap } from "../features/usage/recap";
 import type { QuotaFile } from "../tap/statusline";
@@ -22,6 +29,10 @@ export interface UsageSnapshot {
   month: UsageSummary;
   all: UsageSummary;
   heat: { day: string; tokens: number }[];
+  /** 52 weeks, Monday-aligned, for the activity map. */
+  year: YearDay[];
+  /** The longest chat (first reply to last) in the last 30 days and of all time. */
+  longest: { month: number; all: number };
   recap: Recap;
   recapMarkdown: string;
   /** `shadowed`: a project statusline hides Orbit's there, so limits won't update in it. */
@@ -90,6 +101,11 @@ export class UsageService {
       month: summarize(r, startOfDay(now, 29), end),
       all: summarize(r, 0, end),
       heat: heatmap(r, now, 26),
+      year: yearGrid(r, now),
+      longest: {
+        month: longestChat(r, startOfDay(now, 29), Number.POSITIVE_INFINITY),
+        all: longestChat(r, 0, Number.POSITIVE_INFINITY),
+      },
       recap,
       recapMarkdown: recapMarkdown(recap),
       quota: { enabled: status.enabled, shadowed: status.shadowed === true, data },

@@ -108,7 +108,7 @@ describe("Running now on Home", () => {
     expect(within(running).getAllByRole("listitem")).toHaveLength(3);
     fireEvent.click(within(running).getByRole("button", { name: /4 more running/ }));
     expect(store.tab.value).toBe("chats");
-    expect(store.filter.value).toBe("live");
+    expect(store.filters().view).toBe("chats");
   });
 });
 

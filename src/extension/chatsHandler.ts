@@ -6,7 +6,7 @@ import { searchMessages } from "../features/chats/search";
 import { transcriptMarkdown } from "../features/chats/transcript";
 import type { Session } from "../features/chats/types";
 import { expandPrompt, type PromptLibrary } from "../features/prompts/library";
-import { readTimeline, readVersion } from "../features/timeline/reader";
+import { readCheckpoints, readTimeline, readVersion } from "../features/timeline/reader";
 import type { ChangedFile, FileVersion } from "../features/timeline/types";
 import { type ChangedFileView, type HostMsg, parseViewMsg, type ViewMsg } from "../shared/protocol";
 import { MAX_PROMPT_IN_LINK } from "./opener";
@@ -30,9 +30,16 @@ export interface ChatsHandlerDeps {
   /** Save dialog for a Markdown file. */
   saveMarkdown(text: string, suggestedName: string): Promise<void>;
   post(m: HostMsg): void;
+  /** Shows a file in the editor. */
+  openFile(path: string): Promise<void>;
+  /** The file is open in an editor with changes not saved yet. */
+  unsaved(path: string): boolean;
 }
 
-type ChatsMsg = Extract<ViewMsg, { type: `chat:${string}` | `prompts:${string}` | "search" }>;
+type ChatsMsg = Extract<
+  ViewMsg,
+  { type: `chat:${string}` | `cp:${string}` | `prompts:${string}` | "search" }
+>;
 
 /** Search shows at most this many chats. */
 const MAX_HITS = 200;
@@ -46,7 +53,12 @@ const when = (at: number) => (at ? new Date(at).toLocaleString() : "an unknown t
 function toView(f: ChangedFile): ChangedFileView {
   return {
     ...f,
-    versions: f.versions.map(({ version, at, available }) => ({ version, at, available })),
+    versions: f.versions.map(({ version, at, available, bytes }) => ({
+      version,
+      at,
+      available,
+      bytes,
+    })),
   };
 }
 
@@ -64,7 +76,15 @@ export function exportName(title: string): string {
 /** Handles one Chats-tab message. Returns false for messages that belong elsewhere. */
 export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<boolean> {
   const m = parseViewMsg(raw);
-  if (!m || !(m.type.startsWith("chat:") || m.type.startsWith("prompts:") || m.type === "search"))
+  if (
+    !m ||
+    !(
+      m.type.startsWith("chat:") ||
+      m.type.startsWith("cp:") ||
+      m.type.startsWith("prompts:") ||
+      m.type === "search"
+    )
+  )
     return false;
   const msg = m as ChatsMsg;
   const warn = (text: string) => d.confirm.warn(text);
@@ -91,7 +111,36 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
     return file && v ? { file, v } : null;
   };
 
+  /** The Checkpoints tab's view of one chat, also for a chat whose transcript is gone. */
+  const postFiles = async (id: string) => {
+    const s = d.getSession(id);
+    const r = await readCheckpoints({
+      home: d.home,
+      sessionId: id,
+      transcript: s?.file ?? null,
+      cwd: s?.cwd ?? "",
+    });
+    d.post({ type: "cp:files", id, gone: !s, files: r.files.map(toView), orphans: r.orphans });
+  };
+
   switch (msg.type) {
+    case "cp:files":
+      await postFiles(msg.id);
+      return true;
+
+    case "cp:openFile": {
+      const s = session(msg.id);
+      if (!s) return true;
+      const file = (await timeline(s)).find((f) => samePath(f.path, msg.path));
+      if (!file) return true;
+      if (!file.exists) {
+        warn(`${file.name} isn't there any more. Restore a version to bring it back.`);
+        return true;
+      }
+      await d.openFile(file.path);
+      return true;
+    }
+
     case "chat:details": {
       const s = session(msg.id);
       if (s) d.post({ type: "chat:details", id: s.id, files: (await timeline(s)).map(toView) });
@@ -131,6 +180,12 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
         );
         return true;
       }
+      if (d.unsaved(file.path)) {
+        warn(
+          `Save or close ${file.name} first: it has unsaved changes in the editor, and restoring would clash with them.`,
+        );
+        return true;
+      }
       if (file.exists && (await readTextSafe(file.path, 5 * MiB)) === content.text) {
         d.info(`${file.name} is already the same as it was before that edit.`);
         return true;
@@ -141,11 +196,14 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
         summary: file.exists
           ? `Put ${file.name} back to how it was before Claude's edit at ${when(v.at)}? Orbit backs up the current version, and you can undo this.`
           : `Bring back ${file.name} as it was before Claude's edit at ${when(v.at)}? Undo removes it again.`,
-        label: `Restored ${file.name}`,
+        label: `Restored ${file.name} to before change ${v.version}`,
       });
       // The panel shows whether each file exists, so it has to catch up.
       const s = restored ? d.getSession(msg.id) : undefined;
-      if (s) d.post({ type: "chat:details", id: s.id, files: (await timeline(s)).map(toView) });
+      if (s) {
+        d.post({ type: "chat:details", id: s.id, files: (await timeline(s)).map(toView) });
+        await postFiles(s.id);
+      }
       return true;
     }
 
@@ -180,7 +238,8 @@ export async function handleChats(raw: unknown, d: ChatsHandlerDeps): Promise<bo
         : "";
       if (msg.type === "prompts:copy") {
         await d.copy(text);
-        d.info(`Prompt copied.${gone}`);
+        const short = text.replace(/\s+/g, " ").trim();
+        d.info(`Copied "${short.length > 60 ? `${short.slice(0, 60)}…` : short}"${gone}`);
       } else if (encodeURIComponent(text).length > MAX_PROMPT_IN_LINK) {
         await d.newChat();
         await d.copy(text);

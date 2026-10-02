@@ -35,6 +35,10 @@ exports.run = async () => {
       "orbit.showPrompts",
       "orbit.showUsage",
       "orbit.showSetup",
+      "orbit.exportBrain",
+      "orbit.importBrain",
+      "orbit.runDiagnostics",
+      "orbit.reportProblem",
     ])
       assert.ok(cmds.includes(c), `${c} missing`);
   });
@@ -144,5 +148,20 @@ exports.run = async () => {
 
   await check("refresh command runs without error", async () => {
     await vscode.commands.executeCommand("orbit.refresh");
+  });
+
+  await check("the health report opens, without the home folder in it", async () => {
+    const before = new Set(vscode.workspace.textDocuments);
+    await vscode.commands.executeCommand("orbit.runDiagnostics");
+    const doc = await until("the health report", () =>
+      vscode.workspace.textDocuments.find(
+        (d) => !before.has(d) && d.getText().startsWith("# Orbit diagnostics"),
+      ),
+    );
+    assert.ok(!doc.getText().includes(require("node:os").homedir()), "home folder leaked");
+  });
+
+  await check("Checkpoints lists a chat's files for the view", async () => {
+    await api.dispatch({ type: "cp:files", id: process.env.ORBIT_IT_HERE });
   });
 };

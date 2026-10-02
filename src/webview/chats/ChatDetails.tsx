@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { Turn } from "../../features/chats/conversation";
 import type { ChangedFileView } from "../../shared/protocol";
 import { post } from "../bus";
 import * as store from "../store";
-import { Icon } from "../ui/Icon";
-import { relativeTime } from "./model";
+import { formatTokens } from "../ui/charts/format";
+import { StatTile } from "../ui/charts/StatTile";
+import { Empty } from "../ui/Empty";
+import { Icon, IconButton } from "../ui/Icon";
+import { showMenu } from "../ui/Menu";
+import { Segmented } from "../ui/Segmented";
+import { LIVE_LABEL, LIVE_TITLE, liveClass } from "./live";
+import { rowMenu } from "./menu";
+import { duration, relativeTime, toVMs } from "./model";
 
 /**
  * Where a file is, shown relative to the chat's folder when it's inside it.
@@ -95,67 +103,400 @@ function FileCard({ id, f, cwd }: { id: string; f: ChangedFileView; cwd: string 
   );
 }
 
-/** One chat's files, versions and transcript. */
+/** "Sep 8 at 3:04 PM" */
+const startedAt = (t: number) =>
+  `${new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" })} at ${new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+
+let nextReq = 0;
+const PAGE = 50;
+
+/** Text with every match of `q` marked. */
+function Marked({ text, q }: { text: string; q: string }) {
+  if (!q) return <>{text}</>;
+  const lower = text.toLowerCase();
+  const parts: (string | preact.JSX.Element)[] = [];
+  let at = 0;
+  for (let i = lower.indexOf(q); i >= 0; i = lower.indexOf(q, i + q.length)) {
+    parts.push(text.slice(at, i), <mark key={i}>{text.slice(i, i + q.length)}</mark>);
+    at = i + q.length;
+  }
+  parts.push(text.slice(at));
+  return <>{parts}</>;
+}
+
+function TurnItem({ t, q, id }: { t: Turn; q: string; id: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard?.writeText(t.text).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 900);
+      },
+      () => {},
+    );
+  };
+  const thinkingHit = !!q && !!t.thinking?.toLowerCase().includes(q);
+  return (
+    <li class={`turn ${t.role}`}>
+      <div class="turn-head">
+        <span class="turn-role">{t.role === "you" ? "You" : "Claude"}</span>
+        {t.at ? (
+          <span class="turn-time" title={new Date(t.at).toLocaleString()}>
+            {new Date(t.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+          </span>
+        ) : null}
+        <span class="turn-actions">
+          <IconButton
+            icon={copied ? "check" : "copy"}
+            label={copied ? "Copied" : "Copy"}
+            onClick={copy}
+          />
+          {t.role === "you" ? (
+            <IconButton
+              icon="debug-restart"
+              label="Ask again in a new chat"
+              onClick={() => post({ type: "chat:askAgain", id, text: t.text.slice(0, 10_000) })}
+            />
+          ) : null}
+        </span>
+      </div>
+      {t.thinking ? (
+        <details class="turn-thinking" open={thinkingHit}>
+          <summary>Thinking</summary>
+          <p>
+            <Marked text={t.thinking} q={q} />
+          </p>
+        </details>
+      ) : null}
+      {t.text ? (
+        <p class="turn-text">
+          <Marked text={t.text} q={q} />
+        </p>
+      ) : null}
+      {t.tools.length ? (
+        <ul class="turn-tools">
+          {t.tools.map((x, i) => (
+            <li key={i}>
+              <span class="tool-name">
+                <Marked text={x.name} q={q} />
+              </span>
+              {x.arg ? (
+                <code class="tool-arg">
+                  <Marked text={x.arg} q={q} />
+                </code>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {t.usage ? (
+        <span class="turn-usage">
+          {formatTokens(t.usage.output)} out · {formatTokens(t.usage.input)} in ·{" "}
+          {formatTokens(t.usage.cache)} cache
+        </span>
+      ) : null}
+    </li>
+  );
+}
+
+/** The conversation: newest or oldest first, 50 at a time, or every match of a search. */
+function Messages({ id }: { id: string }) {
+  const [order, setOrder] = useState<"latest" | "earliest">("latest");
+  const [limit, setLimit] = useState(PAGE);
+  const [query, setQuery] = useState("");
+  const [asked, setAsked] = useState("");
+  const [req, setReq] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setAsked(query.trim()), 250);
+    return () => clearTimeout(t);
+  }, [query]);
+  useEffect(() => {
+    const r = `c${++nextReq}`;
+    setReq(r);
+    post({ type: "chat:conversation", id, order, query: asked, limit, req: r });
+  }, [id, order, asked, limit, store.sessions.value.find((s) => s.id === id)?.lastActiveAt]);
+  const c = store.conversation.value;
+  const page = c && c.id === id ? c.page : null;
+  const stale = !c || c.req !== req;
+  const q = asked.toLowerCase();
+  return (
+    <section class="messages" aria-labelledby="messages-title">
+      <div class="messages-head">
+        <h4 id="messages-title" class="subgroup-title">
+          Messages{page ? ` (${page.total.toLocaleString()})` : ""}
+        </h4>
+        {page && page.total > PAGE ? (
+          <Segmented<"latest" | "earliest">
+            legend="Order"
+            value={order}
+            onChange={(v) => {
+              setOrder(v);
+              setLimit(PAGE);
+            }}
+            options={[
+              { value: "latest", label: "Latest" },
+              { value: "earliest", label: "Earliest" },
+            ]}
+          />
+        ) : null}
+      </div>
+      <div class="search">
+        <Icon name="search" />
+        <input
+          type="search"
+          placeholder="Search this chat"
+          aria-label="Search this chat"
+          value={query}
+          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setQuery("");
+          }}
+        />
+        {asked ? (
+          <span class="search-count" aria-live="polite">
+            {stale || !page ? "…" : `${page.matches ?? 0} found`}
+          </span>
+        ) : null}
+      </div>
+      {!page ? (
+        <div class="loading" role="status">
+          Reading the conversation…
+        </div>
+      ) : (
+        <>
+          <p class="messages-hint">
+            {asked
+              ? page.matches
+                ? `${page.matches} message${page.matches === 1 ? "" : "s"} match, newest first`
+                : "No matches."
+              : `Showing ${order === "latest" ? "last" : "first"} ${Math.min(page.turns.length, page.total)} of ${page.total} messages${order === "latest" ? " · newest first" : ""}`}
+          </p>
+          <ul class="turns">
+            {page.turns.map((t, i) => (
+              <TurnItem key={`${t.at}-${i}`} t={t} q={q} id={id} />
+            ))}
+          </ul>
+          {!asked && page.turns.length < page.total ? (
+            <button
+              type="button"
+              class="btn secondary small"
+              onClick={() => setLimit(limit + PAGE)}
+            >
+              Show more ({page.total - page.turns.length} remaining)
+            </button>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+function Stats({ id }: { id: string }) {
+  const c = store.conversation.value;
+  const st = c?.id === id ? c.page.stats : null;
+  if (!st) return null;
+  const tokens = st.tokens.input + st.tokens.output;
+  return (
+    <div class="tiles">
+      <StatTile
+        label={st.messages === 1 ? "message" : "messages"}
+        value={formatTokens(st.messages)}
+      />
+      {st.tools ? (
+        <StatTile label={st.tools === 1 ? "tool" : "tools"} value={formatTokens(st.tools)} />
+      ) : null}
+      {tokens ? (
+        <StatTile
+          label="tokens"
+          value={formatTokens(tokens)}
+          hint={`${formatTokens(st.tokens.input)} in · ${formatTokens(st.tokens.output)} out · ${formatTokens(st.tokens.cacheRead)} cache read · ${formatTokens(st.tokens.cacheWrite)} cache write`}
+        />
+      ) : null}
+      <StatTile label="duration" value={duration(st.durationMs)} />
+    </div>
+  );
+}
+
+/** One chat: what it is, everything you can do with it, the files Claude changed, and the conversation. */
 export function ChatDetails() {
   const d = store.details.value!;
-  const s = store.sessions.value.find((x) => x.id === d.id);
-  const title = store.renames.value[d.id] || s?.title || "Chat";
+  const vm = toVMs({
+    sessions: store.sessions.value.filter((x) => x.id === d.id),
+    live: store.live.value,
+    pins: store.pins.value,
+    renames: store.renames.value,
+    here: store.here.value,
+    tags: store.tags.value,
+    archived: store.archived.value,
+    hidden: store.hidden.value,
+    temp: store.temp.value,
+    terminals: store.terminals.value,
+  })[0];
   const backRef = useRef<HTMLButtonElement>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState("");
   // Opening details moves focus here; going back returns it to the search box.
   useEffect(() => backRef.current?.focus(), []);
   const back = () => {
     store.focusSearch.value = true;
     store.details.value = null;
+    store.conversation.value = null;
+  };
+  const inCheckpoints = store.tab.value === "checkpoints";
+  if (!vm) {
+    return (
+      <section class="details">
+        <button ref={backRef} type="button" class="back-btn" onClick={back}>
+          <Icon name="arrow-left" /> {inCheckpoints ? "All checkpoints" : "All chats"}
+        </button>
+        <Empty icon="warning" title="That chat is gone">
+          It's no longer on disk.
+        </Empty>
+      </section>
+    );
+  }
+  const s = vm.s;
+  const sub = s.firstPrompt && s.firstPrompt !== vm.title ? s.firstPrompt : "";
+  const primary = vm.live
+    ? { icon: "terminal", label: vm.linked ? "View" : "Running" }
+    : { icon: "play", label: "Continue" };
+  const otherFolder = !vm.here && store.env.value?.hasWorkspace;
+  const saveName = () => {
+    post({ type: "rename", id: s.id, title: draft.trim() === s.title ? "" : draft });
+    setRenaming(false);
   };
   return (
-    <section class="details" aria-labelledby="details-title">
-      <div class="details-head">
+    <section class="details scroll-y" aria-labelledby="details-title">
+      <button
+        ref={backRef}
+        type="button"
+        class="back-btn"
+        aria-label={inCheckpoints ? "Back to checkpoints" : "Back to chats"}
+        onClick={back}
+      >
+        <Icon name="arrow-left" /> {inCheckpoints ? "All checkpoints" : "All chats"}
+      </button>
+      {renaming ? (
+        <input
+          class="rename-input big"
+          aria-label="New name"
+          value={draft}
+          maxLength={200}
+          ref={(el) => el?.focus()}
+          onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveName();
+            if (e.key === "Escape") setRenaming(false);
+          }}
+          onBlur={() => setRenaming(false)}
+        />
+      ) : (
+        <h3 id="details-title" class="details-title">
+          {vm.title}
+        </h3>
+      )}
+      {sub ? <p class="details-sub">{sub}</p> : null}
+      <div class="details-meta">
+        {vm.live ? (
+          <span class={`pill live ${liveClass(vm.live.status)}`} title={LIVE_TITLE[vm.live.status]}>
+            <span class={`live-dot ${liveClass(vm.live.status)}`} aria-hidden="true" />
+            {LIVE_LABEL[vm.live.status]}
+          </span>
+        ) : null}
+        <span class="pill" title={s.cwd}>
+          <Icon name="folder" /> {s.project}
+        </span>
+        {s.branch ? (
+          <span class="pill mono">
+            <Icon name="git-branch" /> {s.branch}
+          </span>
+        ) : null}
+        <span class="details-date">· {startedAt(s.startedAt)}</span>
+      </div>
+      {s.worktree ? (
+        <div class={`wt-card${s.worktree.removed ? " removed" : ""}`}>
+          <div class="wt-title">
+            {s.worktree.kind === "claude" ? "Worktree Claude made" : "Your worktree"}
+            {s.worktree.removed ? <span class="badge warn">removed</span> : null}
+          </div>
+          <dl>
+            <dt>Folder</dt>
+            <dd>{s.cwd}</dd>
+            <dt>Branch</dt>
+            <dd>{s.branch ?? "(detached)"}</dd>
+          </dl>
+          {s.worktree.removed ? (
+            <p class="card-hint">
+              This worktree was removed from disk, so the chat can't continue there.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {otherFolder ? (
+        <p class="notice">
+          <Icon name="info" /> This chat is from <b>{s.project}</b>.{" "}
+          <button
+            type="button"
+            class="link-btn"
+            onClick={() => post({ type: "chat:openFolder", id: s.id })}
+          >
+            Open {s.project}
+          </button>
+        </p>
+      ) : null}
+      <div class="details-actions">
+        <button type="button" class="btn" onClick={() => post({ type: "openChat", id: s.id })}>
+          <Icon name={primary.icon} /> {primary.label}
+        </button>
         <button
-          ref={backRef}
+          type="button"
+          class="btn secondary"
+          onClick={() => post({ type: "pin", id: s.id, on: !vm.pinned })}
+        >
+          <Icon name={vm.pinned ? "pinned" : "pin"} /> {vm.pinned ? "Unpin" : "Pin"}
+        </button>
+        <button
+          type="button"
+          class="btn secondary"
+          title="Save this chat as a .jsonl file you can import anywhere"
+          onClick={() => post({ type: "chat:save", ids: [s.id] })}
+        >
+          <Icon name="export" /> Export
+        </button>
+        <button
           type="button"
           class="icon-btn"
-          aria-label={store.tab.value === "checkpoints" ? "Back to checkpoints" : "Back to chats"}
-          title="Back"
-          onClick={back}
+          title="More actions"
+          aria-label={`More actions for ${vm.title}`}
+          aria-haspopup="menu"
+          onClick={(e) =>
+            showMenu(
+              [
+                ...rowMenu(vm, () => {
+                  setDraft(vm.title);
+                  setRenaming(true);
+                }).filter(
+                  (m) =>
+                    m.kind === "separator" ||
+                    !["Files and transcript", "Pin to top", "Unpin"].includes(m.label),
+                ),
+                { kind: "separator" },
+                {
+                  label: "Read the transcript",
+                  icon: "book",
+                  run: () => post({ type: "chat:transcript", id: s.id }),
+                },
+              ],
+              e.currentTarget as HTMLElement,
+              `${vm.title} actions`,
+            )
+          }
         >
-          <Icon name="arrow-left" />
-        </button>
-        <h3 id="details-title" class="details-title">
-          {title}
-        </h3>
-      </div>
-      <div class="details-actions">
-        <button
-          type="button"
-          class="btn small"
-          onClick={() => post({ type: "openChat", id: d.id })}
-        >
-          Continue chat
-        </button>
-        <button
-          type="button"
-          class="btn small secondary"
-          onClick={() => post({ type: "chat:transcript", id: d.id })}
-        >
-          Read transcript
-        </button>
-        <button
-          type="button"
-          class="btn small secondary"
-          onClick={() => post({ type: "chat:export", id: d.id })}
-        >
-          Export as Markdown
-        </button>
-        <button
-          type="button"
-          class="btn small secondary"
-          title="Start a new chat from this one's history. This chat stays as it is."
-          onClick={() => post({ type: "forkChat", id: d.id })}
-        >
-          Fork into a new chat
+          <Icon name="ellipsis" />
         </button>
       </div>
-      <TagEditor id={d.id} />
+      <Stats id={s.id} />
+      <TagEditor id={s.id} />
       <h4 class="subgroup-title">Files Claude changed</h4>
       {d.files === null ? (
         <div class="loading" role="status">
@@ -166,19 +507,16 @@ export function ChatDetails() {
       ) : (
         <ul class="file-cards">
           {d.files.map((f) => (
-            <FileCard key={f.path} id={d.id} f={f} cwd={s?.cwd ?? ""} />
+            <FileCard key={f.path} id={d.id} f={f} cwd={s.cwd} />
           ))}
         </ul>
       )}
+      <Messages id={s.id} />
     </section>
   );
 }
 
-/** Opens a chat's details and asks the host for its changes. */
-export function openDetails(id: string): void {
-  store.details.value = { id, files: null };
-  post({ type: "chat:details", id });
-}
+export { openDetails } from "./open";
 
 /** Orbit-only tags for a chat: shown on its row, found with #tag in search. */
 function TagEditor({ id }: { id: string }) {

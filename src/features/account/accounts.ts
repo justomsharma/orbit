@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { ConflictError, type EditPlan, type UndoEntry } from "../../core/safeWriter";
+import type { QuotaFile } from "../../tap/statusline";
 import { type CredentialStore, looksLikeCredentials } from "./credentials";
 import { identityFrom, type Profile, profileFrom } from "./profile";
 
@@ -11,6 +12,8 @@ export interface SavedAccount {
   plan: string | null;
   organization: string | null;
   savedAt: number;
+  /** "62% weekly · 3h ago": its plan limits when last used here, if still meaningful. */
+  lastSeen?: string;
 }
 
 export interface AccountSnapshot {
@@ -18,6 +21,40 @@ export interface AccountSnapshot {
   saved: SavedAccount[];
   /** Saved accounts can be switched on this machine. */
   canSwitch: boolean;
+  /** When Orbit last switched accounts (plan limits from before belong to the old one). */
+  switchedAt: number | null;
+  /** Days until Claude Code's sign-in needs logging in again, when known. */
+  signInDays?: number | null;
+  /** ~/.claude.json is empty or broken; the newest backup Claude Code kept, if any. */
+  broken?: { backup: string | null; backupAt: number | null } | null;
+}
+
+/** One account's plan limits when Claude last reported them. */
+interface Seen {
+  seven: number | null;
+  five: number | null;
+  sevenResetsAt: number | null;
+  at: number;
+}
+
+const SEEN_KEY = "orbit.quotaSeen";
+const SWITCHED_KEY = "orbit.switchedAt";
+const MAX_SEEN = 20;
+
+function ago(ms: number): string {
+  const m = Math.floor(ms / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+}
+
+/** "62% weekly · 3h ago", or "" when there's no weekly number or it's out of date. */
+export function describeSeen(s: Seen | undefined, now: number): string {
+  if (!s || s.seven === null) return "";
+  if (now - s.at >= 7 * 86_400_000 || (s.sevenResetsAt !== null && s.sevenResetsAt <= now))
+    return "";
+  return `${Math.round(s.seven)}% weekly · ${ago(now - s.at)}`;
 }
 
 /** What one saved account keeps in VS Code's encrypted secret storage. */
@@ -42,11 +79,18 @@ export interface AccountDeps {
   };
   /** The list of saved accounts (no secrets), e.g. in globalState. */
   list: { get(): SavedAccount[]; set(v: SavedAccount[]): PromiseLike<void> };
+  /** Small non-secret notes (last-seen limits, switch time), e.g. in globalState. */
+  memo: {
+    get<T>(key: string, fallback: T): T;
+    set(key: string, value: unknown): PromiseLike<void>;
+  };
   writer: {
     planJson(file: string, mutate: (o: Record<string, unknown>) => void): Promise<EditPlan>;
     apply(plan: EditPlan, label: string): Promise<UndoEntry>;
     undo(id: string): Promise<void>;
   };
+  /** Whether ~/.claude.json is broken, and the newest backup to restore from. */
+  health?(): Promise<{ broken: boolean; backup: string | null; backupAt: number | null }>;
 }
 
 export const MAX_SAVED = 12;
@@ -80,6 +124,15 @@ function parseSecret(text: string | undefined): Secret | null {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** Whole days until the sign-in's refresh token runs out (never shows the token). */
+export function signInDays(credentials: string | null, now: number): number | null {
+  if (!looksLikeCredentials(credentials)) return null;
+  const o = oauthOf(credentials);
+  const at = typeof o.refreshTokenExpiresAt === "number" ? o.refreshTokenExpiresAt : null;
+  if (!at || at <= now) return at ? 0 : null;
+  return Math.floor((at - now) / 86_400_000);
+}
+
 /** Saving, switching and forgetting Claude Code accounts, done safely. */
 export class Accounts {
   constructor(private readonly d: AccountDeps) {}
@@ -91,7 +144,44 @@ export class Accounts {
 
   async snapshot(): Promise<AccountSnapshot> {
     const profile = profileFrom(await this.d.readClaudeJson());
-    return { profile, saved: this.saved(), canSwitch: (await this.d.credentials()) !== null };
+    const seen = this.d.memo.get<Record<string, Seen>>(SEEN_KEY, {});
+    const now = Date.now();
+    const saved = this.saved().map((a) => {
+      const lastSeen = describeSeen(seen[a.id], now);
+      return lastSeen ? { ...a, lastSeen } : a;
+    });
+    const switchedAt = this.d.memo.get<number | null>(SWITCHED_KEY, null);
+    const store = await this.d.credentials();
+    const h = await this.d.health?.().catch(() => null);
+    return {
+      profile,
+      saved,
+      canSwitch: store !== null,
+      switchedAt: typeof switchedAt === "number" ? switchedAt : null,
+      signInDays: profile && store ? signInDays(await store.read(), now) : null,
+      broken: h?.broken ? { backup: h.backup, backupAt: h.backupAt } : null,
+    };
+  }
+
+  /** Keeps the signed-in account's latest plan limits, to show after switching away. */
+  async remember(q: QuotaFile | null): Promise<void> {
+    if (!q || (!q.sevenDay && !q.fiveHour)) return;
+    const switchedAt = this.d.memo.get<number | null>(SWITCHED_KEY, null);
+    if (typeof switchedAt === "number" && q.updatedAt < switchedAt) return;
+    const id = profileFrom(await this.d.readClaudeJson())?.id;
+    if (!id) return;
+    const all = { ...this.d.memo.get<Record<string, Seen>>(SEEN_KEY, {}) };
+    if ((all[id]?.at ?? 0) >= q.updatedAt) return;
+    all[id] = {
+      seven: q.sevenDay?.pct ?? null,
+      five: q.fiveHour?.pct ?? null,
+      sevenResetsAt: q.sevenDay?.resetsAt ?? null,
+      at: q.updatedAt,
+    };
+    const newest = Object.entries(all)
+      .sort((a, b) => b[1].at - a[1].at)
+      .slice(0, MAX_SEEN);
+    await this.d.memo.set(SEEN_KEY, Object.fromEntries(newest));
   }
 
   /** Saves (or refreshes) the signed-in account. Returns its name. */
@@ -190,6 +280,7 @@ export class Accounts {
       }
       throw new Error(`${message(e)}. Nothing was changed.`);
     }
+    await this.d.memo.set(SWITCHED_KEY, Date.now());
     return target;
   }
 

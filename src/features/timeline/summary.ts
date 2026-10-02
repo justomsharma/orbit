@@ -14,6 +14,8 @@ export interface CheckpointSummary {
   files: number;
   versions: number;
   bytes: number;
+  /** When the newest checkpoint was written (ms since epoch). */
+  newest: number;
 }
 
 const cache = new Map<string, { mtimeMs: number; s: CheckpointSummary }>();
@@ -26,11 +28,7 @@ async function summarize(dir: string, id: string): Promise<CheckpointSummary | n
   const files = new Set<string>();
   let versions = 0;
   const blobs = (await listDirSafe(dir)).filter((e) => e.isFile() && BLOB.test(e.name));
-  const sizes = await mapLimit(
-    blobs,
-    PARALLEL,
-    async (e) => (await statSafe(join(dir, e.name)))?.size ?? 0,
-  );
+  const stats = await mapLimit(blobs, PARALLEL, (e) => statSafe(join(dir, e.name)));
   for (const e of blobs) {
     files.add(e.name.match(BLOB)![1]!);
     versions++;
@@ -39,7 +37,8 @@ async function summarize(dir: string, id: string): Promise<CheckpointSummary | n
     id,
     files: files.size,
     versions,
-    bytes: sizes.reduce((a, b) => a + b, 0),
+    bytes: stats.reduce((a, st) => a + (st?.size ?? 0), 0),
+    newest: Math.max(0, ...stats.map((st) => st?.mtimeMs ?? 0)),
   };
   cache.set(dir, { mtimeMs: st.mtimeMs, s });
   return s;

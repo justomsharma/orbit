@@ -17,6 +17,42 @@ export interface Window {
   resetsAt: number;
 }
 
+/** How well Claude's prompt cache is working (Claude Code's `prompt_cache`). */
+export interface CacheInfo {
+  ttl: string | null;
+  requests: number;
+  misses: number;
+  rebuilds: number;
+  hitRatio: number | null;
+  /** Tokens sent again because of cache misses. */
+  recached: number;
+  /** Why the last miss happened, e.g. "tools_changed". */
+  lastMiss: string[];
+  toolsAdded: number;
+  toolsRemoved: number;
+}
+
+export interface PrInfo {
+  number: number;
+  url: string | null;
+  review: string | null;
+  /** "mr" on GitLab. */
+  kind: "pr" | "mr";
+}
+
+export interface WorktreeInfo {
+  name: string;
+  branch: string | null;
+  originalBranch: string | null;
+  path: string | null;
+}
+
+export interface RepoInfo {
+  host: string | null;
+  owner: string;
+  name: string;
+}
+
 export interface StatusInput {
   sessionId: string | null;
   model: string | null;
@@ -25,6 +61,10 @@ export interface StatusInput {
   fiveHour: Window | null;
   sevenDay: Window | null;
   spendLimit: Window | null;
+  cache?: CacheInfo | null;
+  pr?: PrInfo | null;
+  worktree?: WorktreeInfo | null;
+  repo?: RepoInfo | null;
 }
 
 export interface QuotaFile extends StatusInput {
@@ -41,6 +81,62 @@ function win(v: unknown): Window | null {
   const pct = num(o.used_percentage);
   const at = num(o.resets_at);
   return pct === null || at === null ? null : { pct, resetsAt: at * 1000 };
+}
+
+const text = (v: unknown, max = 300): string | null =>
+  typeof v === "string" && v.trim() && v.length <= max ? v.trim() : null;
+const count = (v: unknown) => Math.max(0, num(v) ?? 0);
+
+function cacheInfo(v: unknown): CacheInfo | null {
+  const o = rec(v);
+  if (num(o.requests) === null) return null;
+  const miss = rec(o.last_miss_cause);
+  const causes = Array.isArray(miss.causes)
+    ? miss.causes.filter((c): c is string => typeof c === "string" && /^[\w-]{1,60}$/.test(c))
+    : [];
+  return {
+    ttl: text(o.ttl, 10),
+    requests: count(o.requests),
+    misses: count(o.misses),
+    rebuilds: count(o.expected_rebuilds),
+    hitRatio: num(o.hit_ratio),
+    recached: count(o.miss_recache_tokens),
+    lastMiss: causes.slice(0, 8),
+    toolsAdded: count(miss.tools_added),
+    toolsRemoved: count(miss.tools_removed),
+  };
+}
+
+function prInfo(v: unknown): PrInfo | null {
+  const o = rec(v);
+  const n = num(o.number);
+  if (n === null || !Number.isInteger(n) || n <= 0) return null;
+  const url = text(o.url, 500);
+  return {
+    number: n,
+    url: url && /^https:\/\//.test(url) ? url : null,
+    review: text(o.review_state, 40),
+    kind: o.kind === "mr" ? "mr" : "pr",
+  };
+}
+
+function worktreeInfo(v: unknown): WorktreeInfo | null {
+  const o = rec(v);
+  const name = text(o.name, 200);
+  if (!name) return null;
+  return {
+    name,
+    branch: text(o.branch, 200),
+    originalBranch: text(o.original_branch, 200),
+    path: text(o.path, 1000),
+  };
+}
+
+function repoInfo(v: unknown): RepoInfo | null {
+  const o = rec(v);
+  const owner = text(o.owner, 200);
+  const name = text(o.name, 200);
+  return owner && name ? { host: text(o.host, 200), owner, name } : null;
 }
 
 export function parseStatusInput(text: string): StatusInput | null {
@@ -60,6 +156,10 @@ export function parseStatusInput(text: string): StatusInput | null {
     fiveHour: win(limits.five_hour),
     sevenDay: win(limits.seven_day),
     spendLimit: win(limits.spend_limit),
+    cache: cacheInfo(raw.prompt_cache),
+    pr: prInfo(raw.pr),
+    worktree: worktreeInfo(raw.worktree),
+    repo: repoInfo(rec(raw.workspace).repo),
   };
 }
 
@@ -77,7 +177,12 @@ export function mergeQuota(prev: QuotaFile | null, next: StatusInput, now: numbe
 
 export function defaultLine(s: StatusInput | null): string {
   if (!s) return "";
-  const parts = [s.model, s.contextPct === null ? null : `${Math.round(s.contextPct)}% context`];
+  const parts = [
+    s.model,
+    s.contextPct === null ? null : `${Math.round(s.contextPct)}% context`,
+    s.fiveHour ? `5h ${Math.round(s.fiveHour.pct)}%` : null,
+    s.sevenDay ? `7d ${Math.round(s.sevenDay.pct)}%` : null,
+  ];
   return parts.filter(Boolean).join(" · ");
 }
 

@@ -3,7 +3,18 @@ import type { SkillInfo } from "../../features/setup/skills";
 import { itemFormError } from "../../shared/validate";
 import { post } from "../bus";
 import * as store from "../store";
+import { Icon } from "../ui/Icon";
 import { Segmented } from "../ui/Segmented";
+import {
+  Chips,
+  CopyButton,
+  DetailPage,
+  FileText,
+  Gone,
+  Info,
+  openDetail,
+  Problems,
+} from "./Detail";
 import {
   Badge,
   decided,
@@ -18,6 +29,9 @@ import {
   Section,
   useSubmit,
 } from "./parts";
+
+export { AgentDetail, AgentsSection, modelFamily } from "./AgentsSection";
+export { CommandDetail, CommandsSection } from "./CommandsSection";
 
 type Kind = "skill" | "agent" | "command";
 
@@ -157,31 +171,152 @@ function skillGroups(list: SkillInfo[]): { title: string; items: SkillInfo[] }[]
 const inScope = (k: SkillInfo, scope: SkillScope) =>
   scope === "all" || (scope === "plugin" ? !!k.plugin : !k.plugin && k.scope === scope);
 
+const WHERE: Record<string, string> = {
+  project: "This project",
+  user: "You (every project)",
+};
+const whereOf = (k: { scope: string; plugin: string | null }) =>
+  k.plugin ? `Plugin ${k.plugin.split("@")[0]}` : (WHERE[k.scope] ?? k.scope);
+
+function SkillBadges({ k }: { k: SkillInfo }) {
+  return (
+    <>
+      <Badge>{k.plugin ? k.plugin.split("@")[0] : SCOPE_LABEL[k.scope]}</Badge>
+      {!k.loaded ? (
+        <Badge tone="warn" title="Claude Code doesn't load skills in a subfolder of a folder">
+          Not loaded
+        </Badge>
+      ) : null}
+      {k.linked ? (
+        <Badge title="This skill's folder is a link to another place on disk">Linked</Badge>
+      ) : null}
+      {k.loaded && k.problems.length ? <Badge tone="warn">Check</Badge> : null}
+    </>
+  );
+}
+
+const canUse = (k: SkillInfo) => k.loaded && k.userInvocable;
+const useWhy = (k: SkillInfo) =>
+  !k.loaded
+    ? "Claude Code doesn't load this skill where it is"
+    : !k.userInvocable
+      ? "This skill is only for Claude to use (user-invocable: false)"
+      : `Start a new chat with ${k.command} typed in`;
+
+/** One skill: how to use it, what it may do, and its SKILL.md. */
+export function SkillDetail({ id }: { id: string }) {
+  const k = store.setup.value?.skills.find((x) => x.file === id);
+  if (!k) return <Gone back="All skills" what="skill" />;
+  return (
+    <DetailPage
+      back="All skills"
+      title={k.name}
+      sub={k.description}
+      badges={<SkillBadges k={k} />}
+      actions={
+        <>
+          <button
+            type="button"
+            class="btn small"
+            disabled={!canUse(k)}
+            title={useWhy(k)}
+            onClick={() => post({ type: "setup:launch", file: k.file })}
+          >
+            <Icon name="comment-discussion" /> Use in chat
+          </button>
+          <CopyButton text={k.command} label={`Copy ${k.command}`}>
+            Copy {k.command}
+          </CopyButton>
+          <button
+            type="button"
+            class="btn small secondary"
+            onClick={() => post({ type: "setup:open", file: k.file })}
+          >
+            <Icon name="go-to-file" /> Open file
+          </button>
+          {k.plugin || k.linked ? null : (
+            <button
+              type="button"
+              class="btn small secondary danger"
+              title="Moves the skill's folder to Orbit's trash; Undo puts it back"
+              onClick={() => post({ type: "setup:trash", file: k.file })}
+            >
+              <Icon name="trash" /> Delete…
+            </button>
+          )}
+        </>
+      }
+    >
+      <Problems items={k.problems} />
+      <Info
+        label="About this skill"
+        rows={[
+          [
+            "Type it as",
+            <code key="c">{`${k.command}${k.argumentHint ? ` ${k.argumentHint}` : ""}`}</code>,
+          ],
+          ["From", whereOf(k)],
+          ["In folder", k.group],
+          ["Tags", k.tags.length ? <Chips items={k.tags} label="Tags" /> : null],
+          ["Model", k.model],
+          [
+            "Tools it may use",
+            k.allowedTools.length ? <Chips items={k.allowedTools} label="Tools" /> : null,
+          ],
+          [
+            "Claude uses it on its own",
+            k.modelInvocable ? "Yes, when it fits" : "No, only when you type it",
+          ],
+          ["You can type it", k.userInvocable ? "Yes" : "No"],
+          // Claude's skillOverrides don't apply to plugin skills; /plugin manages those.
+          ["What Claude sees", k.plugin ? null : <SkillVisibility key="v" name={k.name} />],
+          [
+            "File",
+            <code key="f" class="srow-mono">
+              {k.file}
+            </code>,
+          ],
+        ]}
+      />
+      <FileText file={k.file} title="SKILL.md" />
+    </DetailPage>
+  );
+}
+
 export function SkillsSection() {
   const s = store.setup.value!;
   const q = store.setupQuery.value;
   const page = useContext(PageMode);
   const scope = page ? store.skillScope.value : "all";
   const list = s.skills.filter(
-    (k) => inScope(k, scope) && matches(q, k.name, k.description, k.plugin),
+    (k) => inScope(k, scope) && matches(q, k.name, k.description, k.plugin, k.tags.join(" ")),
   );
   const row = (k: SkillInfo) => (
     <Row
       key={k.file}
       title={k.name}
       sub={k.problems[0] ?? k.description}
-      badges={
-        <>
-          <Badge>{k.plugin ? k.plugin.split("@")[0] : SCOPE_LABEL[k.scope]}</Badge>
-          {k.linked ? (
-            <Badge title="This skill's folder is a link to another place on disk">Linked</Badge>
-          ) : null}
-          {k.problems.length ? <Badge tone="warn">Check</Badge> : null}
-        </>
-      }
+      dim={!k.loaded}
+      badges={<SkillBadges k={k} />}
+      extra={k.tags.length ? <Chips items={k.tags} label={`${k.name} tags`} /> : null}
+      onSelect={page ? () => openDetail("skills", k.file) : undefined}
       actions={
-        // Claude's skillOverrides don't apply to plugin skills; /plugin manages those.
-        k.plugin ? null : <SkillVisibility name={k.name} />
+        <>
+          {canUse(k) ? (
+            <button
+              type="button"
+              class="icon-btn"
+              title={useWhy(k)}
+              aria-label={`Use ${k.command} in a new chat`}
+              onClick={() => post({ type: "setup:launch", file: k.file })}
+            >
+              <Icon name="comment-discussion" />
+            </button>
+          ) : null}
+          <CopyButton text={k.command} label={`Copy ${k.command}`} />
+          {/* On its own page the picker is in the details; Config's list keeps it here. */}
+          {k.plugin || page ? null : <SkillVisibility name={k.name} />}
+        </>
       }
       onOpen={() => post({ type: "setup:open", file: k.file })}
     />
@@ -234,77 +369,6 @@ export function SkillsSection() {
         </Empty>
       )}
       <Adder kind="skill" />
-    </Section>
-  );
-}
-
-export function AgentsSection() {
-  const s = store.setup.value!;
-  const q = store.setupQuery.value;
-  const list = s.agents.filter((a) => matches(q, a.name, a.description, a.model, a.plugin));
-  return (
-    <Section
-      id="agents"
-      title="Agents"
-      icon="hubot"
-      count={s.agents.length}
-      hidden={q.trim() !== "" && list.length === 0}
-    >
-      {list.length ? (
-        <ul class="srows">
-          {list.map((a) => (
-            <Row
-              key={a.file}
-              title={a.name}
-              sub={a.problems[0] ?? a.description}
-              badges={
-                <>
-                  <Badge>{a.plugin ? a.plugin.split("@")[0] : SCOPE_LABEL[a.scope]}</Badge>
-                  {a.model ? <Badge>{a.model}</Badge> : null}
-                </>
-              }
-              onOpen={() => post({ type: "setup:open", file: a.file })}
-            />
-          ))}
-        </ul>
-      ) : (
-        <Empty>
-          No agents yet. An agent is a helper Claude can hand focused work to, like reviewing code.
-        </Empty>
-      )}
-      <Adder kind="agent" />
-    </Section>
-  );
-}
-
-export function CommandsSection() {
-  const s = store.setup.value!;
-  const q = store.setupQuery.value;
-  const list = s.commands.filter((c) => matches(q, c.name, c.description, c.plugin));
-  return (
-    <Section
-      id="commands"
-      title="Commands"
-      icon="terminal-cmd"
-      count={s.commands.length}
-      hidden={q.trim() !== "" && list.length === 0}
-    >
-      {list.length ? (
-        <ul class="srows">
-          {list.map((c) => (
-            <Row
-              key={c.file}
-              title={`/${c.name}`}
-              sub={c.problems[0] ?? c.description}
-              badges={<Badge>{c.plugin ? c.plugin.split("@")[0] : SCOPE_LABEL[c.scope]}</Badge>}
-              onOpen={() => post({ type: "setup:open", file: c.file })}
-            />
-          ))}
-        </ul>
-      ) : (
-        <Empty>No custom commands. New ones are best written as skills.</Empty>
-      )}
-      <Adder kind="command" />
     </Section>
   );
 }

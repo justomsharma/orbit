@@ -46,6 +46,7 @@ describe("readAgents", () => {
       plugin: null,
       file: join(home, "agents", "reviewer.md"),
       problems: [],
+      skills: [],
     });
     expect(agents[0]).toMatchObject({
       tools: ["Bash", "Read"],
@@ -53,6 +54,16 @@ describe("readAgents", () => {
       problems: [],
     });
     expect(agents[2]).toMatchObject({ plugin: "crew@market", problems: [] });
+  });
+
+  it("reads the skills an agent loads", async () => {
+    const root = tmp();
+    const home = join(root, "claude");
+    put(home, "agents/a.md", "---\nname: a\ndescription: A\nskills: [notes, deploy]\n---\n");
+    put(home, "agents/b.md", "---\nname: b\ndescription: B\nskills: notes, deploy\n---\n");
+    const [a, b] = await readAgents(home, null, []);
+    expect(a!.skills).toEqual(["notes", "deploy"]);
+    expect(b!.skills).toEqual(["notes", "deploy"]);
   });
 
   it("reports an unknown model, a missing description and bad YAML", async () => {

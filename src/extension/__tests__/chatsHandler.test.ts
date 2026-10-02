@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { L, writeBlob, writeSession } from "../../../test/helpers/fakeHome";
 import { useTmpDir } from "../../../test/helpers/tmp";
@@ -15,7 +15,7 @@ const tmp = useTmpDir();
 const V1 = "0123456789abcdef@v1";
 const V2 = "0123456789abcdef@v2";
 
-function setup(answer: "apply" | "cancel" = "apply") {
+function setup(answer: "apply" | "cancel" = "apply", unsaved: string[] = []) {
   const root = tmp();
   const home = join(root, ".claude");
   const cwd = join(root, "shop");
@@ -107,6 +107,10 @@ function setup(answer: "apply" | "cancel" = "apply") {
       log.push(`save ${name}\n${text}`);
     },
     post: (m) => posted.push(m),
+    openFile: async (f) => {
+      log.push(`open ${f}`);
+    },
+    unsaved: (f) => unsaved.includes(basename(f)),
   };
   return {
     home,
@@ -121,6 +125,48 @@ function setup(answer: "apply" | "cancel" = "apply") {
     handle: (m: object) => handleChats(m, deps),
   };
 }
+
+describe("handleChats: Checkpoints tab", () => {
+  it("lists a chat's files with sizes and unexplained backups, never blob paths", async () => {
+    const { handle, posted, id, home, a } = setup();
+    writeBlob(home, id, "fedcba9876543210@v1", "stray");
+    await handle({ type: "cp:files", id });
+    const m = posted[0] as Extract<HostMsg, { type: "cp:files" }>;
+    expect(m).toMatchObject({ id, gone: false, orphans: 1 });
+    expect(m.files.find((f) => f.path === a)!.versions.map((v) => v.bytes)).toEqual([9, 7]);
+    expect(JSON.stringify(m)).not.toContain(join(home, "file-history"));
+  });
+
+  it("still answers for a chat that's gone, with how many backups are left", async () => {
+    const { handle, posted, home } = setup();
+    const gone = randomUUID();
+    writeBlob(home, gone, "0123456789abcdef@v1", "x");
+    await handle({ type: "cp:files", id: gone });
+    expect(posted[0]).toEqual({ type: "cp:files", id: gone, gone: true, files: [], orphans: 1 });
+  });
+
+  it("opens the current file, but only one from this chat", async () => {
+    const { handle, log, id, a, cwd } = setup();
+    await handle({ type: "cp:openFile", id, path: a });
+    await handle({ type: "cp:openFile", id, path: join(cwd, "secret.txt") });
+    expect(log).toEqual([`open ${a}`]);
+  });
+
+  it("won't restore over unsaved changes in the editor", async () => {
+    const { handle, log, id, a } = setup("apply", ["a.ts"]);
+    await handle({ type: "chat:restore", id, path: a, version: 1 });
+    expect(readFileSync(a, "utf8")).toBe("now\n");
+    expect(log).toEqual([
+      expect.stringMatching(/^warn Save or close a\.ts first: it has unsaved changes/),
+    ]);
+  });
+
+  it("refreshes the Checkpoints list after a restore", async () => {
+    const { handle, posted, id, a } = setup();
+    await handle({ type: "chat:restore", id, path: a, version: 1 });
+    expect(posted.map((m) => m.type)).toContain("cp:files");
+  });
+});
 
 describe("handleChats: files Claude changed", () => {
   it("lists the changed files without sending blob paths to the view", async () => {
@@ -239,6 +285,7 @@ describe("handleChats: prompts", () => {
     await handle({ type: "prompts:copy", id: p!.id });
     await handle({ type: "prompts:use", id: p!.id });
     expect(log).toContain("copy review PASTED");
+    expect(log).toContain('info Copied "review PASTED"');
     expect(log).toContain("chat review PASTED");
   });
 

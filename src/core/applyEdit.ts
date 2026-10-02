@@ -58,6 +58,8 @@ export interface TextEdit {
   transform: (before: string | null) => string;
   summary: string;
   label: string;
+  /** Always asks, with this explained. */
+  warning?: string;
 }
 
 /** The same flow for a whole-file edit, such as creating a new skill. */

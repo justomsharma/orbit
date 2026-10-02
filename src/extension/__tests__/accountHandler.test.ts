@@ -37,6 +37,7 @@ function setup(
           },
     saved: list,
     canSwitch: true,
+    switchedAt: null,
   });
   const d: AccountHandlerDeps = {
     accounts: {
@@ -136,5 +137,45 @@ describe("handleAccount", () => {
   it("refuses a malformed account id", async () => {
     const { handle } = setup();
     expect(await handle({ type: "account:switch", id: "../../etc" })).toBe(false);
+  });
+});
+
+describe("handleAccount: broken settings file", () => {
+  it("restores Claude's backup of ~/.claude.json after asking", async () => {
+    const log: string[] = [];
+    const d = {
+      accounts: {
+        snapshot: async () => ({
+          profile: null,
+          saved: [],
+          canSwitch: true,
+          switchedAt: null,
+          broken: { backup: "/b/.claude.json.backup.1", backupAt: 1 },
+        }),
+        saveCurrent: async () => "",
+        switchTo: async () => ({}) as never,
+        remove: async () => {},
+      },
+      runClaude: async () => {},
+      ask: async (m: string) => {
+        log.push(`ask ${m}`);
+        return "Restore";
+      },
+      pick: async () => undefined,
+      running: () => 0,
+      info: (m: string) => void log.push(`info ${m}`),
+      warn: (m: string) => void log.push(`warn ${m}`),
+      refresh: async () => {},
+      restoreConfig: async (b: string) => {
+        log.push(`restore ${b}`);
+        return true;
+      },
+    };
+    await handleAccount({ type: "account:restoreConfig" }, d);
+    expect(log).toEqual([
+      "ask Restore ~/.claude.json from Claude Code's backup?",
+      "restore /b/.claude.json.backup.1",
+      "info Restored ~/.claude.json from the backup.",
+    ]);
   });
 });

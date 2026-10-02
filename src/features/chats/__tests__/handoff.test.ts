@@ -39,7 +39,17 @@ describe("terminalOptions", () => {
       shellPath: "C:\\bin\\claude.exe",
       shellArgs: ["--resume", ID],
       cwd: 'C:\\my "odd" dir',
+      sessionId: ID,
     });
+  });
+
+  it("names the terminal after the chat when it knows the title", () => {
+    const named = terminalOptions(ID, "/x", "/bin/claude", {
+      title: "Fix the checkout race condition",
+    });
+    expect(named.name).toBe("Fix the checkout race c…");
+    const fork = terminalOptions(ID, "/x", "/bin/claude", { title: "Short", fork: true });
+    expect(fork.name).toBe("Fork: Short");
   });
 
   it("refuses a hostile session id", () => {

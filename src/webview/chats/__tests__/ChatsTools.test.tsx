@@ -7,6 +7,18 @@ import type { ViewMsg } from "../../../shared/protocol";
 import { App } from "../../app";
 import { setPost } from "../../bus";
 import * as store from "../../store";
+import { MenuLayer } from "../../ui/Menu";
+import { DEFAULT_FILTER } from "../model";
+
+/** The Chats view with the menu layer the app renders once. */
+const renderChats = () =>
+  render(
+    <>
+      <ChatsView />
+      <MenuLayer />
+    </>,
+  );
+
 import { ChatsView } from "../ChatsView";
 import { PromptsView } from "../PromptsView";
 
@@ -48,15 +60,17 @@ beforeEach(() => {
   sent.length = 0;
   setPost((m) => sent.push(m));
   store.query.value = "";
-  store.filter.value = "all";
+  store.chatFilter.value = { ...DEFAULT_FILTER, date: "all" };
+  store.collapsed.value = [];
+  store.selected.value = null;
   store.details.value = null;
   store.prompts.value = null;
   store.promptsError.value = null;
   store.promptQuery.value = "";
+  store.promptProject.value = "";
   store.inMessages.value = false;
   store.messageHits.value = null;
   store.messageSearch.value = null;
-  store.narrow.value = { project: null, branch: null, since: null };
   store.applyHostMessage({
     type: "sessions",
     items: [chat],
@@ -117,6 +131,42 @@ describe("Prompts", () => {
     ]);
   });
 
+  it("narrows to one project, with counts, and says how many of all are shown", () => {
+    store.prompts.value = [
+      prompt({}),
+      prompt({ id: "bbbbbbbbbbbb", text: "write tests first", project: "/code/api" }),
+      prompt({ id: "cccccccccccc", text: "ship it", project: "/code/api" }),
+    ];
+    render(<PromptsView />);
+    const pick = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    expect([...pick.options].map((o) => o.textContent)).toEqual([
+      "All projects (3)",
+      "api (2)",
+      "shop (1)",
+    ]);
+    fireEvent.change(pick, { target: { value: "/code/api" } });
+    expect(screen.queryByText("tell in short and simple")).toBeNull();
+    expect(screen.getByText("2 of 3 prompts")).toBeTruthy();
+  });
+
+  it("opens the chat when the prompt itself is clicked", () => {
+    store.prompts.value = [prompt({})];
+    render(<PromptsView />);
+    fireEvent.click(screen.getByRole("button", { name: /tell in short and simple/ }));
+    expect(sent).toEqual([{ type: "openChat", id: ID }]);
+  });
+
+  it("says how much was pasted, from Claude's placeholders", () => {
+    store.prompts.value = [
+      prompt({
+        text: "[Pasted text #1 +290 lines] and [Pasted text #2 +10 lines] plan it",
+        pastes: 2,
+      }),
+    ];
+    render(<PromptsView />);
+    expect(screen.getByText(/2 pasted · 300 lines/)).toBeTruthy();
+  });
+
   it("offers no chat link for a prompt whose chat is gone", () => {
     store.prompts.value = [prompt({ sessionId: null })];
     render(<PromptsView />);
@@ -140,7 +190,7 @@ describe("Prompts", () => {
 
 describe("Chat details", () => {
   const openDetails = () => {
-    render(<ChatsView />);
+    renderChats();
     fireEvent.click(screen.getByRole("button", { name: /Files and transcript/ }));
   };
   const files = () =>
@@ -155,8 +205,8 @@ describe("Chat details", () => {
             exists: true,
             createdByClaude: false,
             versions: [
-              { version: 1, at: 1_700_000_000_000, available: true },
-              { version: 2, at: 1_700_000_100_000, available: false },
+              { version: 1, at: 1_700_000_000_000, available: true, bytes: 10 },
+              { version: 2, at: 1_700_000_100_000, available: false, bytes: 10 },
             ],
           },
           {
@@ -164,7 +214,7 @@ describe("Chat details", () => {
             name: "new.ts",
             exists: true,
             createdByClaude: true,
-            versions: [{ version: 1, at: 1_700_000_200_000, available: true }],
+            versions: [{ version: 1, at: 1_700_000_200_000, available: true, bytes: 10 }],
           },
         ],
       });
@@ -214,9 +264,12 @@ describe("Chat details", () => {
   it("reads, exports and continues the chat, and goes back to the list", () => {
     openDetails();
     files();
-    fireEvent.click(screen.getByRole("button", { name: /Read transcript/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Export as Markdown/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Continue chat/ }));
+    const more = () => fireEvent.click(screen.getByRole("button", { name: /More actions for/ }));
+    more();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Read the transcript/ }));
+    more();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Export as Markdown/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/ }));
     expect(sent).toContainEqual({ type: "chat:transcript", id: ID });
     expect(sent).toContainEqual({ type: "chat:export", id: ID });
     expect(sent).toContainEqual({ type: "openChat", id: ID });
@@ -233,7 +286,7 @@ describe("Chat details", () => {
 
 describe("Search inside messages", () => {
   it("searches what was said, shows where, and opens the chat", async () => {
-    render(<ChatsView />);
+    renderChats();
     fireEvent.click(screen.getByRole("checkbox", { name: /In messages/ }));
     fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
       target: { value: "golden set" },
@@ -269,9 +322,9 @@ describe("Search inside messages", () => {
       here: [ID],
       env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
     });
-    store.filter.value = "workspace";
+    store.chatFilter.value = { ...DEFAULT_FILTER, date: "all", project: "here" };
     store.inMessages.value = true;
-    render(<ChatsView />);
+    renderChats();
     fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
       target: { value: "golden" },
     });
@@ -294,7 +347,7 @@ describe("Search inside messages", () => {
 
   it("shows how far a long search has got", async () => {
     store.inMessages.value = true;
-    render(<ChatsView />);
+    renderChats();
     fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
       target: { value: "golden" },
     });
@@ -310,12 +363,14 @@ describe("Search inside messages", () => {
         total: 117,
       }),
     );
-    expect(screen.getByRole("status").textContent).toMatch(/45 of 117 chats/);
+    expect(
+      screen.getAllByRole("status").some((el) => /45 of 117 chats/.test(el.textContent ?? "")),
+    ).toBe(true);
   });
 
   it("ignores answers to an older search", () => {
     store.inMessages.value = true;
-    render(<ChatsView />);
+    renderChats();
     act(() =>
       store.applyHostMessage({
         type: "search",
@@ -355,7 +410,7 @@ describe("Tags, fork and more filters", () => {
 
   it("shows a chat's tags and finds chats by #tag", () => {
     loadTwo({ [ID]: ["bug"] });
-    render(<ChatsView />);
+    renderChats();
     expect(screen.getByText("#bug")).toBeTruthy();
     fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
       target: { value: "#bug" },
@@ -366,28 +421,32 @@ describe("Tags, fork and more filters", () => {
 
   it("adds and removes tags, and forks, from the details panel", () => {
     loadTwo({ [ID]: ["bug"] });
-    render(<ChatsView />);
+    renderChats();
     fireEvent.click(screen.getAllByRole("button", { name: /Files and transcript/ })[0]!);
     const input = screen.getByRole("textbox", { name: /Add a tag/ });
     fireEvent.input(input, { target: { value: "Release" } });
     fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.click(screen.getByRole("button", { name: /Remove tag bug/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Fork into a new chat/ }));
+    fireEvent.click(screen.getByRole("button", { name: /More actions for/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Fork into a new chat/ }));
     expect(sent).toContainEqual({ type: "tags", id: ID, tags: ["bug", "Release"] });
     expect(sent).toContainEqual({ type: "tags", id: ID, tags: [] });
     expect(sent).toContainEqual({ type: "forkChat", id: ID });
   });
 
-  it("narrows by folder, branch and date from More filters", () => {
+  it("narrows by folder and date from the filter panel, showing what's on as chips", () => {
     loadTwo();
-    render(<ChatsView />);
-    fireEvent.click(screen.getByRole("button", { name: /More filters/ }));
+    renderChats();
+    fireEvent.click(screen.getByRole("button", { name: "Filter chats" }));
     fireEvent.change(screen.getByLabelText("Folder"), { target: { value: "/code/api" } });
     expect(screen.getByText("Docs chat")).toBeTruthy();
     expect(screen.queryByText("Fix the parser")).toBeNull();
-    expect((screen.getByLabelText("Branch") as HTMLSelectElement).options.length).toBe(2);
-    fireEvent.change(screen.getByLabelText("When"), { target: { value: "week" } });
+    // One branch here: no branch menu to clutter the panel.
+    expect(screen.queryByLabelText("Branch")).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Week" }));
     expect(screen.queryByText("Docs chat")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filter: Week" }));
+    expect(screen.getByText("Docs chat")).toBeTruthy();
   });
 });
 
@@ -406,7 +465,7 @@ describe("Search inside messages, done right", () => {
       here: [ID],
       env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
     });
-    store.filter.value = "workspace";
+    store.chatFilter.value = { ...DEFAULT_FILTER, date: "all", project: "here" };
     store.inMessages.value = true;
   });
   const type = (v: string) =>
@@ -421,7 +480,7 @@ describe("Search inside messages, done right", () => {
     };
 
   it("asks the host to search only the chats in view, and says when results were capped", async () => {
-    render(<ChatsView />);
+    renderChats();
     type("golden");
     await waitFor(() => expect(lastSearch()?.query).toBe("golden"));
     expect(lastSearch().ids).toEqual([ID]);
@@ -438,7 +497,7 @@ describe("Search inside messages, done right", () => {
   });
 
   it("works the results with the keyboard", async () => {
-    render(<ChatsView />);
+    renderChats();
     type("golden");
     await waitFor(() => expect(lastSearch()?.query).toBe("golden"));
     act(() =>
@@ -458,7 +517,7 @@ describe("Search inside messages, done right", () => {
   });
 
   it("cancels the host search when the box is cleared, and never shows hits for another query", async () => {
-    render(<ChatsView />);
+    renderChats();
     type("golden");
     await waitFor(() => expect(lastSearch()?.query).toBe("golden"));
     const req = lastSearch().req;
@@ -492,7 +551,7 @@ describe("Chat details: small things done right", () => {
       here: [ID],
       env: { claudeExtension: true, hasWorkspace: true, platform },
     });
-    render(<ChatsView />);
+    renderChats();
     fireEvent.click(screen.getByRole("button", { name: /Files and transcript/ }));
     act(() => store.applyHostMessage({ type: "chat:details", id: ID, files }));
   };
@@ -505,8 +564,8 @@ describe("Chat details: small things done right", () => {
         exists: true,
         createdByClaude: false,
         versions: [
-          { version: 1, at: 0, available: true },
-          { version: 3, at: 0, available: true },
+          { version: 1, at: 0, available: true, bytes: 10 },
+          { version: 3, at: 0, available: true, bytes: 10 },
         ],
       },
     ]);
@@ -521,14 +580,14 @@ describe("Chat details: small things done right", () => {
         name: "a.ts",
         exists: true,
         createdByClaude: false,
-        versions: [{ version: 1, at: 0, available: true }],
+        versions: [{ version: 1, at: 0, available: true, bytes: 10 }],
       },
       {
         path: "/code/shop/lib/b.ts",
         name: "b.ts",
         exists: true,
         createdByClaude: false,
-        versions: [{ version: 1, at: 0, available: true }],
+        versions: [{ version: 1, at: 0, available: true, bytes: 10 }],
       },
     ]);
     expect(screen.getByText("src")).toBeTruthy();
@@ -546,11 +605,10 @@ describe("Chat details: small things done right", () => {
 
 describe("Last touches", () => {
   it("'Show all chats' also clears the menu filters that emptied the list", () => {
-    store.narrow.value = { project: "/nowhere", branch: null, since: null };
-    store.filter.value = "all";
-    render(<ChatsView />);
+    store.chatFilter.value = { ...DEFAULT_FILTER, date: "all", project: "/nowhere" };
+    renderChats();
     fireEvent.click(screen.getByRole("button", { name: /Show all chats/ }));
-    expect(store.narrow.value).toEqual({ project: null, branch: null, since: null });
+    expect(store.filters().project).toBe("all");
     expect(screen.getByText("Fix the parser")).toBeTruthy();
   });
 
@@ -565,7 +623,7 @@ describe("Last touches", () => {
       here: [ID],
       env: { claudeExtension: true, hasWorkspace: true, platform: "linux" },
     });
-    render(<ChatsView />);
+    renderChats();
     fireEvent.click(screen.getByRole("button", { name: /Files and transcript/ }));
     expect(screen.queryByRole("textbox", { name: /Add a tag/ })).toBeNull();
     expect(screen.getByText(/up to 8 tags/)).toBeTruthy();
@@ -586,7 +644,7 @@ describe("Last touches", () => {
       });
     load([ID, OTHER]);
     store.inMessages.value = true;
-    render(<ChatsView />);
+    renderChats();
     fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
       target: { value: "golden" },
     });
@@ -600,7 +658,7 @@ describe("Last touches", () => {
 describe("Get started: finding a chat", () => {
   it("ticks the step the first time someone searches", () => {
     store.onboarding.value = { done: [], dismissed: false };
-    render(<ChatsView />);
+    renderChats();
     fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
       target: { value: "parser" },
     });
@@ -611,7 +669,7 @@ describe("Get started: finding a chat", () => {
 
   it("doesn't report it again once done", () => {
     store.onboarding.value = { done: ["find"], dismissed: false };
-    render(<ChatsView />);
+    renderChats();
     fireEvent.input(screen.getByRole("combobox", { name: /Search chats/ }), {
       target: { value: "parser" },
     });

@@ -29,6 +29,14 @@ export interface TerminalSpec {
   shellPath: string;
   shellArgs: string[];
   cwd: string | undefined;
+  /** The chat it continues, so Orbit can show this terminal later. */
+  sessionId?: string;
+}
+
+/** A terminal tab name from a chat title (Claude Code renames it while working anyway). */
+export function terminalName(title: string): string {
+  const t = title.replace(/\s+/g, " ").trim();
+  return t.length > 24 ? `${t.slice(0, 23)}…` : t || "Claude";
 }
 
 /**
@@ -41,6 +49,8 @@ export interface TerminalSpec {
 /** `fork`: Claude's --fork-session, a new chat that starts from this one's history. */
 export interface ResumeOptions {
   fork?: boolean;
+  /** The chat's title, for the terminal tab. */
+  title?: string;
 }
 
 export function terminalOptions(
@@ -51,10 +61,13 @@ export function terminalOptions(
 ): TerminalSpec {
   assertId(id);
   return {
-    name: `Claude · ${projectName(cwd)}${o.fork ? " (new branch)" : ""}`,
+    name: o.title
+      ? terminalName(`${o.fork ? "Fork: " : ""}${o.title}`)
+      : `Claude · ${projectName(cwd)}${o.fork ? " (new branch)" : ""}`,
     shellPath: claudePath,
     shellArgs: ["--resume", id, ...(o.fork ? ["--fork-session"] : [])],
     cwd: cwd || undefined,
+    ...(o.fork ? {} : { sessionId: id }),
   };
 }
 

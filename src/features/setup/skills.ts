@@ -10,6 +10,7 @@ import {
   NO_DESCRIPTION,
   PARALLEL,
   type PluginRoot,
+  pluginName,
   readMarkdown,
   strOrNull,
   toolList,
@@ -30,11 +31,41 @@ export interface SkillInfo {
   problems: string[];
   /** The skill's folder is a link (symlink or junction) to somewhere else; Claude follows it. */
   linked: boolean;
+  /** Labels from `tags` or `metadata.tags` (for finding skills; Claude doesn't use them). */
+  tags: string[];
+  argumentHint: string | null;
+  /** Folders between `skills/` and this skill's folder, e.g. "team"; null when it sits right below. */
+  group: string | null;
+  /** Claude Code loads it (it sits one folder below `skills/`). */
+  loaded: boolean;
+  /** What you type to run it: `/name`, or `/plugin:name` for a plugin's skill. */
+  command: string;
 }
 
 interface Found extends ContentRoot {
   folder: string;
   linked: boolean;
+  /** Grouping folders above it, outermost first. */
+  path: string[];
+}
+
+/** How deep grouping folders are searched for skills Claude won't load. */
+const MAX_GROUP_DEPTH = 3;
+
+/** `tags: a, b`, `tags: [a, b]` or `metadata: { tags: … }`. */
+function tagsOf(d: Record<string, unknown>): string[] {
+  const meta =
+    d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : {};
+  const v = d.tags ?? meta.tags;
+  const list = Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : [];
+  return [
+    ...new Set(
+      list
+        .filter((t): t is string => typeof t === "string")
+        .map((t) => t.trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, 12);
 }
 
 /** Is this link a folder? (Read-only; a dangling link or a link to a file is not.) */
@@ -54,18 +85,51 @@ async function findSkills(roots: ContentRoot[]): Promise<Found[]> {
   const out: Found[] = [];
   for (const root of roots)
     for (const e of await listDirSafe(root.dir)) {
-      if (e.isDirectory()) out.push({ ...root, folder: e.name, linked: false });
-      else if (e.isSymbolicLink() && (await linksToFolder(join(root.dir, e.name))))
-        out.push({ ...root, folder: e.name, linked: true });
+      if (e.isDirectory()) {
+        if ((await statSafe(join(root.dir, e.name, "SKILL.md")))?.isFile())
+          out.push({ ...root, folder: e.name, linked: false, path: [] });
+        else await findNested(root, [e.name], out);
+      } else if (e.isSymbolicLink() && (await linksToFolder(join(root.dir, e.name))))
+        out.push({ ...root, folder: e.name, linked: true, path: [] });
     }
   return out;
 }
 
+/**
+ * Skills inside a grouping folder (`skills/team/lint/SKILL.md`). Claude Code doesn't
+ * load these, so they're shown with that problem rather than silently missing.
+ * Real folders only; a folder with SKILL.md is a skill, never searched further.
+ */
+async function findNested(root: ContentRoot, path: string[], out: Found[]): Promise<void> {
+  if (path.length > MAX_GROUP_DEPTH) return;
+  for (const e of await listDirSafe(join(root.dir, ...path))) {
+    if (!e.isDirectory()) continue;
+    if ((await statSafe(join(root.dir, ...path, e.name, "SKILL.md")))?.isFile())
+      out.push({ ...root, folder: e.name, linked: false, path });
+    else await findNested(root, [...path, e.name], out);
+  }
+}
+
 async function readSkill(f: Found): Promise<SkillInfo | null> {
-  const dir = join(f.dir, f.folder);
+  const dir = join(f.dir, ...f.path, f.folder);
   const file = join(dir, "SKILL.md");
   if (!(await statSafe(file))?.isFile()) return null;
-  const base = { scope: f.scope, plugin: f.plugin, dir, file, linked: f.linked };
+  const group = f.path.length ? f.path.join("/") : null;
+  const nested = group
+    ? [
+        `Claude Code only loads skills one folder below skills/. Move "${f.folder}" out of "${group}" to use it.`,
+      ]
+    : [];
+  const command = (name: string) => `/${f.plugin ? `${pluginName(f.plugin)}:` : ""}${name}`;
+  const base = {
+    scope: f.scope,
+    plugin: f.plugin,
+    dir,
+    file,
+    linked: f.linked,
+    group,
+    loaded: !group,
+  };
   const md = await readMarkdown(file);
   if (!md)
     return {
@@ -76,12 +140,15 @@ async function readSkill(f: Found): Promise<SkillInfo | null> {
       allowedTools: [],
       userInvocable: true,
       modelInvocable: true,
-      problems: [UNREADABLE],
+      problems: [...nested, UNREADABLE],
+      tags: [],
+      argumentHint: null,
+      command: command(f.folder),
     };
   const d = md.data;
   const declared = strOrNull(d.name);
   const description = strOrNull(d.description);
-  const problems: string[] = [];
+  const problems: string[] = [...nested];
   if (md.error) problems.push(md.error);
   if (declared && declared !== f.folder)
     problems.push(`Name in SKILL.md (${declared}) differs from its folder (${f.folder})`);
@@ -95,6 +162,9 @@ async function readSkill(f: Found): Promise<SkillInfo | null> {
     userInvocable: d["user-invocable"] !== false,
     modelInvocable: d["disable-model-invocation"] !== true,
     problems,
+    tags: tagsOf(d),
+    argumentHint: strOrNull(d["argument-hint"]),
+    command: command(declared ?? f.folder),
   };
 }
 

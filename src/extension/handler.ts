@@ -1,6 +1,7 @@
 import type { Session } from "../features/chats/types";
 import type { QuotaResult } from "../features/usage/quotaInstall";
 import { ORBIT_LINKS } from "../shared/links";
+import type { OrbitPrefs } from "../shared/protocol";
 import { parseViewMsg } from "../shared/protocol";
 import type { Reading } from "../shared/tabs";
 import { MAX_PROMPT_IN_LINK, type Opener } from "./opener";
@@ -14,16 +15,24 @@ export interface HandlerDeps {
   /** The current weekly recap as Markdown, or null before usage is loaded. */
   recapMarkdown(): string | null;
   copy(text: string): Promise<void>;
-  saveImage(dataUrl: string): Promise<void>;
+  saveImage(dataUrl: string, which?: "week" | "year"): Promise<void>;
   refresh(): Promise<void>;
   /** The tab the person is looking at, so only its data is read. */
   setTab(tab: Reading): void;
   /** Only links that appear in the person's own chats (PR links) may be opened. */
   isKnownLink(url: string): boolean;
   openLink(url: string): Promise<void>;
+  /** VS Code settings, filtered to Orbit. */
+  openOrbitSettings(): Promise<void>;
+  /** Writes to Orbit's log (Output panel). */
+  logError(message: string): void;
+  /** Runs `orbit.<id>` (only Orbit's backup and help commands). */
+  orbitCommand(
+    id: "exportBrain" | "importBrain" | "runDiagnostics" | "reportProblem",
+  ): Promise<void>;
   info(message: string): void;
   warn(message: string): void;
-  setPref(key: "openChatsIn" | "terminalLocation", value: string): Promise<void>;
+  setPref(key: keyof OrbitPrefs, value: string | number | boolean | string[]): Promise<void>;
   continueLast(): Promise<void>;
 }
 
@@ -81,6 +90,13 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         return d.openLink(m.url);
       case "openOrbitLink":
         return d.openLink(ORBIT_LINKS[m.link]);
+      case "openOrbitSettings":
+        return d.openOrbitSettings();
+      case "orbitCommand":
+        return d.orbitCommand(m.id);
+      case "viewError":
+        d.logError(`The ${m.where} tab hit an error: ${m.message}`);
+        return;
       case "setPref":
         await d.setPref(m.key, m.value);
         return d.refresh();
@@ -90,6 +106,10 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         try {
           const r = await (m.on ? d.quota.enable() : d.quota.disable());
           if (!r.ok && r.reason === "no-node") d.warn(NO_NODE);
+          if (!r.ok && r.reason === "managed")
+            d.warn(
+              "Your organisation's managed settings set Claude Code's statusline, so Orbit can't show plan limits.",
+            );
         } catch (e) {
           d.warn(
             `Orbit couldn't change plan limits: ${e instanceof Error ? e.message : String(e)}`,
@@ -108,7 +128,7 @@ export function createHandler(d: HandlerDeps): (raw: unknown) => Promise<void> {
         return;
       }
       case "saveRecapImage":
-        return d.saveImage(m.dataUrl);
+        return d.saveImage(m.dataUrl, m.which);
     }
   };
 }

@@ -184,15 +184,23 @@ const accountMsg = {
       },
     ],
     canSwitch: true,
+    switchedAt: null,
   },
 };
 const checkpointsMsg = {
   type: "checkpoints",
   items: [
-    { id: id(1), files: 6, versions: 14, bytes: 412_000 },
-    { id: id(2), files: 3, versions: 5, bytes: 38_400 },
-    { id: id(4), files: 21, versions: 52, bytes: 1_900_000 },
-    { id: id(6), files: 2, versions: 2, bytes: 9_800 },
+    { id: id(1), files: 6, versions: 14, bytes: 412_000, newest: now - 0.4 * H },
+    { id: id(2), files: 3, versions: 5, bytes: 38_400, newest: now - 5 * H },
+    { id: id(4), files: 21, versions: 52, bytes: 1_900_000, newest: now - 30 * H },
+    { id: id(6), files: 2, versions: 2, bytes: 9_800, newest: now - 80 * H },
+    {
+      id: "9f8e7d6c-0000-4000-8000-00000000abcd",
+      files: 1,
+      versions: 3,
+      bytes: 4_100,
+      newest: now - 300 * H,
+    },
   ],
 };
 
@@ -253,9 +261,9 @@ const detailsMsg = (chatId) => ({
       exists: true,
       createdByClaude: false,
       versions: [
-        { version: 1, at: now - 3 * H, available: true },
-        { version: 2, at: now - 2.5 * H, available: true },
-        { version: 3, at: now - 2 * H, available: false },
+        { version: 1, at: now - 3 * H, available: true, bytes: 18_400 },
+        { version: 2, at: now - 2.5 * H, available: true, bytes: 18_400 },
+        { version: 3, at: now - 2 * H, available: false, bytes: 0 },
       ],
     },
     {
@@ -264,8 +272,8 @@ const detailsMsg = (chatId) => ({
       exists: true,
       createdByClaude: true,
       versions: [
-        { version: 1, at: now - 2.8 * H, available: true },
-        { version: 2, at: now - 2.2 * H, available: true },
+        { version: 1, at: now - 2.8 * H, available: true, bytes: 18_400 },
+        { version: 2, at: now - 2.2 * H, available: true, bytes: 18_400 },
       ],
     },
     {
@@ -273,7 +281,7 @@ const detailsMsg = (chatId) => ({
       name: "README.md",
       exists: false,
       createdByClaude: false,
-      versions: [{ version: 1, at: now - 1 * H, available: true }],
+      versions: [{ version: 1, at: now - 1 * H, available: true, bytes: 18_400 }],
     },
   ],
 });
@@ -328,7 +336,7 @@ for (const [name, vars] of Object.entries(themes)) {
 <script>
   window.__sent = [];
   window.acquireVsCodeApi = () => ({
-    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { const s = ${JSON.stringify(sample)}; if ((new URLSearchParams(location.search).get("t") || location.hash.slice(1)) === "welcome") s.onboarding.welcomed = false; window.postMessage(s, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); if (m.type === "tab" && m.tab === "setup") setTimeout(() => { for (const x of ${JSON.stringify(setupMsgs)}) window.postMessage(x, "*"); }, 0); if (m.type === "tab" && m.tab === "prompts") setTimeout(() => window.postMessage(${JSON.stringify(promptsMsg)}, "*"), 0); if (m.type === "tab" && m.tab === "account") setTimeout(() => window.postMessage(${JSON.stringify(accountMsg)}, "*"), 0); if (m.type === "tab" && m.tab === "checkpoints") setTimeout(() => window.postMessage(${JSON.stringify(checkpointsMsg)}, "*"), 0); if (m.type === "chat:details") { const d = ${JSON.stringify(detailsMsg("ID"))}; d.id = m.id; setTimeout(() => window.postMessage(d, "*"), 0); } if (m.type === "search") { const h = ${JSON.stringify(hitsMsg("REQ"))}; h.req = m.req; setTimeout(() => window.postMessage(h, "*"), 0); } },
+    postMessage: (m) => { window.__sent.push(m); if (m.type === "ready") setTimeout(() => { const s = ${JSON.stringify(sample)}; if ((new URLSearchParams(location.search).get("t") || location.hash.slice(1)) === "welcome") s.onboarding.welcomed = false; window.postMessage(s, "*"); window.postMessage(${JSON.stringify(usageMsg)}, "*"); }, 0); if (m.type === "tab" && m.tab === "setup") setTimeout(() => { for (const x of ${JSON.stringify(setupMsgs)}) window.postMessage(x, "*"); }, 0); if (m.type === "tab" && m.tab === "prompts") setTimeout(() => window.postMessage(${JSON.stringify(promptsMsg)}, "*"), 0); if (m.type === "tab" && m.tab === "account") setTimeout(() => window.postMessage(${JSON.stringify(accountMsg)}, "*"), 0); if (m.type === "tab" && m.tab === "checkpoints") setTimeout(() => window.postMessage(${JSON.stringify(checkpointsMsg)}, "*"), 0); if (m.type === "setup:read") setTimeout(() => window.postMessage({ type: "setup:content", file: m.file, truncated: false, text: ["---", "name: sample", "description: A sample file for the preview", "---", "You are a focused reviewer.", "", "- Read the diff first.", "- Point to exact lines.", "- Keep it short.", ""].join(String.fromCharCode(10)) }, "*"), 0); if (m.type === "cp:files") { const d = ${JSON.stringify(detailsMsg("ID"))}; setTimeout(() => window.postMessage({ type: "cp:files", id: m.id, gone: m.id.startsWith("9f8e"), files: m.id.startsWith("9f8e") ? [] : d.files, orphans: m.id.startsWith("9f8e") ? 3 : 2 }, "*"), 0); } if (m.type === "chat:details") { const d = ${JSON.stringify(detailsMsg("ID"))}; d.id = m.id; setTimeout(() => window.postMessage(d, "*"), 0); } if (m.type === "search") { const h = ${JSON.stringify(hitsMsg("REQ"))}; h.req = m.req; setTimeout(() => window.postMessage(h, "*"), 0); } },
     getState: () => { const t = new URLSearchParams(location.search).get("t") || location.hash.slice(1); return t && t !== "welcome" ? { tab: t } : undefined; },
     setState: () => {},
   });
