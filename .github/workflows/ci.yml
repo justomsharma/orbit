@@ -55,7 +55,8 @@ jobs:
           name: orbit-vsix
           path: dist/*.vsix
 
-  # A version tag (v1.2.3) publishes the tested package to both stores.
+  # A version tag (v1.2.3) publishes the tested package to Open VSX (Cursor, Windsurf, VSCodium…).
+  # The VS Code Marketplace stays a manual upload of the same .vsix.
   publish:
     needs: package
     if: startsWith(github.ref, 'refs/tags/v')
@@ -72,12 +73,3 @@ jobs:
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: npx --yes ovsx publish dist/*.vsix --skip-duplicate
-      - name: Visual Studio Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: |
-          if [ -z "$VSCE_PAT" ]; then
-            echo "::warning::VSCE_PAT isn't set, so the Marketplace wasn't updated. Upload the .vsix by hand."
-            exit 0
-          fi
-          npx --yes @vscode/vsce publish --packagePath dist/*.vsix --skip-duplicate
