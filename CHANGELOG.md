@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Now also on Open VSX, for Cursor, Windsurf, VSCodium and other editors. No other changes.
+
 ## 0.3.0
 
 - **Plan limits you can read at a glance**: 5-hour and weekly use in the status bar (yellow from 75%,
