@@ -63,8 +63,13 @@ exports.run = async () => {
   );
 
   await check("reads token usage and prices it", async () => {
-    await api.refresh();
-    const u = api.lastUsage();
+    // A refresh can join one already running (slow CI machines): wait for the usage read.
+    let u = null;
+    for (let i = 0; i < 40 && !u; i++) {
+      await api.refresh();
+      u = api.lastUsage();
+      if (!u) await new Promise((r) => setTimeout(r, 250));
+    }
     assert.ok(u, "no usage snapshot");
     assert.equal(u.all.messages, 2);
     assert.ok(u.all.cost > 0, "expected a priced cost");
